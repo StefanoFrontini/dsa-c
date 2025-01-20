@@ -1,6 +1,7 @@
+#include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 
 typedef struct
 {
@@ -22,12 +23,46 @@ void prepend(DINARRAY *arr, int item);
 int pop(DINARRAY *arr);
 void delete(DINARRAY *arr, int index);
 void removeItem(DINARRAY *arr, int item);
+int findItem(DINARRAY *arr, int item);
 
 void test_jarray();
 
 int main(void)
 {
     test_jarray();
+}
+
+void resize(DINARRAY *arr)
+{
+    if (arr->size == arr->capacity)
+    {
+
+        int *tmp = realloc(arr->data, 2 * arr->capacity * sizeof(int));
+        if (tmp == NULL)
+        {
+            free(arr->data);
+            exit(EXIT_FAILURE);
+        }
+        arr->capacity = 2 * arr->capacity;
+
+        arr->data = tmp;
+    }
+    else if (arr->size < (1.0 / 4.0) * (float)arr->capacity)
+    {
+        int *tmp = realloc(arr->data, floor((1.0 / 4.0) * (float)arr->capacity) * sizeof(int));
+        if (tmp == NULL)
+        {
+            free(arr->data);
+            exit(EXIT_FAILURE);
+        }
+        arr->capacity = floor((1.0 / 4.0) * (float)arr->capacity);
+
+        arr->data = tmp;
+    }
+    else
+    {
+        return;
+    }
 }
 
 DINARRAY init(int capacity)
@@ -176,7 +211,7 @@ int pop(DINARRAY *arr)
 
 void delete(DINARRAY *arr, int index)
 {
-    printf("%i\n", index);
+
     checkBounds(arr, index);
     int *tmp = malloc((arr->capacity - 1) * sizeof(int));
 
@@ -204,20 +239,26 @@ void delete(DINARRAY *arr, int index)
 
 void removeItem(DINARRAY *arr, int item)
 {
-    int indexToDelete[arr->size];
-    int counter = 0;
     for (int i = 0; i < arr->size; i++)
     {
         if (arr->data[i] == item)
         {
-            indexToDelete[counter] = i;
-            counter++;
+            delete (arr, i);
+            i--;
         }
     }
-    for (int j = 0; j < counter; j++)
+}
+
+int findItem(DINARRAY *arr, int item)
+{
+    for (int i = 0; i < arr->size; i++)
     {
-        delete (arr, indexToDelete[j]);
+        if (arr->data[i] == item)
+        {
+            return i;
+        }
     }
+    return -1;
 }
 
 void test_jarray()
@@ -258,8 +299,17 @@ void test_jarray()
     push(2, &dinArray);
     assert(size(&dinArray) == 5);
     removeItem(&dinArray, 2);
+    assert(findItem(&dinArray, 5) == 1);
+    assert(findItem(&dinArray, 15) == -1);
+    pop(&dinArray);
+    pop(&dinArray);
+    // push(7, &dinArray);
+    // push(8, &dinArray);
+    // push(9, &dinArray);
+    // resize(&dinArray);
 
     printData(&dinArray);
+    printf("capacity: %i\n", dinArray.capacity);
     free(dinArray.data);
 
     printf("All tests passed!\n");
