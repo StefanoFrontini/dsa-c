@@ -12,7 +12,10 @@ int main(void)
 int bs_list(int haystack[], int length, int needle)
 {
     int low = 0;
+    int *p = &low;
     int high = length;
+    // printf("%p\n", haystack);
+    printf("%i\n", *p);
 
     do
     {
