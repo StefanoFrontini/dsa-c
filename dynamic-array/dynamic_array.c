@@ -24,6 +24,7 @@ int pop(DINARRAY *arr);
 void delete(DINARRAY *arr, int index);
 void removeItem(DINARRAY *arr, int item);
 int findItem(DINARRAY *arr, int item);
+void resize(DINARRAY *arr);
 
 void test_jarray();
 
@@ -36,7 +37,6 @@ void resize(DINARRAY *arr)
 {
     if (arr->size == arr->capacity)
     {
-
         int *tmp = realloc(arr->data, 2 * arr->capacity * sizeof(int));
         if (tmp == NULL)
         {
@@ -47,7 +47,7 @@ void resize(DINARRAY *arr)
 
         arr->data = tmp;
     }
-    else if (arr->size < (1.0 / 4.0) * (float)arr->capacity)
+    else if (arr->size < (1.0 / 4.0) * (float)arr->capacity && ((1.0 / 4.0) * (float)arr->capacity) >= 1.0)
     {
         int *tmp = realloc(arr->data, floor((1.0 / 4.0) * (float)arr->capacity) * sizeof(int));
         if (tmp == NULL)
@@ -81,24 +81,9 @@ DINARRAY init(int capacity)
 
 void push(int item, DINARRAY *arr)
 {
-    if (arr->size < arr->capacity)
-    {
-        arr->data[arr->size] = item;
-        arr->size++;
-    }
-    else
-    {
-        int *tmp = realloc(arr->data, 2 * arr->capacity * sizeof(int));
-        if (tmp == NULL)
-        {
-            free(arr->data);
-            exit(EXIT_FAILURE);
-        }
-        arr->capacity = 2 * arr->capacity;
-        tmp[arr->size] = item;
-        arr->size++;
-        arr->data = tmp;
-    }
+    resize(arr);
+    arr->data[arr->size] = item;
+    arr->size++;
 }
 
 void printData(DINARRAY *arr)
@@ -204,6 +189,7 @@ int pop(DINARRAY *arr)
     }
     else
     {
+        resize(arr);
         arr->size--;
         return arr->data[arr->size];
     }
@@ -274,7 +260,6 @@ void test_jarray()
     push(3, &dinArray);
 
     push(4, &dinArray);
-    // printData(&dinArray);
 
     assert(capacity(&dinArray) == 6);
     assert(size(&dinArray) == 4);
@@ -301,15 +286,12 @@ void test_jarray()
     removeItem(&dinArray, 2);
     assert(findItem(&dinArray, 5) == 1);
     assert(findItem(&dinArray, 15) == -1);
+    printData(&dinArray);
     pop(&dinArray);
     pop(&dinArray);
-    // push(7, &dinArray);
-    // push(8, &dinArray);
-    // push(9, &dinArray);
-    // resize(&dinArray);
-
     printData(&dinArray);
     printf("capacity: %i\n", dinArray.capacity);
+    printf("size: %i\n", dinArray.size);
     free(dinArray.data);
 
     printf("All tests passed!\n");
