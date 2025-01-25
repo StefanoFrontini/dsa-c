@@ -90,6 +90,39 @@ void freeMemory(node **list)
     }
 }
 
+void insertAt(int item, int idx, node **list)
+{
+    if (idx == 0)
+    {
+        prepend(list, item);
+        printf("Inserted!\n");
+    }
+    else
+    {
+        node *n = createNode(item, list);
+        int i = 0;
+        int inserted = 0;
+        for (node *ptr = *list; ptr != NULL; ptr = ptr->next, i++)
+        {
+            if (i == idx - 1)
+            {
+                n->next = ptr->next;
+                ptr->next = n;
+                inserted++;
+                break;
+            }
+        }
+        if (inserted == 0)
+        {
+            printf("Not Inserted!\n");
+        }
+        else
+        {
+            printf("Inserted!\n");
+        }
+    }
+}
+
 void test_linked_list()
 {
     // list is a variable storing the address of the first node
@@ -98,6 +131,8 @@ void test_linked_list()
     prepend(&list, 2);
     prepend(&list, 3);
     append(&list, 4);
+    printList(list);
+    insertAt(11, 1, &list);
     printList(list);
 
     freeMemory(&list);
