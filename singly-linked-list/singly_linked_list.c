@@ -9,10 +9,12 @@ typedef struct node
 } node;
 
 node *init(void);
-node *createNode(int number);
+node *createNode(int number, node **list);
 void prepend(node **list, int item);
 void test_linked_list();
 void printList(node *list);
+void freeMemory(node **list);
+void append(node **list, int item);
 
 int main(void)
 {
@@ -37,11 +39,12 @@ node *init(void)
     return list;
 }
 
-node *createNode(int number)
+node *createNode(int number, node **list)
 {
     node *n = malloc(sizeof(node));
     if (n == NULL)
     {
+        freeMemory(list);
         exit(EXIT_FAILURE);
     }
     n->number = number;
@@ -51,15 +54,51 @@ node *createNode(int number)
 
 void prepend(node **list, int item)
 {
-    node *n = createNode(item);
+    node *n = createNode(item, list);
     n->next = *list;
     *list = n;
 }
 
+void append(node **list, int item)
+{
+    node *n = createNode(item, list);
+    if (*list == NULL)
+    {
+        *list = n;
+    }
+    else
+    {
+        for (node *ptr = *list; ptr != NULL; ptr = ptr->next)
+        {
+            if (ptr->next == NULL)
+            {
+                ptr->next = n;
+                break;
+            }
+        }
+    }
+}
+
+void freeMemory(node **list)
+{
+    node *ptr = *list;
+    while (ptr != NULL)
+    {
+        node *next = ptr->next;
+        free(ptr);
+        ptr = next;
+    }
+}
+
 void test_linked_list()
 {
+    // list is a variable storing the address of the first node
     node *list = init();
     prepend(&list, 1);
     prepend(&list, 2);
+    prepend(&list, 3);
+    append(&list, 4);
     printList(list);
+
+    freeMemory(&list);
 }
