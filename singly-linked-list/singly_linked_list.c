@@ -123,6 +123,45 @@ void insertAt(int item, int idx, node **list)
     }
 }
 
+void deleteAt(int idx, node **list)
+{
+    if (*list == NULL)
+    {
+        printf("List is empty, nothing to delete");
+        return;
+    }
+    if (idx == 0)
+    {
+        printf("Deleting head...\n");
+        node *ptr = *list;
+        *list = ptr->next;
+    }
+    else
+    {
+        int i = 0;
+        int deleted = 0;
+        for (node *ptr = *list; ptr != NULL; ptr = ptr->next, i++)
+        {
+            if (i == idx - 1)
+            {
+                node *next = ptr->next->next;
+                free(ptr->next);
+                ptr->next = next;
+                deleted++;
+                break;
+            }
+        }
+        if (deleted == 0)
+        {
+            printf("Not deleted!\n");
+        }
+        else
+        {
+            printf("deleted!\n");
+        }
+    }
+}
+
 void test_linked_list()
 {
     // list is a variable storing the address of the first node
@@ -131,8 +170,9 @@ void test_linked_list()
     prepend(&list, 2);
     prepend(&list, 3);
     append(&list, 4);
-    printList(list);
     insertAt(11, 1, &list);
+    printList(list);
+    deleteAt(0, &list);
     printList(list);
 
     freeMemory(&list);
