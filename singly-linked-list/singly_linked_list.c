@@ -15,6 +15,7 @@ void test_linked_list();
 void printList(node *list);
 void freeMemory(node **list);
 void append(node **list, int item);
+node *get(int idx, node **list);
 
 int main(void)
 {
@@ -162,6 +163,33 @@ void deleteAt(int idx, node **list)
     }
 }
 
+node *get(int idx, node **list)
+{
+    if (*list == NULL)
+    {
+        printf("List is empty, returning null ptr\n");
+        return *list;
+    }
+    if (idx == 0)
+    {
+        node *ptr = *list;
+        *list = ptr->next;
+        printf("Getting head...%i\n", ptr->number);
+        return *list;
+    }
+    int i = 0;
+    for (node *ptr = *list; ptr != NULL; ptr = ptr->next, i++)
+    {
+        if (i == idx)
+        {
+            printf("Returning node with value %i!\n", ptr->number);
+            return ptr;
+        }
+    }
+    printf("Nothing to get, returning list ptr!\n");
+    return *list;
+}
+
 void test_linked_list()
 {
     // list is a variable storing the address of the first node
@@ -171,9 +199,9 @@ void test_linked_list()
     prepend(&list, 3);
     append(&list, 4);
     insertAt(11, 1, &list);
-    printList(list);
     deleteAt(0, &list);
     printList(list);
+    get(4, &list);
 
     freeMemory(&list);
 }
