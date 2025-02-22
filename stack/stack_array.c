@@ -22,7 +22,7 @@ STACK init(int capacity)
 {
     STACK s;
     s.top = 0;
-    s.array = malloc(10 * sizeof(int));
+    s.array = malloc(capacity * sizeof(int));
     if (s.array == NULL)
     {
         exit(EXIT_FAILURE);
