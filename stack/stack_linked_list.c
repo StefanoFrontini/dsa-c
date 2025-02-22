@@ -63,6 +63,21 @@ int pop(STACK **s)
     }
 }
 
+int peek(STACK **s)
+{
+    if (*s == NULL)
+    {
+        printf("Cannot peek, stack is empty");
+        exit(EXIT_FAILURE);
+    }
+    else
+    {
+        STACK *ptr = *s;
+        int number = ptr->number;
+        return number;
+    }
+}
+
 void print_stack(STACK *s)
 {
     for (STACK *node = s; node != NULL; node = node->next)
@@ -78,6 +93,9 @@ void test_stack()
     push(&s, 15);
     int deletedEl = pop(&s);
     printf("deletedEl: %i\n", deletedEl);
+    push(&s, 20);
+    int head = peek(&s);
+    printf("peek is: %i\n", head);
     print_stack(s);
 
     printf("All tests passed!\n");
