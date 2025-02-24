@@ -7,7 +7,7 @@ typedef struct
     int *array;
     int front;
     int size;
-} QUEUE;
+} queue;
 
 void test_queue_array();
 
@@ -17,9 +17,9 @@ int main(void)
     return 0;
 }
 
-QUEUE init(int capacity)
+queue init(int capacity)
 {
-    QUEUE q;
+    queue q;
     q.front = 0;
     q.size = 0;
     q.array = malloc(capacity * sizeof(int));
@@ -30,7 +30,7 @@ QUEUE init(int capacity)
     return q;
 }
 
-void enqueue(QUEUE *q, int item, int capacity)
+void enqueue(queue *q, int item, int capacity)
 {
     if (q->size == capacity)
     {
@@ -44,7 +44,7 @@ void enqueue(QUEUE *q, int item, int capacity)
         q->size++;
     }
 }
-int dequeue(QUEUE *q)
+int dequeue(queue *q)
 {
     if (q->size == 0)
     {
@@ -63,7 +63,7 @@ int dequeue(QUEUE *q)
         return itemRemoved;
     }
 }
-int peek(QUEUE *q)
+int peek(queue *q)
 {
     return q->array[q->front];
 }
@@ -71,7 +71,7 @@ int peek(QUEUE *q)
 void test_queue_array()
 {
     int capacity = 10;
-    QUEUE q = init(capacity);
+    queue q = init(capacity);
     enqueue(&q, 28, capacity);
     enqueue(&q, 33, capacity);
     enqueue(&q, 19, capacity);

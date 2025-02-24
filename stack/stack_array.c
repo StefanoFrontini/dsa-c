@@ -7,20 +7,20 @@ typedef struct
 {
     int *array;
     int top;
-} STACK;
+} s_node;
 
 void test_stack_array();
 
-void push(STACK *s, int item);
+void push(stack *s, int item);
 
 int main(void)
 {
     test_stack_array();
 }
 
-STACK init(int capacity)
+stack init(int capacity)
 {
-    STACK s;
+    stack s;
     s.top = 0;
     s.array = malloc(capacity * sizeof(int));
     if (s.array == NULL)
@@ -30,13 +30,13 @@ STACK init(int capacity)
     return s;
 }
 
-void push(STACK *s, int item)
+void push(stack *s, int item)
 {
     s->array[s->top] = item;
     s->top++;
 }
 
-int pop(STACK *s)
+int pop(stack *s)
 {
     int itemToRemove = s->array[s->top - 1];
     s->top--;
@@ -45,7 +45,7 @@ int pop(STACK *s)
 
 void test_stack_array()
 {
-    STACK s = init(10);
+    stack s = init(10);
     assert(s.top == 0);
     push(&s, 15);
     assert(s.top == 1);

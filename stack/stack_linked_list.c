@@ -2,17 +2,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct STACK
+typedef struct s_node
 {
     int number;
-    struct STACK *next;
-} STACK;
+    struct s_node *next;
+} s_node;
 
 void test_stack();
 
-STACK *createNode(int item);
+s_node *createNode(int item);
 
-void push(STACK **s, int item);
+void push(s_node **s, int item);
+void freeMemory(s_node **q);
 
 int main(void)
 {
@@ -21,15 +22,15 @@ int main(void)
     return 0;
 }
 
-STACK *init()
+s_node *init()
 {
-    STACK *s = NULL;
+    s_node *s = NULL;
     return s;
 }
 
-STACK *createNode(int item)
+s_node *createNode(int item)
 {
-    STACK *n = malloc(sizeof(STACK));
+    s_node *n = malloc(sizeof(s_node));
     if (n == NULL)
     {
         exit(EXIT_FAILURE);
@@ -39,14 +40,14 @@ STACK *createNode(int item)
     return n;
 }
 
-void push(STACK **s, int item)
+void push(s_node **s, int item)
 {
-    STACK *n = createNode(item);
+    s_node *n = createNode(item);
     n->next = *s;
     *s = n;
 }
 
-int pop(STACK **s)
+int pop(s_node **s)
 {
     if (*s == NULL)
     {
@@ -55,7 +56,7 @@ int pop(STACK **s)
     }
     else
     {
-        STACK *ptr = *s;
+        s_node *ptr = *s;
         int number = ptr->number;
         *s = ptr->next;
         free(ptr);
@@ -63,7 +64,7 @@ int pop(STACK **s)
     }
 }
 
-int peek(STACK **s)
+int peek(s_node **s)
 {
     if (*s == NULL)
     {
@@ -72,31 +73,43 @@ int peek(STACK **s)
     }
     else
     {
-        STACK *ptr = *s;
+        s_node *ptr = *s;
         int number = ptr->number;
         return number;
     }
 }
 
-void print_stack(STACK *s)
+void print_stack(s_node *s)
 {
-    for (STACK *node = s; node != NULL; node = node->next)
+    for (s_node *node = s; node != NULL; node = node->next)
     {
         printf("%i\n", node->number);
     }
 }
 
+void freeMemory(s_node **q)
+{
+    s_node *ptr = *q;
+    while (ptr != NULL)
+    {
+        s_node *next = ptr->next;
+        free(ptr);
+        ptr = next;
+    }
+}
+
 void test_stack()
 {
-    STACK *s = init();
-    push(&s, 10);
-    push(&s, 15);
-    int deletedEl = pop(&s);
+    s_node *stack = init();
+    push(&stack, 10);
+    push(&stack, 15);
+    int deletedEl = pop(&stack);
     printf("deletedEl: %i\n", deletedEl);
-    push(&s, 20);
-    int head = peek(&s);
+    push(&stack, 20);
+    int head = peek(&stack);
     printf("peek is: %i\n", head);
-    print_stack(s);
+    print_stack(stack);
+    freeMemory(&stack);
 
     printf("All tests passed!\n");
 }
