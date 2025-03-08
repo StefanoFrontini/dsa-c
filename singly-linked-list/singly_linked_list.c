@@ -83,12 +83,12 @@ void append(node **list, int item)
 
 void freeMemory(node **list)
 {
-    node *ptr = *list;
-    while (ptr != NULL)
+    node *cursor = *list;
+    while (cursor != NULL)
     {
-        node *next = ptr->next;
-        free(ptr);
-        ptr = next;
+        node *tmp = cursor;
+        cursor = cursor->next;
+        free(tmp);
     }
 }
 

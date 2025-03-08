@@ -9,18 +9,18 @@ typedef struct
     int top;
 } s_node;
 
-void test_stack_array();
+void test_s_node_array();
 
-void push(stack *s, int item);
+void push(s_node *s, int item);
 
 int main(void)
 {
-    test_stack_array();
+    test_s_node_array();
 }
 
-stack init(int capacity)
+s_node init(int capacity)
 {
-    stack s;
+    s_node s;
     s.top = 0;
     s.array = malloc(capacity * sizeof(int));
     if (s.array == NULL)
@@ -30,22 +30,22 @@ stack init(int capacity)
     return s;
 }
 
-void push(stack *s, int item)
+void push(s_node *s, int item)
 {
     s->array[s->top] = item;
     s->top++;
 }
 
-int pop(stack *s)
+int pop(s_node *s)
 {
     int itemToRemove = s->array[s->top - 1];
     s->top--;
     return itemToRemove;
 }
 
-void test_stack_array()
+void test_s_node_array()
 {
-    stack s = init(10);
+    s_node s = init(10);
     assert(s.top == 0);
     push(&s, 15);
     assert(s.top == 1);
