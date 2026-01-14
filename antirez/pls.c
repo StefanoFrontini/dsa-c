@@ -1,6 +1,7 @@
 #include <stdint.h> // uint32_t uint16_t
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 /* Initialize a prefixed length string with the specified string 'init' of
 length 'len'
 *
@@ -26,9 +27,11 @@ char *ps_create(char *init, int len) {
   p->refcount = 1;
   p->magic = 0xDEADBEEF;
 
-  for (int j = 0; j < len; j++) {
-    p->str[j] = init[j]; // We should use memcpy() here;
-  }
+  memcpy(p->str, init, len);
+
+  // for (int j = 0; j < len; j++) {
+  //   p->str[j] = init[j]; // We should use memcpy() here;
+  // }
   p->str[len] = 0;
   return p->str;
 }
@@ -94,6 +97,6 @@ int main(void) {
   // printf("%d\n", (int)sizeof(struct pls));
   printf("%s\n", global_string);
   ps_release(mystr);
-  ps_release(mystr);
+  // ps_release(mystr);
   return 0;
 }
