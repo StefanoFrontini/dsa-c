@@ -7,7 +7,9 @@ struct pls {
   long len;
   char str[24];
 };
+
 #define HEXDUMP_CHARS_PER_LINE 8
+
 void hexdump(void *p, size_t len) {
   unsigned char *byte = p;
   size_t po = 0;
