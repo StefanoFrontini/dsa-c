@@ -11,7 +11,6 @@ int main(void) {
   for (int j = 0; j < 10; j++) {
     printf("s[%d] = %c\n", j, s[j]);
   }
-  return 0;
   // char *mystr = "Hello World";
   // size_t len = strlen(mystr);
   // for (size_t j = 0; j < len; j++) {
