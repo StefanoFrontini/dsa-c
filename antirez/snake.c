@@ -49,6 +49,8 @@ node *createNode(char x, char y) {
 
   return new;
 }
+// void freeNode(node *n) { free(n); }
+
 snake *createSnake(char x, char y) {
   node *newNode = malloc(sizeof(node));
   newNode->value.x = x;
@@ -65,6 +67,13 @@ snake *prepend(snake *s, char x, char y) {
   s->head->prev = newNode;
   newNode->next = s->head;
   s->head = newNode;
+  return s;
+}
+snake *deleteTail(snake *s) {
+  node *newTail = s->tail->prev;
+  newTail->next = NULL;
+  free(s->tail);
+  s->tail = newTail;
   return s;
 }
 
@@ -87,6 +96,9 @@ int main(void) {
   snake *snake = createSnake(12, 12);
   snake = prepend(snake, 15, 16);
   snake = prepend(snake, 18, 19);
+  printNode(snake->head);
+  snake = deleteTail(snake);
+  printf("-------------------------\n");
   printNode(snake->head);
   //   initSnake();
   //   initGrid(grid, GROUND);
