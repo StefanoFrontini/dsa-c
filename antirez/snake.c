@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <termios.h>
+#include <unistd.h>
 // #include <unistd.h>
 
 // typedef struct {
@@ -104,27 +106,39 @@ void printGrid(char *grid) {
     printf("\n");
   }
 }
+void cleanup(struct termios *original) {
+  tcsetattr(STDIN_FILENO, TCSANOW, original);
+  printf("\033[?25h");
+}
 
 int main(void) {
-  //   printf("%lu\n", sizeof(grid));
-  //   grid snakeGrid;
-  //   snakeGrid.row = 25;
-  //   snakeGrid.column = 25;
+  struct termios original;
+  struct termios raw;
+  tcgetattr(STDIN_FILENO, &original);
+  atexit(cleanup);
+  raw = original;
+  raw.c_lflag &= (~ICANON); // switch off buffer
+  raw.c_lflag &= (~ECHO);   // switch off echo
+  raw.c_cc[VMIN] = 0;
+  raw.c_cc[VTIME] = 0;
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+  printf("\033[?25l"); // hide cursor
+  printf("\033[2J");   // clean screen
+  printf("\033[H");    // cursor at Home
+
   char grid[GRID_CELLS];
   memset(grid, GROUND, GRID_CELLS);
   snake *snake = createSnake(0, 0, grid);
   snake = prepend(snake, 1, 0, grid);
   snake = prepend(snake, 2, 0, grid);
   printNode(snake->head);
-  //   snake = deleteTail(snake, grid);
   printf("-------------------------\n");
   printNode(snake->head);
   printf("-------------------------\n");
-  //   setCell(grid, 24, 24, BODY);
-  //   setCell(grid, 0, 0, BODY);
   printGrid(grid);
-  //   initSnake();
-  //   initGrid(grid, GROUND);
+  usleep(1);
+  // ...play game
+  tcsetattr(STDIN_FILENO, TCSANOW, &original);
 
   return 0;
 }
