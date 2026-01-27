@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +16,8 @@
 #define GROUND '.'
 #define BODY '*'
 
+struct termios original;
+
 typedef struct node {
   char x;
   char y;
@@ -28,6 +31,38 @@ typedef struct {
   node *tail;
 
 } snake;
+
+enum Keys { ARROW_UP = 1000, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT, ESC_KEY };
+
+int readEditorKey() {
+  ssize_t nread;
+  char c;
+
+  nread = read(STDIN_FILENO, &c, 1);
+  if (nread == 0)
+    return 0;
+  if (c != '\033') {
+    return c;
+  }
+  char buf[2];
+  nread = read(STDIN_FILENO, buf, sizeof(buf));
+  if (nread == 0) {
+    return ESC_KEY;
+  }
+  if (buf[0] == '[') {
+    switch (buf[1]) {
+      case 'A':
+        return ARROW_UP;
+      case 'B':
+        return ARROW_DOWN;
+      case 'C':
+        return ARROW_RIGHT;
+      case 'D':
+        return ARROW_LEFT;
+    }
+  }
+  return 0;
+}
 
 void setCell(char *grid, char x, char y, char state) {
   int index = x + GRID_COLS * y;
@@ -106,13 +141,19 @@ void printGrid(char *grid) {
     printf("\n");
   }
 }
-void cleanup(struct termios *original) {
-  tcsetattr(STDIN_FILENO, TCSANOW, original);
+void cleanup(void) {
+  tcsetattr(STDIN_FILENO, TCSANOW, &original);
   printf("\033[?25h");
+}
+snake *moveRight(snake *s, char *grid) {
+  char x = s->head->x;
+  x++;
+  s = prepend(s, x, s->head->y, grid);
+  s = deleteTail(s, grid);
+  return s;
 }
 
 int main(void) {
-  struct termios original;
   struct termios raw;
   tcgetattr(STDIN_FILENO, &original);
   atexit(cleanup);
@@ -131,12 +172,82 @@ int main(void) {
   snake *snake = createSnake(0, 0, grid);
   snake = prepend(snake, 1, 0, grid);
   snake = prepend(snake, 2, 0, grid);
-  printNode(snake->head);
-  printf("-------------------------\n");
-  printNode(snake->head);
-  printf("-------------------------\n");
+  // printNode(snake->head);
+  // printf("-------------------------\n");
+  // printNode(snake->head);
+  // printf("-------------------------\n");
   printGrid(grid);
-  usleep(1);
+  // usleep(1);
+
+  // char buf[3];
+  // memset(buf, 0, 4);
+  // ssize_t nread;
+
+  char direction = 0;
+  while (1) {
+    int c = readEditorKey();
+    if (c > 0) {
+      switch (c) {
+        case ARROW_UP:
+          printf("Up\n");
+          break;
+        case ARROW_DOWN:
+          printf("Down\n");
+          break;
+        case ARROW_LEFT:
+          printf("Left\n");
+          break;
+        case ARROW_RIGHT:
+          direction = 1;
+          // printf("Right\n");
+          break;
+        case ESC_KEY:
+          printf("Closing...\n");
+          return 1;
+        default:
+          // printf("Key pressed is: %c\n", c);
+          break;
+      }
+    }
+    printf("\033[H");
+    switch (direction) {
+      case 0:
+        break;
+      case 1:
+        snake = moveRight(snake, grid);
+        break;
+      default:
+        break;
+    }
+    printGrid(grid);
+    usleep(100000);
+    // nread = read(STDIN_FILENO, buf, sizeof(buf));
+    // if (nread == -1) {
+    //   perror("Reading key");
+    //   return 1;
+    // };
+    // if (nread == 1) {
+    //   if (buf[0] == '\033') {
+    //     printf("Closing...\n");
+    //     break;
+    //   }
+    //   printf("Reading char: %c\n", buf[0]);
+    // }
+    // if (nread == 3 && buf[0] == '\033' && buf[1] == '[') {
+    //   if (buf[2] == 'A') {
+    //     printf("Su\n");
+    //   }
+    //   if (buf[2] == 'B') {
+    //     printf("Giù\n");
+    //   }
+    //   if (buf[2] == 'C') {
+    //     printf("Destra\n");
+    //   }
+    //   if (buf[2] == 'D') {
+    //     printf("Sinistra\n");
+    //   }
+    // }
+  }
   // ...play game
   tcsetattr(STDIN_FILENO, TCSANOW, &original);
 
