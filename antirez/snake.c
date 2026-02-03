@@ -23,6 +23,7 @@ typedef struct node {
 typedef struct {
   node *head;
   node *tail;
+  char direction;
 } snake;
 
 typedef struct fruit {
@@ -33,9 +34,36 @@ typedef struct fruit {
 enum Keys { ARROW_UP = 1000, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT, ESC_KEY };
 enum Directions { IDLE = 0, MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT };
 
+typedef struct {
+  char x;
+  char y;
+} Point;
+
+/* Get new head position based on the direction */
+Point getNextHeadPosition(snake *s) {
+  Point p = {s->head->x, s->head->y};
+  switch (s->direction) {
+    case MOVE_UP:
+      p.y--;
+      break;
+    case MOVE_DOWN:
+      p.y++;
+      break;
+    case MOVE_LEFT:
+      p.x--;
+      break;
+    case MOVE_RIGHT:
+      p.x++;
+      break;
+    default:
+      break;
+  }
+  return p;
+}
+
 struct termios original;
 
-/* this function reads the keyboard inputs  */
+/* Reads the keyboard inputs  */
 int readKeyPress() {
   ssize_t nread;
   char c;
@@ -65,21 +93,21 @@ int readKeyPress() {
   }
   return 0;
 }
-/* this function sets the state of the element of the grid positioned at x and y
+/* Sets the state of the element of the grid positioned at x and y
  * coordinates */
 void setCell(char *grid, char x, char y, char state) {
   int index = x + GRID_COLS * y;
   grid[index] = state;
 }
 
-/* this function gets the state of the element of the grid positioned at x and y
- * coordinates */
+/* Gets the state of the element of the grid positioned at x and y
+  coordinates */
 char getCell(char *grid, char x, char y) {
   int index = x + GRID_COLS * y;
   return grid[index];
 }
 
-/* this function creates an element of the snake body */
+/*  Creates an element of the snake body */
 node *createNode(char x, char y) {
   node *new = malloc(sizeof(node));
 
@@ -90,7 +118,7 @@ node *createNode(char x, char y) {
 
   return new;
 }
-/* this function creates a snake. The snake is modelled as a doubly linked list
+/* Creates a snake. The snake is modelled as a doubly linked list
  * for fast adding to the head e removing from the tail. */
 snake *createSnake(char x, char y, char *grid) {
   node *newNode = malloc(sizeof(node));
@@ -101,10 +129,11 @@ snake *createSnake(char x, char y, char *grid) {
   snake *s = malloc(sizeof(snake));
   s->head = newNode;
   s->tail = newNode;
+  s->direction = IDLE;
   setCell(grid, x, y, BODY);
   return s;
 }
-/* this function prepends a new head to the snake body */
+/* Prepends a new head to the snake body */
 snake *prepend(snake *s, char x, char y, char *grid) {
   node *newNode = createNode(x, y);
   s->head->prev = newNode;
@@ -113,7 +142,7 @@ snake *prepend(snake *s, char x, char y, char *grid) {
   setCell(grid, x, y, BODY);
   return s;
 }
-/* this function deletes the tail of the snake */
+/* Deletes the tail of the snake */
 snake *deleteTail(snake *s, char *grid) {
   node *newTail = s->tail->prev;
   newTail->next = NULL;
@@ -122,7 +151,7 @@ snake *deleteTail(snake *s, char *grid) {
   s->tail = newTail;
   return s;
 }
-/* helper function to print the snake body to stdout */
+/* Prints the snake body to stdout */
 void printNode(node *head) {
   if (head == NULL)
     return;
@@ -132,21 +161,31 @@ void printNode(node *head) {
     head = head->next;
   }
 }
-/* this function draw the grid */
-void printGrid(char *grid) {
+void freeSnake(node *head) {
+  if (head == NULL)
+    return;
+  freeSnake(head->next);
+  free(head);
+}
+/* Draws the grid */
+void printGrid(char *grid, char score) {
   for (int y = 0; y < GRID_ROWS; y++) {
     for (int x = 0; x < GRID_COLS; x++) {
       printf("%c", getCell(grid, x, y));
+      if (y == 0 && x == GRID_COLS - 1) {
+        printf("\tScore: %d", score);
+      }
     }
     printf("\n");
   }
 }
-/* restores the terminal settings on game exit */
+/* Restores the terminal settings on game exit */
 void cleanup(void) {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
   printf("\033[?25h"); // show cursor
 }
 
+/* Updates the fruit location on the grid */
 void updateFruit(fruit *f, char *grid) {
   char x = rand() % GRID_COLS;
   char y = rand() % GRID_ROWS;
@@ -159,77 +198,88 @@ void updateFruit(fruit *f, char *grid) {
   f->y = y;
   setCell(grid, x, y, FRUIT);
 }
-snake *move(snake *s, char x, char y, char *grid, fruit *f) {
-  if (getCell(grid, x, y) == BODY) {
-    printf("\033[16;0H");
-    printf("Game Over\n");
-    exit(1);
-  }
-  s = prepend(s, x, y, grid);
-  if (x == f->x && y == f->y) {
-    updateFruit(f, grid);
-  } else {
-    s = deleteTail(s, grid);
-  }
 
-  return s;
-}
-/* this fuction moves the snake right */
-snake *moveRight(snake *s, char *grid, fruit *f) {
-  char x = s->head->x;
-  char y = s->head->y;
-  if (x >= GRID_COLS - 1) {
-    printf("\033[16;0H");
-    printf("Game Over\n");
-    exit(1);
-  }
-  x++;
-  s = move(s, x, y, grid, f);
-  return s;
-}
+/* Updates the score */
+// void updateScore(char *s) {
+//   s[0] = s[0] + 1;
+// }
 
-/* this fuction moves the snake left */
-snake *moveLeft(snake *s, char *grid, fruit *f) {
-  char x = s->head->x;
-  char y = s->head->y;
-  if (x <= 0) {
-    printf("\033[16;0H");
-    printf("Game Over\n");
-    exit(1);
-  }
-  x--;
-  s = move(s, x, y, grid, f);
-  return s;
-}
+/* Updates the linked list when the snake moves. Checks the collisison between
+ * snake, wall and the fruit. If there is a collision with a fruit the score is
+ * updated */
+// snake *move(snake *s, char x, char y, char *grid, fruit *f, char *score) {
+//   if (getCell(grid, x, y) == BODY) {
+//     printf("\033[16;0H");
+//     printf("Game Over\n");
+//     exit(1);
+//   }
+//   s = prepend(s, x, y, grid);
+//   if (x == f->x && y == f->y) {
+//     updateScore(score);
+//     updateFruit(f, grid);
+//   } else {
+//     s = deleteTail(s, grid);
+//   }
 
-/* this fuction moves the snake down */
-snake *moveDown(snake *s, char *grid, fruit *f) {
-  char x = s->head->x;
-  char y = s->head->y;
-  if (y >= GRID_ROWS - 1) {
-    printf("\033[16;0H");
-    printf("Game Over\n");
-    exit(1);
-  }
-  y++;
-  s = move(s, x, y, grid, f);
-  return s;
-}
+//   return s;
+// }
+/* Moves the snake right */
+// snake *moveRight(snake *s, char *grid, fruit *f, char *score) {
+//   char x = s->head->x;
+//   char y = s->head->y;
+//   if (x >= GRID_COLS - 1) {
+//     printf("\033[16;0H");
+//     printf("Game Over\n");
+//     exit(1);
+//   }
+//   x++;
+//   s = move(s, x, y, grid, f, score);
+//   return s;
+// }
 
-/* this fuction moves the snake up */
-snake *moveUp(snake *s, char *grid, fruit *f) {
-  char x = s->head->x;
-  char y = s->head->y;
-  if (y <= 0) {
-    printf("\033[16;0H");
-    printf("Game Over\n");
-    exit(1);
-  }
-  y--;
-  s = move(s, x, y, grid, f);
-  return s;
-}
+// /* Moves the snake left */
+// snake *moveLeft(snake *s, char *grid, fruit *f, char *score) {
+//   char x = s->head->x;
+//   char y = s->head->y;
+//   if (x <= 0) {
+//     printf("\033[16;0H");
+//     printf("Game Over\n");
+//     exit(1);
+//   }
+//   x--;
+//   s = move(s, x, y, grid, f, score);
+//   return s;
+// }
 
+// /* Moves the snake down */
+// snake *moveDown(snake *s, char *grid, fruit *f, char *score) {
+//   char x = s->head->x;
+//   char y = s->head->y;
+//   if (y >= GRID_ROWS - 1) {
+//     printf("\033[16;0H");
+//     printf("Game Over\n");
+//     exit(1);
+//   }
+//   y++;
+//   s = move(s, x, y, grid, f, score);
+//   return s;
+// }
+
+// /* Moves the snake up */
+// snake *moveUp(snake *s, char *grid, fruit *f, char *score) {
+//   char x = s->head->x;
+//   char y = s->head->y;
+//   if (y <= 0) {
+//     printf("\033[16;0H");
+//     printf("Game Over\n");
+//     exit(1);
+//   }
+//   y--;
+//   s = move(s, x, y, grid, f, score);
+//   return s;
+// }
+
+/* Place the fruit on the grid randomly */
 fruit *createFruit(char *grid) {
   fruit *f = malloc(sizeof(*f));
   char x = rand() % GRID_COLS;
@@ -260,8 +310,7 @@ int main(void) {
   char grid[GRID_CELLS]; // initialize the grid
   memset(grid, GROUND, GRID_CELLS);
   snake *snake = createSnake(0, 0, grid); // creates the snake a (0, 0) position
-  snake = prepend(snake, 1, 0, grid); // adds a new head to the snake: (1, 0)
-  snake = prepend(snake, 2, 0, grid); // adds a new head to the snake: (2, 0)
+  char score = 0;
   // printNode(snake->head);
   // printf("-------------------------\n");
   // printNode(snake->head);
@@ -271,64 +320,76 @@ int main(void) {
   printf("\033[?25l"); // hide cursor
   printf("\033[2J");   // clean screen
   printf("\033[H");    // cursor at Home
-  printGrid(grid);
-
-  char direction = IDLE;
+  printGrid(grid, score);
   while (1) {
-    int c = readKeyPress();
-    if (c > 0) {
-      switch (c) {
-        case ARROW_UP: {
-          if (direction == MOVE_UP || direction == MOVE_DOWN)
-            break;
-          direction = MOVE_UP;
-        } break;
-        case ARROW_DOWN: {
-          if (direction == MOVE_UP || direction == MOVE_DOWN)
-            break;
-          direction = MOVE_DOWN;
-        } break;
-        case ARROW_LEFT: {
-          if (direction == MOVE_LEFT || direction == MOVE_RIGHT)
-            break;
-          direction = MOVE_LEFT;
-        } break;
-        case ARROW_RIGHT: {
-          if (direction == MOVE_RIGHT || direction == MOVE_LEFT)
-            break;
-          direction = MOVE_RIGHT;
-        } break;
-        case ESC_KEY:
-          printf("Closing...\n");
-          exit(1);
-        default:
-          // printf("Key pressed is: %c\n", c);
+    int pressedKey = readKeyPress();
+
+    if (pressedKey > 0) {
+      switch (pressedKey) {
+        case ARROW_UP:
+          if (snake->direction != MOVE_DOWN)
+            snake->direction = MOVE_UP;
           break;
+        case ARROW_DOWN:
+          if (snake->direction != MOVE_UP)
+            snake->direction = MOVE_DOWN;
+          break;
+        case ARROW_LEFT:
+          if (snake->direction != MOVE_RIGHT)
+            snake->direction = MOVE_LEFT;
+          break;
+        case ARROW_RIGHT:
+          if (snake->direction != MOVE_LEFT)
+            snake->direction = MOVE_RIGHT;
+          break;
+        case ESC_KEY:
+          goto endgame;
       }
     }
-    printf("\033[H");
-    switch (direction) {
-      case IDLE:
+
+    if (snake->direction != IDLE) {
+      Point next = getNextHeadPosition(snake);
+
+      // 1. Checks wall collisions
+      if (next.x < 0 || next.x >= GRID_COLS || next.y < 0 ||
+          next.y >= GRID_ROWS) {
+        printf("\033[%d;%dHGAME OVER (Wall)!\n", GRID_ROWS + 2,
+               0); // Prints at the end of the grid
+        break;     // exit from while
+      }
+
+      // 2. Checks body collision
+      if (getCell(grid, next.x, next.y) == BODY) {
+        printf("\033[%d;%dHGAME OVER (Body)!\n", GRID_ROWS + 2, 0);
         break;
-      case MOVE_RIGHT:
-        snake = moveRight(snake, grid, f);
-        break;
-      case MOVE_LEFT:
-        snake = moveLeft(snake, grid, f);
-        break;
-      case MOVE_UP:
-        snake = moveUp(snake, grid, f);
-        break;
-      case MOVE_DOWN:
-        snake = moveDown(snake, grid, f);
-        break;
-      default:
-        break;
+      }
+
+      // 3. Moves the snake
+      snake = prepend(snake, next.x, next.y, grid);
+
+      // 4. Checks fruit collision
+      if (next.x == f->x && next.y == f->y) {
+        score++;
+        updateFruit(f, grid);
+      } else {
+        snake = deleteTail(snake, grid);
+      }
     }
 
-    printGrid(grid);
-    usleep(100000);
+    // Rendering: moves the cursor at Home e redraw
+    printf("\033[H");
+    printGrid(grid, score);
+
+    usleep(100000); // 10 FPS
   }
+
+endgame:
+  freeSnake(snake->head);
+  free(snake);
+  free(f);
+
+  return 0;
+
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
 
   return 0;
