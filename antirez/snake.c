@@ -42,6 +42,7 @@ typedef struct fruit {
 
 enum Keys { ARROW_UP = 1000, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT, ESC_KEY };
 enum Directions { IDLE = 0, MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT };
+enum GameState { CONTINUE = 2000, GAME_OVER, SCORE_UP };
 
 typedef struct {
   char x;
@@ -223,11 +224,43 @@ fruit *createFruit(char *grid) {
   return f;
 }
 
-/* Helper function to get time in microseconds */
+/* Helper function to get the time in microseconds */
 int64_t current_timestamp() {
   struct timeval te;
   gettimeofday(&te, NULL); // get current time
   return te.tv_sec * 1000000LL + te.tv_usec;
+}
+char input(void) {
+  int pressedKey = readKeyPress();
+
+  if (pressedKey > 0) {
+    switch (pressedKey) {
+      case ARROW_UP:
+        return MOVE_UP;
+        // if (snake->direction != MOVE_DOWN)
+        //   snake->direction = MOVE_UP;
+        // break;
+      case ARROW_DOWN:
+        return MOVE_DOWN;
+        // if (snake->direction != MOVE_UP)
+        //   snake->direction = MOVE_DOWN;
+        // break;
+      case ARROW_LEFT:
+        return MOVE_LEFT;
+        // if (snake->direction != MOVE_RIGHT)
+        //   snake->direction = MOVE_LEFT;
+        // break;
+      case ARROW_RIGHT:
+        return MOVE_RIGHT;
+        // if (snake->direction != MOVE_LEFT)
+        //   snake->direction = MOVE_RIGHT;
+        // break;
+      case ESC_KEY:
+        return ESC_KEY;
+        // goto endgame;
+    }
+  }
+  return IDLE;
 }
 
 int main(void) {
@@ -261,6 +294,7 @@ int main(void) {
   int64_t total_dt = 0;
   int64_t total_dt_snake = 0;
   int64_t end = current_timestamp();
+  char nextMoveRequested = 0;
 
   while (1) {
     int64_t start = current_timestamp();
@@ -276,31 +310,38 @@ int main(void) {
       total_dt = 0;
       frame_count = 0;
     }
-
-    int pressedKey = readKeyPress();
-
-    if (pressedKey > 0) {
-      switch (pressedKey) {
-        case ARROW_UP:
-          if (snake->direction != MOVE_DOWN)
-            snake->direction = MOVE_UP;
-          break;
-        case ARROW_DOWN:
-          if (snake->direction != MOVE_UP)
-            snake->direction = MOVE_DOWN;
-          break;
-        case ARROW_LEFT:
-          if (snake->direction != MOVE_RIGHT)
-            snake->direction = MOVE_LEFT;
-          break;
-        case ARROW_RIGHT:
-          if (snake->direction != MOVE_LEFT)
-            snake->direction = MOVE_RIGHT;
-          break;
-        case ESC_KEY:
-          goto endgame;
-      }
+    nextMoveRequested = input();
+    if (nextMoveRequested == ESC_KEY)
+      goto endgame;
+    if (nextMoveRequested != IDLE) {
+      snake->direction = nextMoveRequested;
     }
+
+    // int pressedKey = readKeyPress();
+
+    // if (pressedKey > 0) {
+    //   switch (pressedKey) {
+    //     case ARROW_UP:
+    //       if (snake->direction != MOVE_DOWN)
+    //         snake->direction = MOVE_UP;
+    //       break;
+    //     case ARROW_DOWN:
+    //       if (snake->direction != MOVE_UP)
+    //         snake->direction = MOVE_DOWN;
+    //       break;
+    //     case ARROW_LEFT:
+    //       if (snake->direction != MOVE_RIGHT)
+    //         snake->direction = MOVE_LEFT;
+    //       break;
+    //     case ARROW_RIGHT:
+    //       if (snake->direction != MOVE_LEFT)
+    //         snake->direction = MOVE_RIGHT;
+    //       break;
+    //     case ESC_KEY:
+    //       goto endgame;
+    //   }
+    // }
+
     // move the snake every 100 us
     if (total_dt_snake >= SNAKE_MOVE_TIME) {
       if (snake->direction != IDLE) {
