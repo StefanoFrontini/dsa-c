@@ -1,7 +1,9 @@
 #include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -12,6 +14,13 @@
 #define GROUND '.'
 #define BODY '*'
 #define FRUIT 'O'
+
+#define FPS 60
+#define SNAKE_SPEED 10
+
+// Time measured in microseconds(us)
+const int64_t FRAME_TIME = 1000000 / FPS;              // ~16.666 us
+const int64_t SNAKE_MOVE_TIME = 1000000 / SNAKE_SPEED; // 100.000 us
 
 typedef struct node {
   char x;
@@ -199,86 +208,6 @@ void updateFruit(fruit *f, char *grid) {
   setCell(grid, x, y, FRUIT);
 }
 
-/* Updates the score */
-// void updateScore(char *s) {
-//   s[0] = s[0] + 1;
-// }
-
-/* Updates the linked list when the snake moves. Checks the collisison between
- * snake, wall and the fruit. If there is a collision with a fruit the score is
- * updated */
-// snake *move(snake *s, char x, char y, char *grid, fruit *f, char *score) {
-//   if (getCell(grid, x, y) == BODY) {
-//     printf("\033[16;0H");
-//     printf("Game Over\n");
-//     exit(1);
-//   }
-//   s = prepend(s, x, y, grid);
-//   if (x == f->x && y == f->y) {
-//     updateScore(score);
-//     updateFruit(f, grid);
-//   } else {
-//     s = deleteTail(s, grid);
-//   }
-
-//   return s;
-// }
-/* Moves the snake right */
-// snake *moveRight(snake *s, char *grid, fruit *f, char *score) {
-//   char x = s->head->x;
-//   char y = s->head->y;
-//   if (x >= GRID_COLS - 1) {
-//     printf("\033[16;0H");
-//     printf("Game Over\n");
-//     exit(1);
-//   }
-//   x++;
-//   s = move(s, x, y, grid, f, score);
-//   return s;
-// }
-
-// /* Moves the snake left */
-// snake *moveLeft(snake *s, char *grid, fruit *f, char *score) {
-//   char x = s->head->x;
-//   char y = s->head->y;
-//   if (x <= 0) {
-//     printf("\033[16;0H");
-//     printf("Game Over\n");
-//     exit(1);
-//   }
-//   x--;
-//   s = move(s, x, y, grid, f, score);
-//   return s;
-// }
-
-// /* Moves the snake down */
-// snake *moveDown(snake *s, char *grid, fruit *f, char *score) {
-//   char x = s->head->x;
-//   char y = s->head->y;
-//   if (y >= GRID_ROWS - 1) {
-//     printf("\033[16;0H");
-//     printf("Game Over\n");
-//     exit(1);
-//   }
-//   y++;
-//   s = move(s, x, y, grid, f, score);
-//   return s;
-// }
-
-// /* Moves the snake up */
-// snake *moveUp(snake *s, char *grid, fruit *f, char *score) {
-//   char x = s->head->x;
-//   char y = s->head->y;
-//   if (y <= 0) {
-//     printf("\033[16;0H");
-//     printf("Game Over\n");
-//     exit(1);
-//   }
-//   y--;
-//   s = move(s, x, y, grid, f, score);
-//   return s;
-// }
-
 /* Place the fruit on the grid randomly */
 fruit *createFruit(char *grid) {
   fruit *f = malloc(sizeof(*f));
@@ -292,6 +221,13 @@ fruit *createFruit(char *grid) {
   f->y = y;
   setCell(grid, x, y, FRUIT);
   return f;
+}
+
+/* Helper function to get time in microseconds */
+int64_t current_timestamp() {
+  struct timeval te;
+  gettimeofday(&te, NULL); // get current time
+  return te.tv_sec * 1000000LL + te.tv_usec;
 }
 
 int main(void) {
@@ -309,7 +245,7 @@ int main(void) {
 
   char grid[GRID_CELLS]; // initialize the grid
   memset(grid, GROUND, GRID_CELLS);
-  snake *snake = createSnake(0, 0, grid); // creates the snake a (0, 0) position
+  snake *snake = createSnake(0, 0, grid); // creates the snake a (0, 0)
   char score = 0;
   // printNode(snake->head);
   // printf("-------------------------\n");
@@ -321,7 +257,26 @@ int main(void) {
   printf("\033[2J");   // clean screen
   printf("\033[H");    // cursor at Home
   printGrid(grid, score);
+  int frame_count = 0;
+  int64_t total_dt = 0;
+  int64_t total_dt_snake = 0;
+  int64_t end = current_timestamp();
+
   while (1) {
+    int64_t start = current_timestamp();
+    int64_t dt = start - end;
+    end = start;
+
+    total_dt += dt;
+    total_dt_snake += dt;
+    frame_count++;
+
+    if (total_dt >= 1000000) { // print the frame count every second
+      printf("\033[%d;%dHFPS: %d", GRID_ROWS + 2, 0, frame_count);
+      total_dt = 0;
+      frame_count = 0;
+    }
+
     int pressedKey = readKeyPress();
 
     if (pressedKey > 0) {
@@ -346,49 +301,53 @@ int main(void) {
           goto endgame;
       }
     }
+    // move the snake every 100 us
+    if (total_dt_snake >= SNAKE_MOVE_TIME) {
+      if (snake->direction != IDLE) {
+        Point next = getNextHeadPosition(snake);
 
-    if (snake->direction != IDLE) {
-      Point next = getNextHeadPosition(snake);
+        // 1. Checks wall collisions
+        if (next.x < 0 || next.x >= GRID_COLS || next.y < 0 ||
+            next.y >= GRID_ROWS) {
+          printf("\033[%d;%dHGAME OVER (Wall)!\n", GRID_ROWS + 3,
+                 0); // Prints at the end of the grid
+          break;     // exit from while
+        }
 
-      // 1. Checks wall collisions
-      if (next.x < 0 || next.x >= GRID_COLS || next.y < 0 ||
-          next.y >= GRID_ROWS) {
-        printf("\033[%d;%dHGAME OVER (Wall)!\n", GRID_ROWS + 2,
-               0); // Prints at the end of the grid
-        break;     // exit from while
+        // 2. Checks body collision
+        if (getCell(grid, next.x, next.y) == BODY) {
+          printf("\033[%d;%dHGAME OVER (Body)!\n", GRID_ROWS + 3, 0);
+          break;
+        }
+
+        // 3. Moves the snake
+        snake = prepend(snake, next.x, next.y, grid);
+
+        // 4. Checks fruit collision
+        if (next.x == f->x && next.y == f->y) {
+          score++;
+          updateFruit(f, grid);
+        } else {
+          snake = deleteTail(snake, grid);
+        }
       }
-
-      // 2. Checks body collision
-      if (getCell(grid, next.x, next.y) == BODY) {
-        printf("\033[%d;%dHGAME OVER (Body)!\n", GRID_ROWS + 2, 0);
-        break;
-      }
-
-      // 3. Moves the snake
-      snake = prepend(snake, next.x, next.y, grid);
-
-      // 4. Checks fruit collision
-      if (next.x == f->x && next.y == f->y) {
-        score++;
-        updateFruit(f, grid);
-      } else {
-        snake = deleteTail(snake, grid);
-      }
+      total_dt_snake -= SNAKE_MOVE_TIME;
     }
 
     // Rendering: moves the cursor at Home e redraw
     printf("\033[H");
     printGrid(grid, score);
 
-    usleep(100000); // 10 FPS
+    int64_t word_done = current_timestamp() - start;
+    if (word_done < FRAME_TIME) {
+      usleep(FRAME_TIME - word_done);
+    }
   }
 
 endgame:
   freeSnake(snake->head);
   free(snake);
   free(f);
-
-  return 0;
 
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
 
