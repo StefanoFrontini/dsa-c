@@ -18,9 +18,13 @@
 #define FPS 60
 #define SNAKE_SPEED 10
 
+#define QUEUE_KEY_PRESS_SIZE 3
+
 // Time measured in microseconds(us)
 const int64_t FRAME_TIME = 1000000 / FPS;              // ~16.666 us
 const int64_t SNAKE_MOVE_TIME = 1000000 / SNAKE_SPEED; // 100.000 us
+
+// ---- DATA STRUCTURES ----
 
 typedef struct node {
   char x;
@@ -32,22 +36,69 @@ typedef struct node {
 typedef struct {
   node *head;
   node *tail;
-  char direction;
+  int direction;
 } snake;
 
 typedef struct fruit {
   char x;
   char y;
 } fruit;
-
-enum Keys { ARROW_UP = 1000, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT, ESC_KEY };
-enum Directions { IDLE = 0, MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT };
-enum GameState { CONTINUE = 2000, GAME_OVER, SCORE_UP };
+/* Input buffer for storing key press within the 100us timeframe */
+typedef struct {
+  int keys[QUEUE_KEY_PRESS_SIZE];
+  int head;  // Where to write new input
+  int tail;  // Where to read for the update function
+  int count; // How many
+} inputBuffer;
 
 typedef struct {
   char x;
   char y;
 } Point;
+
+enum Keys {
+  ARROW_UP = 1000,
+  ARROW_DOWN,
+  ARROW_LEFT,
+  ARROW_RIGHT,
+  ESC_KEY,
+  NO_KEY
+};
+enum Directions { IDLE = 0, MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT };
+enum GameState {
+  CONTINUE = 2000,
+  GAME_OVER,
+  GAME_OVER_WALL,
+  GAME_OVER_BODY,
+  SCORE_UP,
+};
+
+struct termios original;
+
+// --- HELPER FUNCTIONS ---
+
+void initBuffer(inputBuffer *buf) {
+  buf->head = 0;
+  buf->tail = 0;
+  buf->count = 0;
+}
+
+void enqueueKey(inputBuffer *buf, int key) {
+  if (buf->count < QUEUE_KEY_PRESS_SIZE) {
+    buf->keys[buf->head] = key;
+    buf->head = (buf->head + 1) % QUEUE_KEY_PRESS_SIZE;
+    buf->count++;
+  }
+}
+
+int dequeueKey(inputBuffer *buf) {
+  if (buf->count == 0)
+    return NO_KEY;
+  int key = buf->keys[buf->tail];
+  buf->tail = (buf->tail + 1) % QUEUE_KEY_PRESS_SIZE;
+  buf->count--;
+  return key;
+}
 
 /* Get new head position based on the direction */
 Point getNextHeadPosition(snake *s) {
@@ -70,8 +121,6 @@ Point getNextHeadPosition(snake *s) {
   }
   return p;
 }
-
-struct termios original;
 
 /* Reads the keyboard inputs  */
 int readKeyPress() {
@@ -177,18 +226,6 @@ void freeSnake(node *head) {
   freeSnake(head->next);
   free(head);
 }
-/* Draws the grid */
-void printGrid(char *grid, char score) {
-  for (int y = 0; y < GRID_ROWS; y++) {
-    for (int x = 0; x < GRID_COLS; x++) {
-      printf("%c", getCell(grid, x, y));
-      if (y == 0 && x == GRID_COLS - 1) {
-        printf("\tScore: %d", score);
-      }
-    }
-    printf("\n");
-  }
-}
 /* Restores the terminal settings on game exit */
 void cleanup(void) {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
@@ -230,71 +267,133 @@ int64_t current_timestamp() {
   gettimeofday(&te, NULL); // get current time
   return te.tv_sec * 1000000LL + te.tv_usec;
 }
-char input(void) {
+
+// Input: Returns key pressed or NO_KEY
+int input(void) {
   int pressedKey = readKeyPress();
 
-  if (pressedKey > 0) {
-    switch (pressedKey) {
+  switch (pressedKey) {
+    case ARROW_UP:
+    case ARROW_DOWN:
+    case ARROW_LEFT:
+    case ARROW_RIGHT:
+    case ESC_KEY:
+      return pressedKey;
+    default:
+      return NO_KEY;
+  }
+}
+
+// Update state
+int update(char *grid, snake *s, fruit *f, inputBuffer *inputBuf) {
+
+  int key = dequeueKey(inputBuf);
+
+  if (key != NO_KEY) {
+    switch (key) {
       case ARROW_UP:
-        return MOVE_UP;
-        // if (snake->direction != MOVE_DOWN)
-        //   snake->direction = MOVE_UP;
-        // break;
+        if (s->direction != MOVE_DOWN)
+          s->direction = MOVE_UP;
+        break;
       case ARROW_DOWN:
-        return MOVE_DOWN;
-        // if (snake->direction != MOVE_UP)
-        //   snake->direction = MOVE_DOWN;
-        // break;
+        if (s->direction != MOVE_UP)
+          s->direction = MOVE_DOWN;
+        break;
       case ARROW_LEFT:
-        return MOVE_LEFT;
-        // if (snake->direction != MOVE_RIGHT)
-        //   snake->direction = MOVE_LEFT;
-        // break;
+        if (s->direction != MOVE_RIGHT)
+          s->direction = MOVE_LEFT;
+        break;
       case ARROW_RIGHT:
-        return MOVE_RIGHT;
-        // if (snake->direction != MOVE_LEFT)
-        //   snake->direction = MOVE_RIGHT;
-        // break;
-      case ESC_KEY:
-        return ESC_KEY;
-        // goto endgame;
+        if (s->direction != MOVE_LEFT)
+          s->direction = MOVE_RIGHT;
+        break;
     }
   }
-  return IDLE;
+
+  if (s->direction == IDLE) {
+    return CONTINUE;
+  }
+
+  Point next = getNextHeadPosition(s);
+
+  // Wall collision
+  if (next.x < 0 || next.x >= GRID_COLS || next.y < 0 || next.y >= GRID_ROWS) {
+    return GAME_OVER_WALL;
+  }
+
+  // Body collision
+  if (getCell(grid, next.x, next.y) == BODY) {
+    return GAME_OVER_BODY;
+  }
+
+  // Movement
+  s = prepend(s, next.x, next.y, grid);
+
+  // Fruit collision
+  if (next.x == f->x && next.y == f->y) {
+    updateFruit(f, grid);
+    return SCORE_UP;
+  } else {
+    s = deleteTail(s, grid);
+    return CONTINUE;
+  }
+}
+
+// Rendering: moves the cursor at Home and redraw
+
+/* Draws the grid */
+void printGrid(char *grid, char score) {
+  for (int y = 0; y < GRID_ROWS; y++) {
+    for (int x = 0; x < GRID_COLS; x++) {
+      printf("%c", getCell(grid, x, y));
+      if (y == 0 && x == GRID_COLS - 1) {
+        printf("\tScore: %d", score);
+      }
+    }
+    printf("\n");
+  }
+}
+void render(char *grid, char score) {
+  printf("\033[H");
+  printGrid(grid, score);
 }
 
 int main(void) {
 
   srand(time(NULL));
-  struct termios raw;
+
+  // Terminal setup
   tcgetattr(STDIN_FILENO, &original); // saves the terminal settings
   atexit(cleanup);
-  raw = original;
-  raw.c_lflag &= (~ICANON); // switch off buffer
-  raw.c_lflag &= (~ECHO);   // switch off echo
+  struct termios raw = original;
+  raw.c_lflag &= ~(ICANON | ECHO); // switch off buffer and echo
   raw.c_cc[VMIN] = 0;
   raw.c_cc[VTIME] = 0;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw); // sets the terminal in raw mode
 
+  // Game Setup
   char grid[GRID_CELLS]; // initialize the grid
   memset(grid, GROUND, GRID_CELLS);
   snake *snake = createSnake(0, 0, grid); // creates the snake a (0, 0)
   char score = 0;
-  // printNode(snake->head);
-  // printf("-------------------------\n");
-  // printNode(snake->head);
-  // printf("-------------------------\n");
   fruit *f = createFruit(grid);
 
+  // Input Buffer Setup
+  inputBuffer inputBuf;
+  initBuffer(&inputBuf);
+
+  // Initial render
   printf("\033[?25l"); // hide cursor
   printf("\033[2J");   // clean screen
   printf("\033[H");    // cursor at Home
-  printGrid(grid, score);
+  render(grid, score);
+
+  // Time variables
   int frame_count = 0;
   int64_t total_dt = 0;
   int64_t total_dt_snake = 0;
   int64_t end = current_timestamp();
-  char nextMoveRequested = 0;
+  int gameState = CONTINUE;
 
   while (1) {
     int64_t start = current_timestamp();
@@ -305,83 +404,46 @@ int main(void) {
     total_dt_snake += dt;
     frame_count++;
 
+    // FPS Counter
     if (total_dt >= 1000000) { // print the frame count every second
       printf("\033[%d;%dHFPS: %d", GRID_ROWS + 2, 0, frame_count);
       total_dt = 0;
       frame_count = 0;
     }
-    nextMoveRequested = input();
-    if (nextMoveRequested == ESC_KEY)
+
+    // 1. Input phase
+    int key = input();
+    if (key == ESC_KEY) {
+      printf("\033[%d;%dHExiting...\n", GRID_ROWS + 2, 0);
       goto endgame;
-    if (nextMoveRequested != IDLE) {
-      snake->direction = nextMoveRequested;
+    }
+    if (key != NO_KEY) {
+      enqueueKey(&inputBuf, key);
     }
 
-    // int pressedKey = readKeyPress();
-
-    // if (pressedKey > 0) {
-    //   switch (pressedKey) {
-    //     case ARROW_UP:
-    //       if (snake->direction != MOVE_DOWN)
-    //         snake->direction = MOVE_UP;
-    //       break;
-    //     case ARROW_DOWN:
-    //       if (snake->direction != MOVE_UP)
-    //         snake->direction = MOVE_DOWN;
-    //       break;
-    //     case ARROW_LEFT:
-    //       if (snake->direction != MOVE_RIGHT)
-    //         snake->direction = MOVE_LEFT;
-    //       break;
-    //     case ARROW_RIGHT:
-    //       if (snake->direction != MOVE_LEFT)
-    //         snake->direction = MOVE_RIGHT;
-    //       break;
-    //     case ESC_KEY:
-    //       goto endgame;
-    //   }
-    // }
-
+    // 2. Update phase
     // move the snake every 100 us
     if (total_dt_snake >= SNAKE_MOVE_TIME) {
-      if (snake->direction != IDLE) {
-        Point next = getNextHeadPosition(snake);
 
-        // 1. Checks wall collisions
-        if (next.x < 0 || next.x >= GRID_COLS || next.y < 0 ||
-            next.y >= GRID_ROWS) {
-          printf("\033[%d;%dHGAME OVER (Wall)!\n", GRID_ROWS + 3,
-                 0); // Prints at the end of the grid
-          break;     // exit from while
-        }
+      gameState = update(grid, snake, f, &inputBuf);
 
-        // 2. Checks body collision
-        if (getCell(grid, next.x, next.y) == BODY) {
-          printf("\033[%d;%dHGAME OVER (Body)!\n", GRID_ROWS + 3, 0);
-          break;
-        }
-
-        // 3. Moves the snake
-        snake = prepend(snake, next.x, next.y, grid);
-
-        // 4. Checks fruit collision
-        if (next.x == f->x && next.y == f->y) {
-          score++;
-          updateFruit(f, grid);
-        } else {
-          snake = deleteTail(snake, grid);
-        }
+      if (gameState == SCORE_UP)
+        score++;
+      else if (gameState != CONTINUE) {
+        // Handling Game Over
+        printf("\033[%d;%dHGAME OVER! Code: %d\n", GRID_ROWS + 3, 0, gameState);
+        goto endgame;
       }
       total_dt_snake -= SNAKE_MOVE_TIME;
     }
 
-    // Rendering: moves the cursor at Home e redraw
-    printf("\033[H");
-    printGrid(grid, score);
+    // 3. Render phase
+    render(grid, score);
 
-    int64_t word_done = current_timestamp() - start;
-    if (word_done < FRAME_TIME) {
-      usleep(FRAME_TIME - word_done);
+    // 4. Capping
+    int64_t work_done = current_timestamp() - start;
+    if (work_done < FRAME_TIME) {
+      usleep(FRAME_TIME - work_done);
     }
   }
 
@@ -389,8 +451,5 @@ endgame:
   freeSnake(snake->head);
   free(snake);
   free(f);
-
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
-
   return 0;
 }
