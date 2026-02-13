@@ -1,21 +1,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-struct node {
+struct Node {
   int val;
-  struct node *left;
-  struct node *right;
+  struct Node *left;
+  struct Node *right;
 };
 
-struct node *create_node(int val) {
-  struct node *n = malloc(sizeof(*n));
+struct Node *create_node(int val) {
+  struct Node *n = malloc(sizeof(*n));
   n->val = val;
   n->left = NULL;
   n->right = NULL;
   return n;
 }
 
-void print_node(struct node *n) {
+void print_node(struct Node *n) {
   if (n == NULL)
     return;
 
@@ -24,16 +24,16 @@ void print_node(struct node *n) {
   print_node(n->right);
 }
 
-void free_tree(struct node *root) {
+void free_tree(struct Node *root) {
   if (root == NULL)
     return;
   free_tree(root->left);
   free_tree(root->right);
   free(root);
 }
-struct node *add_node(struct node *root, int val) {
+struct Node *add_node(struct Node *root, int val) {
   if (root == NULL) {
-    struct node *new = create_node(val);
+    struct Node *new = create_node(val);
     return new;
   }
 
@@ -46,7 +46,7 @@ struct node *add_node(struct node *root, int val) {
 }
 
 int main(void) {
-  struct node *root = NULL;
+  struct Node *root = NULL;
   root = add_node(root, 10);
   printf("%p\n", root);
   root = add_node(root, 5);

@@ -2,247 +2,198 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct node
-{
-    int number;
-    struct node *next;
-} node;
+typedef struct Node {
+  int number;
+  struct Node *next;
+} Node;
 
-node *init(void);
-node *createNode(int number, node **list);
-void prepend(node **list, int item);
+Node *init(void);
+Node *createNode(int number, Node **list);
+void prepend(Node **list, int item);
 void test_linked_list();
-void printList(node *list);
-void freeMemory(node **list);
-void append(node **list, int item);
-node *get(int idx, node **list);
-void removeItem(int item, node **list);
+void printList(Node *list);
+void freeMemory(Node **list);
+void append(Node **list, int item);
+Node *get(int idx, Node **list);
+void removeItem(int item, Node **list);
 
-int main(void)
-{
-    test_linked_list();
+int main(void) {
+  test_linked_list();
 
-    return 0;
+  return 0;
 }
 
-void printList(node *list)
-{
-    node *ptr = list;
-    while (ptr != NULL)
-    {
-        printf("%i\n", ptr->number);
-        ptr = ptr->next;
-    }
+void printList(Node *list) {
+  Node *ptr = list;
+  while (ptr != NULL) {
+    printf("%i\n", ptr->number);
+    ptr = ptr->next;
+  }
 }
 
-node *init(void)
-{
-    node *list = NULL;
-    return list;
+Node *init(void) {
+  Node *list = NULL;
+  return list;
 }
 
-node *createNode(int number, node **list)
-{
-    node *n = malloc(sizeof(node));
-    if (n == NULL)
-    {
-        freeMemory(list);
-        exit(EXIT_FAILURE);
-    }
-    n->number = number;
-    n->next = NULL;
-    return n;
+Node *createNode(int number, Node **list) {
+  Node *n = malloc(sizeof(Node));
+  if (n == NULL) {
+    freeMemory(list);
+    exit(EXIT_FAILURE);
+  }
+  n->number = number;
+  n->next = NULL;
+  return n;
 }
 
-void prepend(node **list, int item)
-{
-    node *n = createNode(item, list);
-    n->next = *list;
+void prepend(Node **list, int item) {
+  Node *n = createNode(item, list);
+  n->next = *list;
+  *list = n;
+}
+
+void append(Node **list, int item) {
+  Node *n = createNode(item, list);
+  if (*list == NULL) {
     *list = n;
+  } else {
+    for (Node *ptr = *list; ptr != NULL; ptr = ptr->next) {
+      if (ptr->next == NULL) {
+        ptr->next = n;
+        break;
+      }
+    }
+  }
 }
 
-void append(node **list, int item)
-{
-    node *n = createNode(item, list);
-    if (*list == NULL)
-    {
-        *list = n;
-    }
-    else
-    {
-        for (node *ptr = *list; ptr != NULL; ptr = ptr->next)
-        {
-            if (ptr->next == NULL)
-            {
-                ptr->next = n;
-                break;
-            }
-        }
-    }
+void freeMemory(Node **list) {
+  Node *cursor = *list;
+  while (cursor != NULL) {
+    Node *tmp = cursor;
+    cursor = cursor->next;
+    free(tmp);
+  }
 }
 
-void freeMemory(node **list)
-{
-    node *cursor = *list;
-    while (cursor != NULL)
-    {
-        node *tmp = cursor;
-        cursor = cursor->next;
-        free(tmp);
-    }
-}
-
-void insertAt(int item, int idx, node **list)
-{
-    if (idx == 0)
-    {
-        prepend(list, item);
-        printf("Inserted!\n");
-    }
-    else
-    {
-        node *n = createNode(item, list);
-        int i = 0;
-        int inserted = 0;
-        for (node *ptr = *list; ptr != NULL; ptr = ptr->next, i++)
-        {
-            if (i == idx - 1)
-            {
-                n->next = ptr->next;
-                ptr->next = n;
-                inserted++;
-                break;
-            }
-        }
-        if (inserted == 0)
-        {
-            printf("Not Inserted!\n");
-        }
-        else
-        {
-            printf("Inserted!\n");
-        }
-    }
-}
-
-void deleteAt(int idx, node **list)
-{
-    if (*list == NULL)
-    {
-        printf("List is empty, nothing to delete");
-        return;
-    }
-    if (idx == 0)
-    {
-        printf("Deleting head...\n");
-        node *ptr = *list;
-        *list = ptr->next;
-    }
-    else
-    {
-        int i = 0;
-        int deleted = 0;
-        for (node *ptr = *list; ptr != NULL; ptr = ptr->next, i++)
-        {
-            if (i == idx - 1 && ptr->next != NULL)
-            {
-                node *next = ptr->next->next;
-                free(ptr->next);
-                ptr->next = next;
-                deleted++;
-                break;
-            }
-        }
-        if (deleted == 0)
-        {
-            printf("Not deleted!\n");
-        }
-        else
-        {
-            printf("deleted!\n");
-        }
-    }
-}
-
-node *get(int idx, node **list)
-{
-    if (*list == NULL)
-    {
-        printf("List is empty, returning null ptr\n");
-        return NULL;
-    }
-    // if (idx == 0)
-    // {
-    //     node *ptr = *list;
-    //     *list = ptr->next;
-    //     printf("Getting head...%i\n", ptr->number);
-    //     return *list;
-    // }
+void insertAt(int item, int idx, Node **list) {
+  if (idx == 0) {
+    prepend(list, item);
+    printf("Inserted!\n");
+  } else {
+    Node *n = createNode(item, list);
     int i = 0;
-    for (node *ptr = *list; ptr != NULL; ptr = ptr->next, i++)
-    {
-        if (i == idx)
-        {
-            printf("Returning node with value %i!\n", ptr->number);
-            return ptr;
-        }
+    int inserted = 0;
+    for (Node *ptr = *list; ptr != NULL; ptr = ptr->next, i++) {
+      if (i == idx - 1) {
+        n->next = ptr->next;
+        ptr->next = n;
+        inserted++;
+        break;
+      }
     }
-    printf("Nothing to get, returning list ptr!\n");
+    if (inserted == 0) {
+      printf("Not Inserted!\n");
+    } else {
+      printf("Inserted!\n");
+    }
+  }
+}
+
+void deleteAt(int idx, Node **list) {
+  if (*list == NULL) {
+    printf("List is empty, nothing to delete");
+    return;
+  }
+  if (idx == 0) {
+    printf("Deleting head...\n");
+    Node *ptr = *list;
+    *list = ptr->next;
+  } else {
+    int i = 0;
+    int deleted = 0;
+    for (Node *ptr = *list; ptr != NULL; ptr = ptr->next, i++) {
+      if (i == idx - 1 && ptr->next != NULL) {
+        Node *next = ptr->next->next;
+        free(ptr->next);
+        ptr->next = next;
+        deleted++;
+        break;
+      }
+    }
+    if (deleted == 0) {
+      printf("Not deleted!\n");
+    } else {
+      printf("deleted!\n");
+    }
+  }
+}
+
+Node *get(int idx, Node **list) {
+  if (*list == NULL) {
+    printf("List is empty, returning null ptr\n");
     return NULL;
+  }
+  // if (idx == 0)
+  // {
+  //     node *ptr = *list;
+  //     *list = ptr->next;
+  //     printf("Getting head...%i\n", ptr->number);
+  //     return *list;
+  // }
+  int i = 0;
+  for (Node *ptr = *list; ptr != NULL; ptr = ptr->next, i++) {
+    if (i == idx) {
+      printf("Returning node with value %i!\n", ptr->number);
+      return ptr;
+    }
+  }
+  printf("Nothing to get, returning list ptr!\n");
+  return NULL;
 }
 
-void removeItem(int item, node **list)
-{
-    if (*list == NULL)
-    {
-        printf("List is empty. Cannot remove\n");
-        return;
-    }
-    else if ((**list).number == item && (**list).next != NULL)
-    {
-        printf("Head %i removed!\n", item);
-        *list = (**list).next;
-        return;
-    }
-    else if ((**list).number == item && (**list).next == NULL)
-    {
-        // *list = NULL;
-        node *temp = *list;
-        *list = NULL;
-        free(temp); // Libera la memoria
-        printf("Head %i removed!\n", item);
-        return;
-    }
+void removeItem(int item, Node **list) {
+  if (*list == NULL) {
+    printf("List is empty. Cannot remove\n");
+    return;
+  } else if ((**list).number == item && (**list).next != NULL) {
+    printf("Head %i removed!\n", item);
+    *list = (**list).next;
+    return;
+  } else if ((**list).number == item && (**list).next == NULL) {
+    // *list = NULL;
+    Node *temp = *list;
+    *list = NULL;
+    free(temp); // Libera la memoria
+    printf("Head %i removed!\n", item);
+    return;
+  }
 
-    else
-    {
-        for (node *ptr = *list; ptr != NULL; ptr = ptr->next)
-        {
-            if (ptr->next != NULL && ptr->next->number == item)
-            {
-                ptr->next = ptr->next->next;
-                printf("Item %i removed!\n", item);
-                return;
-            }
-        }
-        printf("Item not found\n");
+  else {
+    for (Node *ptr = *list; ptr != NULL; ptr = ptr->next) {
+      if (ptr->next != NULL && ptr->next->number == item) {
+        ptr->next = ptr->next->next;
+        printf("Item %i removed!\n", item);
+        return;
+      }
     }
+    printf("Item not found\n");
+  }
 }
 
-void test_linked_list()
-{
-    // list is a variable storing the address of the first node
-    node *list = init();
-    prepend(&list, 1);
-    prepend(&list, 2);
-    prepend(&list, 3);
-    append(&list, 4);
-    insertAt(11, 1, &list);
-    deleteAt(0, &list);
-    get(0, &list);
-    printList(list);
-    removeItem(11, &list);
-    printList(list);
+void test_linked_list() {
+  // list is a variable storing the address of the first node
+  Node *list = init();
+  prepend(&list, 1);
+  prepend(&list, 2);
+  prepend(&list, 3);
+  append(&list, 4);
+  insertAt(11, 1, &list);
+  deleteAt(0, &list);
+  get(0, &list);
+  printList(list);
+  removeItem(11, &list);
+  printList(list);
 
-    freeMemory(&list);
+  freeMemory(&list);
 }
