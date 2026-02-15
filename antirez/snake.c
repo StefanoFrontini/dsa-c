@@ -102,6 +102,15 @@ typedef struct {
 
 // ------------------------------------------------------------------------
 
+// --- FUNCTION PROTOTYPES  ---
+// int determineDirection(int curMode, InputBuffer *inputBuf, Snake *s, Fruit
+// *f,
+//                        char *grid);
+// int applyPhysics(int dir, Snake *s, Fruit *f, char *grid);
+// int bfs_path(Snake *s, Fruit *f, char *grid);
+// GameMode update(char *grid, Snake *s, Fruit *f, InputBuffer *inputBuf,
+//                 int curMode);
+
 struct termios original;
 
 // --- HELPER FUNCTIONS ---
@@ -202,6 +211,7 @@ int readKeyPress() {
   }
   return 0;
 }
+
 /* Sets the state of the element of the grid positioned at x and y
  * coordinates */
 void setCell(char *grid, char x, char y, char state) {
@@ -227,6 +237,7 @@ Node *createNode(char x, char y) {
 
   return new;
 }
+
 /* Creates a snake. The snake is modelled as a doubly linked list
  * for fast adding to the head e removing from the tail. */
 Snake *createSnake(char x, char y, char *grid) {
@@ -242,6 +253,7 @@ Snake *createSnake(char x, char y, char *grid) {
   setCell(grid, x, y, BODY);
   return s;
 }
+
 /* Prepends a new head to the snake body */
 Snake *prepend(Snake *s, char x, char y, char *grid) {
   Node *newNode = createNode(x, y);
@@ -251,6 +263,7 @@ Snake *prepend(Snake *s, char x, char y, char *grid) {
   setCell(grid, x, y, BODY);
   return s;
 }
+
 /* Deletes the tail of the snake */
 Snake *deleteTail(Snake *s, char *grid) {
   Node *newTail = s->tail->prev;
@@ -260,6 +273,7 @@ Snake *deleteTail(Snake *s, char *grid) {
   s->tail = newTail;
   return s;
 }
+
 /* Prints the snake body to stdout */
 void printNode(Node *head) {
   if (head == NULL) return;
@@ -274,6 +288,7 @@ void freeSnake(Node *head) {
   freeSnake(head->next);
   free(head);
 }
+
 /* Restores the terminal settings on game exit */
 void cleanup(void) {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
@@ -331,6 +346,7 @@ int input(void) {
       return NO_KEY;
   }
 }
+
 int update_physics_only(char *grid, Snake *s, Fruit *f) {
   Point next = getNextHeadPosition(s);
 
@@ -357,32 +373,158 @@ int update_physics_only(char *grid, Snake *s, Fruit *f) {
   }
 }
 
-// Update state
-int update(char *grid, Snake *s, Fruit *f, InputBuffer *inputBuf) {
+// BFS
+char visited[GRID_CELLS];
+int parent[GRID_CELLS];
 
-  int key = dequeueKey(inputBuf);
+int bfs_path(Snake *s, Fruit *f, char *grid) {
+  BFSQueue q;
+  Point start = {s->head->x, s->head->y};
+  int startIdx = start.y * GRID_COLS + start.x;
 
-  if (key != NO_KEY) {
-    switch (key) {
-      case ARROW_UP:
-        if (s->direction != MOVE_DOWN) s->direction = MOVE_UP;
+  // Data structures reset
+  initBFSQueue(&q);
+  memset(visited, 0, sizeof(visited));
+  memset(parent, -1, sizeof(parent));
+
+  enqueueBFS(&q, start);
+  setCell(visited, start.x, start.y, 1);
+
+  while (!isBFSQueueEmpty(&q)) {
+    Point current = dequeueBFS(&q);
+
+    // Arrays for movements: Up, Down, Left, Right
+    int dx[] = {0, 0, -1, 1};
+    int dy[] = {-1, 1, 0, 0};
+
+    for (int i = 0; i < 4; i++) {
+      int nx = current.x + dx[i];
+      int ny = current.y + dy[i];
+      int currentIdx = current.y * GRID_COLS + current.x;
+      int nIdx = ny * GRID_COLS + nx;
+
+      // Borders checks
+      if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+
+      // Visited and body checks
+      if (getCell(visited, nx, ny) == 1 || getCell(grid, nx, ny) == BODY)
+        continue;
+
+      parent[nIdx] = currentIdx;
+
+      setCell(visited, nx, ny, 1);
+
+      enqueueBFS(&q, (Point){nx, ny});
+
+      // Fruit found!
+      if (nx == f->x && ny == f->y) {
+
+        // Backtracking
+        int curr = nIdx;
+        while (parent[curr] != startIdx) {
+          curr = parent[curr];
+          if (curr == -1) return -1;
+        }
+
+        // curr is now the next node from the head on the optimal path
+        Point nextMovePoint = getCoord(curr);
+
+        int x_diff = nextMovePoint.x - start.x;
+        int y_diff = nextMovePoint.y - start.y;
+
+        if (x_diff == 0 && y_diff == -1) return MOVE_UP;
+        if (x_diff == 1 && y_diff == 0) return MOVE_RIGHT;
+        if (x_diff == 0 && y_diff == 1) return MOVE_DOWN;
+        if (x_diff == -1 && y_diff == 0) return MOVE_LEFT;
+
+        return -1;
+      }
+    }
+  }
+  return -1;
+}
+
+int determineDirection(int curMode, InputBuffer *inputBuf, Snake *s, Fruit *f,
+                       char *grid) {
+
+  if (curMode == MODE_HUMAN) {
+    int key = dequeueKey(inputBuf);
+    if (key != NO_KEY) {
+      switch (key) {
+        case ARROW_UP:
+          if (s->direction != MOVE_DOWN) return MOVE_UP;
+          break;
+        case ARROW_DOWN:
+          if (s->direction != MOVE_UP) return MOVE_DOWN;
+          break;
+        case ARROW_LEFT:
+          if (s->direction != MOVE_RIGHT) return MOVE_LEFT;
+          break;
+        case ARROW_RIGHT:
+          if (s->direction != MOVE_LEFT) return MOVE_RIGHT;
+          break;
+      }
+    }
+  } else if (curMode == MODE_AI_BFS) {
+
+    int next_dir = bfs_path(s, f, grid);
+
+    if (next_dir != -1) {
+      // Case 1: BFS fount the path to the fruit
+      return next_dir;
+    } else {
+      // Caso 2: BFS failed -> Survival Mode
+      Point head = {s->head->x, s->head->y};
+      int dirs[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
+      int safe_dir = -1;
+
+      for (int i = 0; i < 4; i++) {
+        int test_dir = dirs[i];
+        int nx = head.x;
+        int ny = head.y;
+
+        switch (test_dir) {
+          case MOVE_UP:
+            ny--;
+            break;
+          case MOVE_DOWN:
+            ny++;
+            break;
+          case MOVE_LEFT:
+            nx--;
+            break;
+          case MOVE_RIGHT:
+            nx++;
+            break;
+        }
+
+        if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+        if (getCell(grid, nx, ny) == BODY) continue;
+
+        safe_dir = test_dir;
         break;
-      case ARROW_DOWN:
-        if (s->direction != MOVE_UP) s->direction = MOVE_DOWN;
-        break;
-      case ARROW_LEFT:
-        if (s->direction != MOVE_RIGHT) s->direction = MOVE_LEFT;
-        break;
-      case ARROW_RIGHT:
-        if (s->direction != MOVE_LEFT) s->direction = MOVE_RIGHT;
-        break;
+      }
+
+      if (safe_dir != -1) {
+        return safe_dir;
+      } else {
+        return GAME_OVER;
+      }
     }
   }
 
+  // If we are here it means in HUMAN MODE no key was pressed. The snakes
+  // continues in the previous direction.
+  return NO_KEY;
+}
+int applyPhysics(int dir, Snake *s, Fruit *f, char *grid) {
+  if (dir == GAME_OVER) return GAME_OVER;
+  if (dir != NO_KEY) {
+    s->direction = dir;
+  };
   if (s->direction == IDLE) {
     return CONTINUE;
   }
-
   Point next = getNextHeadPosition(s);
 
   // Wall collision
@@ -408,6 +550,14 @@ int update(char *grid, Snake *s, Fruit *f, InputBuffer *inputBuf) {
   }
 }
 
+// Update state
+GameMode update(char *grid, Snake *s, Fruit *f, InputBuffer *inputBuf,
+                int curMode) {
+
+  int new_dir = determineDirection(curMode, inputBuf, s, f, grid);
+  return applyPhysics(new_dir, s, f, grid);
+}
+
 // Rendering: moves the cursor at Home and redraw
 
 /* Draws the grid */
@@ -426,63 +576,22 @@ void render(char *grid, char score) {
   printf("\033[H");
   printGrid(grid, score);
 }
-// BFS
-char visited[GRID_CELLS];
-int parentArr[GRID_CELLS];
 
-int bfs_path(Snake *s, Fruit *f, char *grid) {
-  BFSQueue q;
-  Point p = {s->head->x, s->head->y};
-  initBFSQueue(&q);
-  memset(visited, 0, sizeof(visited));
-  memset(parentArr, -1, sizeof(parentArr));
-  enqueueBFS(&q, p);
-  setCell(visited, p.x, p.y, 1);
-  while (!isBFSQueueEmpty(&q)) {
-    Point current = dequeueBFS(&q);
-    for (int i = -1; i <= 1; i++) {
-      for (int j = -1; j <= 1; j++) {
-        if (i == 0 && j == 0) continue;
-        if (((i * j) != 0)) continue;
-        if ((current.x + i) < 0 || (current.x + i) >= GRID_COLS) continue;
-        if ((current.y + j) < 0 || (current.y + j) >= GRID_ROWS) continue;
-        if (getCell(visited, current.x + i, current.y + j) == 1 ||
-            getCell(grid, current.x + i, current.y + j) == BODY)
-          continue;
-        if (((current.x + i) == f->x) && ((current.y + j) == f->y)) {
-          int nIndex = (current.y + j) * GRID_COLS + (current.x + i);
-          parentArr[nIndex] = current.y * GRID_COLS + current.x;
-          int headIndex = p.y * GRID_COLS + p.x;
-          int parentIndex = 0;
-          int result = 0;
-          while (nIndex != headIndex) {
-            parentIndex = parentArr[nIndex];
-            if (parentIndex == headIndex) {
-              result = nIndex;
-            }
-            nIndex = parentIndex;
-          }
-          Point r = getCoord(result);
-          char x = r.x - p.x;
-          char y = r.y - p.y;
-          if (x == 0 && y == -1) return MOVE_UP;
-          if (x == 1 && y == 0) return MOVE_RIGHT;
-          if (x == 0 && y == 1) return MOVE_DOWN;
-          if (x == -1 && y == 0) return MOVE_LEFT;
-        }
-        setCell(visited, current.x + i, current.y + j, 1);
-        int nIndex = (current.y + j) * GRID_COLS + (current.x + i);
-        parentArr[nIndex] = current.y * GRID_COLS + current.x;
-
-        enqueueBFS(&q, (Point){current.x + i, current.y + j});
-      }
+int main(int argc, char **argv) {
+  GameMode currentMode = MODE_HUMAN;
+  if (argc == 1) {
+    printf("Running in HUMAN mode...\n");
+  }
+  if (argc > 1) {
+    if (strcmp(argv[1], "bfs") == 0) {
+      currentMode = MODE_AI_BFS;
+      printf("Running in AI mode: Breadth-First Search...\n");
+    } else {
+      printf("Unrecognize mode '%s'. Running in HUMAN mode. Try 'bfs'\n",
+             argv[1]);
     }
   }
-  return -1;
-}
-
-int main(void) {
-  int currentMode = MODE_AI_BFS;
+  sleep(2);
 
   srand(time(NULL));
 
@@ -550,62 +659,7 @@ int main(void) {
     // 2. Update phase
     // move the snake every 100 us
     if (total_dt_snake >= SNAKE_MOVE_TIME) {
-      if (currentMode == MODE_HUMAN) {
-        gameState = update(grid, snake, f, &inputBuf);
-
-      } else if (currentMode == MODE_AI_BFS) {
-        int next_dir = bfs_path(snake, f, grid);
-        if (next_dir != -1) {
-          snake->direction = next_dir;
-        } else {
-          Point head = {snake->head->x, snake->head->y};
-          int dirs[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
-          int safe_dir = -1;
-
-          for (int i = 0; i < 4; i++) {
-            int test_dir = dirs[i];
-            int nx = head.x;
-            int ny = head.y;
-
-            // Calculate next coordinates based on test_dir
-            switch (test_dir) {
-              case MOVE_UP:
-                ny--;
-                break;
-              case MOVE_DOWN:
-                ny++;
-                break;
-              case MOVE_LEFT:
-                nx--;
-                break;
-              case MOVE_RIGHT:
-                nx++;
-                break;
-            }
-
-            // 1. Bounds Check
-            if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) {
-              continue; // Fuori mappa -> Direzione non sicura
-            }
-
-            // 2. Body Check
-            if (getCell(grid, nx, ny) == BODY) {
-              continue;
-            }
-
-            safe_dir = test_dir;
-            break;
-          }
-          if (safe_dir != -1) {
-            snake->direction = safe_dir;
-            printf("Survival Mode: Stall\n");
-          } else {
-            printf("AI Trapped! Game Over.\n");
-            goto endgame;
-          }
-        }
-        gameState = update_physics_only(grid, snake, f);
-      }
+      gameState = update(grid, snake, f, &inputBuf, currentMode);
 
       if (gameState == SCORE_UP)
         score++;
