@@ -28,6 +28,14 @@ const int64_t SNAKE_MOVE_TIME = 1000000 / SNAKE_SPEED; // 100.000 us
 
 //  SNAKE is modelled as a doubly linked list
 
+// 1. Forward Declaration
+struct GameContext;
+typedef struct GameContext GameContext;
+
+// 2. Definizione del Tipo di Funzione (La "Strategy Interface")
+// Definiamo un alias per il puntatore a funzione per pulizia
+typedef int (*InputStrategy)(GameContext *ctx);
+
 typedef struct Node {
   char x;
   char y;
@@ -39,6 +47,7 @@ typedef struct {
   Node *head;
   Node *tail;
   int direction;
+  InputStrategy controller;
 } Snake;
 
 typedef enum {
@@ -108,16 +117,17 @@ typedef struct {
 } BFSQueue;
 
 // Game context
-typedef struct {
+struct GameContext {
   char grid[GRID_CELLS];
   Snake *snake;
   Fruit *f;
   InputBuffer inputBuf;
   GameMode mode;
   int score;
+  // BFS state
   char visited[GRID_CELLS];
   int parent[GRID_CELLS];
-} GameContext;
+};
 
 // ------------------------------------------------------------------------
 
@@ -452,79 +462,74 @@ Directions bfs_path(GameContext *ctx) {
   }
   return -1;
 }
-
-Directions determineDirection(GameContext *ctx) {
-
-  if (ctx->mode == MODE_HUMAN) {
-    int key = dequeueKey(&ctx->inputBuf);
-    if (key != NO_KEY) {
-      switch (key) {
-        case ARROW_UP:
-          if (ctx->snake->direction != MOVE_DOWN) return MOVE_UP;
-          break;
-        case ARROW_DOWN:
-          if (ctx->snake->direction != MOVE_UP) return MOVE_DOWN;
-          break;
-        case ARROW_LEFT:
-          if (ctx->snake->direction != MOVE_RIGHT) return MOVE_LEFT;
-          break;
-        case ARROW_RIGHT:
-          if (ctx->snake->direction != MOVE_LEFT) return MOVE_RIGHT;
-          break;
-      }
-    }
-  } else if (ctx->mode == MODE_AI_BFS) {
-
-    int next_dir = bfs_path(ctx);
-
-    if (next_dir != -1) {
-      // Case 1: BFS fount the path to the fruit
-      return next_dir;
-    } else {
-      // Caso 2: BFS failed -> Survival Mode
-      Point head = {ctx->snake->head->x, ctx->snake->head->y};
-      int dirs[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
-      int safe_dir = -1;
-
-      for (int i = 0; i < 4; i++) {
-        int test_dir = dirs[i];
-        int nx = head.x;
-        int ny = head.y;
-
-        switch (test_dir) {
-          case MOVE_UP:
-            ny--;
-            break;
-          case MOVE_DOWN:
-            ny++;
-            break;
-          case MOVE_LEFT:
-            nx--;
-            break;
-          case MOVE_RIGHT:
-            nx++;
-            break;
-        }
-
-        if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
-        if (getCell(ctx->grid, nx, ny) == BODY) continue;
-
-        safe_dir = test_dir;
+Directions humanInputController(GameContext *ctx) {
+  int key = dequeueKey(&ctx->inputBuf);
+  if (key != NO_KEY) {
+    switch (key) {
+      case ARROW_UP:
+        if (ctx->snake->direction != MOVE_DOWN) return MOVE_UP;
         break;
-      }
-
-      if (safe_dir != -1) {
-        return safe_dir;
-      } else {
-        return NO_DIRECTION;
-      }
+      case ARROW_DOWN:
+        if (ctx->snake->direction != MOVE_UP) return MOVE_DOWN;
+        break;
+      case ARROW_LEFT:
+        if (ctx->snake->direction != MOVE_RIGHT) return MOVE_LEFT;
+        break;
+      case ARROW_RIGHT:
+        if (ctx->snake->direction != MOVE_LEFT) return MOVE_RIGHT;
+        break;
     }
   }
-
-  // If we are here it means in HUMAN MODE no key was pressed. The snakes
-  // continues in the previous direction.
   return IDLE;
 }
+Directions aiBfsController(GameContext *ctx) {
+
+  int next_dir = bfs_path(ctx);
+
+  if (next_dir != -1) {
+    // Case 1: BFS fount the path to the fruit
+    return next_dir;
+  } else {
+    // Caso 2: BFS failed -> Survival Mode
+    Point head = {ctx->snake->head->x, ctx->snake->head->y};
+    int dirs[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
+    int safe_dir = -1;
+
+    for (int i = 0; i < 4; i++) {
+      int test_dir = dirs[i];
+      int nx = head.x;
+      int ny = head.y;
+
+      switch (test_dir) {
+        case MOVE_UP:
+          ny--;
+          break;
+        case MOVE_DOWN:
+          ny++;
+          break;
+        case MOVE_LEFT:
+          nx--;
+          break;
+        case MOVE_RIGHT:
+          nx++;
+          break;
+      }
+
+      if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+      if (getCell(ctx->grid, nx, ny) == BODY) continue;
+
+      safe_dir = test_dir;
+      break;
+    }
+
+    if (safe_dir != -1) {
+      return safe_dir;
+    } else {
+      return NO_DIRECTION;
+    }
+  }
+}
+
 GameState applyPhysics(int dir, GameContext *ctx) {
   if (dir == NO_DIRECTION) return GAME_OVER;
   if (dir != IDLE) {
@@ -561,8 +566,7 @@ GameState applyPhysics(int dir, GameContext *ctx) {
 
 // Update state
 GameState update(GameContext *ctx) {
-
-  Directions new_dir = determineDirection(ctx);
+  int new_dir = ctx->snake->controller(ctx);
   return applyPhysics(new_dir, ctx);
 }
 
@@ -585,7 +589,7 @@ void render(GameContext *ctx) {
   printGrid(ctx->grid, ctx->score);
 }
 
-void initGame(GameContext *ctx) {
+void initGame(GameContext *ctx, int mode_flag) {
   memset(ctx->grid, GROUND, GRID_CELLS);
   ctx->snake = createSnake(5, 5, ctx->grid);
   ctx->score = 0;
@@ -594,19 +598,23 @@ void initGame(GameContext *ctx) {
   memset(ctx->visited, 0, sizeof(ctx->visited));
   memset(ctx->parent, -1, sizeof(ctx->parent));
   ctx->mode = MODE_HUMAN;
+  if (mode_flag == MODE_AI_BFS) {
+    ctx->snake->controller = aiBfsController;
+  } else {
+    ctx->snake->controller = humanInputController;
+  }
 }
 
 int main(int argc, char **argv) {
   // Game Setup
   GameContext game_ctx;
-  initGame(&game_ctx);
 
   if (argc > 1 && strcmp(argv[1], "bfs") == 0) {
     printf("Running in AI mode: Breadth-First Search...\n");
-    game_ctx.mode = MODE_AI_BFS;
+    initGame(&game_ctx, MODE_AI_BFS);
   } else {
+    initGame(&game_ctx, MODE_HUMAN);
     printf("Running in HUMAN mode...Try 'bfs' for AI mode.\n");
-    game_ctx.mode = MODE_HUMAN;
   }
   sleep(2);
 
