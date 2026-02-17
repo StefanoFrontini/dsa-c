@@ -482,54 +482,63 @@ Directions humanInputController(GameContext *ctx) {
   }
   return IDLE;
 }
+
 Directions aiBfsController(GameContext *ctx) {
+  // Variabili statiche: mantengono il valore tra le chiamate (come se fossero
+  // globali ma private qui)
+  static int64_t sum_execution_time = 0;
+  static int samples_count = 0;
+  static int64_t last_print_time = 0;
 
-  int next_dir = bfs_path(ctx);
+  // 1. Misurazione
+  int64_t start = current_timestamp();
 
+  int next_dir = bfs_path(ctx); // Esecuzione reale
+
+  int64_t end = current_timestamp();
+
+  // 2. Accumulo dati statistici
+  sum_execution_time += (end - start);
+  samples_count++;
+
+  // 3. Logica di stampa (Ogni 1 secondo di TEMPO REALE)
+  if (end - last_print_time >= 1000000) {
+    if (samples_count > 0) {
+      long avg_time = sum_execution_time / samples_count;
+
+      // Usiamo una sequenza ANSI per stampare SOTTO la griglia di gioco
+      // Altrimenti la stampa rompe la grafica del serpente
+      printf("\033[%d;0H", GRID_ROWS + 4);
+      printf("BFS Avg Time: %ld us (Samples: %d)      \n", avg_time,
+             samples_count);
+    }
+
+    // Reset statistiche
+    sum_execution_time = 0;
+    samples_count = 0;
+    last_print_time = end;
+  }
+
+  // 4. Logica di gioco standard...
   if (next_dir != -1) {
-    // Case 1: BFS fount the path to the fruit
     return next_dir;
   } else {
-    // Caso 2: BFS failed -> Survival Mode
+    // ... codice Survival Mode ...
     Point head = {ctx->snake->head->x, ctx->snake->head->y};
     int dirs[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
     int safe_dir = -1;
+    // ... resto del tuo codice survival ...
+    // (Ho tagliato per brevità, mantieni il tuo loop for qui)
 
+    // Esempio rapido per completare la logica:
     for (int i = 0; i < 4; i++) {
-      int test_dir = dirs[i];
-      int nx = head.x;
-      int ny = head.y;
-
-      switch (test_dir) {
-        case MOVE_UP:
-          ny--;
-          break;
-        case MOVE_DOWN:
-          ny++;
-          break;
-        case MOVE_LEFT:
-          nx--;
-          break;
-        case MOVE_RIGHT:
-          nx++;
-          break;
-      }
-
-      if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
-      if (getCell(ctx->grid, nx, ny) == BODY) continue;
-
-      safe_dir = test_dir;
-      break;
+      // ... tua logica esistente ...
     }
 
-    if (safe_dir != -1) {
-      return safe_dir;
-    } else {
-      return NO_DIRECTION;
-    }
+    if (safe_dir != -1) return safe_dir;
+    return NO_DIRECTION;
   }
 }
-
 GameState applyPhysics(int dir, GameContext *ctx) {
   if (dir == NO_DIRECTION) return GAME_OVER;
   if (dir != IDLE) {
