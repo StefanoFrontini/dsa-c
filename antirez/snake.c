@@ -482,6 +482,42 @@ Directions humanInputController(GameContext *ctx) {
   }
   return IDLE;
 }
+Directions runSurvivalMode(GameContext *ctx) {
+  Point head = {ctx->snake->head->x, ctx->snake->head->y};
+  int dirs[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
+  int safe_dir = -1;
+
+  for (int i = 0; i < 4; i++) {
+
+    int test_dir = dirs[i];
+    int nx = head.x;
+    int ny = head.y;
+
+    switch (test_dir) {
+      case MOVE_UP:
+        ny--;
+        break;
+      case MOVE_DOWN:
+        ny++;
+        break;
+      case MOVE_LEFT:
+        nx--;
+        break;
+      case MOVE_RIGHT:
+        nx++;
+        break;
+    }
+
+    if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+    if (getCell(ctx->grid, nx, ny) == BODY) continue;
+
+    safe_dir = test_dir;
+    break;
+  }
+
+  if (safe_dir != -1) return safe_dir;
+  return NO_DIRECTION;
+}
 
 Directions aiBfsController(GameContext *ctx) {
   // Variabili statiche: mantengono il valore tra le chiamate (come se fossero
@@ -493,7 +529,7 @@ Directions aiBfsController(GameContext *ctx) {
   // 1. Misurazione
   int64_t start = current_timestamp();
 
-  int next_dir = bfs_path(ctx); // Esecuzione reale
+  int next_dir = bfs_path(ctx);
 
   int64_t end = current_timestamp();
 
@@ -523,20 +559,9 @@ Directions aiBfsController(GameContext *ctx) {
   if (next_dir != -1) {
     return next_dir;
   } else {
-    // ... codice Survival Mode ...
-    Point head = {ctx->snake->head->x, ctx->snake->head->y};
-    int dirs[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
-    int safe_dir = -1;
-    // ... resto del tuo codice survival ...
-    // (Ho tagliato per brevità, mantieni il tuo loop for qui)
-
-    // Esempio rapido per completare la logica:
-    for (int i = 0; i < 4; i++) {
-      // ... tua logica esistente ...
-    }
-
-    if (safe_dir != -1) return safe_dir;
-    return NO_DIRECTION;
+    printf("\033[%d;0H", GRID_ROWS + 6);
+    printf("Survival mode!\n");
+    return runSurvivalMode(ctx);
   }
 }
 GameState applyPhysics(int dir, GameContext *ctx) {
