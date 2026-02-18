@@ -28,13 +28,22 @@ const int64_t SNAKE_MOVE_TIME = 1000000 / SNAKE_SPEED; // 100.000 us
 
 //  SNAKE is modelled as a doubly linked list
 
-// 1. Forward Declaration
+// Forward Declaration
 struct GameContext;
 typedef struct GameContext GameContext;
 
-// 2. Definizione del Tipo di Funzione (La "Strategy Interface")
-// Definiamo un alias per il puntatore a funzione per pulizia
 typedef int (*InputStrategy)(GameContext *ctx);
+
+typedef enum {
+  NO_DIRECTION = -1,
+  IDLE,
+  MOVE_UP,
+  MOVE_DOWN,
+  MOVE_LEFT,
+  MOVE_RIGHT
+} Directions;
+
+typedef Directions (*PathfinderFunction)(GameContext *ctx);
 
 typedef struct Node {
   char x;
@@ -49,15 +58,6 @@ typedef struct {
   int direction;
   InputStrategy controller;
 } Snake;
-
-typedef enum {
-  NO_DIRECTION = -1,
-  IDLE,
-  MOVE_UP,
-  MOVE_DOWN,
-  MOVE_LEFT,
-  MOVE_RIGHT
-} Directions;
 
 typedef enum {
   MODE_HUMAN,
@@ -462,6 +462,31 @@ Directions bfs_path(GameContext *ctx) {
   }
   return -1;
 }
+
+Directions bfs_path_measured(GameContext *ctx) {
+  static int64_t sum_time = 0;
+  static int samples = 0;
+  static int64_t last_print = 0;
+
+  int64_t start = current_timestamp();
+
+  int res = bfs_path(ctx);
+
+  int64_t end = current_timestamp();
+
+  sum_time += (end - start);
+  samples++;
+  if (end - last_print >= 1000000) {
+    if (samples > 0) {
+      printf("\033[%d;0H", GRID_ROWS + 4);
+      printf("BFS Time: %lld us   Samples: %d\n", sum_time / samples, samples);
+    }
+    sum_time = 0;
+    samples = 0;
+    last_print = end;
+  }
+  return res;
+}
 Directions humanInputController(GameContext *ctx) {
   int key = dequeueKey(&ctx->inputBuf);
   if (key != NO_KEY) {
@@ -519,50 +544,23 @@ Directions runSurvivalMode(GameContext *ctx) {
   return NO_DIRECTION;
 }
 
-Directions aiBfsController(GameContext *ctx) {
-  // Variabili statiche: mantengono il valore tra le chiamate (come se fossero
-  // globali ma private qui)
-  static int64_t sum_execution_time = 0;
-  static int samples_count = 0;
-  static int64_t last_print_time = 0;
+// Generic AI Orchestrator
+Directions genericAiLogic(GameContext *ctx, PathfinderFunction algo) {
+  int next_dir = algo(ctx);
 
-  // 1. Misurazione
-  int64_t start = current_timestamp();
-
-  int next_dir = bfs_path(ctx);
-
-  int64_t end = current_timestamp();
-
-  // 2. Accumulo dati statistici
-  sum_execution_time += (end - start);
-  samples_count++;
-
-  // 3. Logica di stampa (Ogni 1 secondo di TEMPO REALE)
-  if (end - last_print_time >= 1000000) {
-    if (samples_count > 0) {
-      long avg_time = sum_execution_time / samples_count;
-
-      // Usiamo una sequenza ANSI per stampare SOTTO la griglia di gioco
-      // Altrimenti la stampa rompe la grafica del serpente
-      printf("\033[%d;0H", GRID_ROWS + 4);
-      printf("BFS Avg Time: %ld us (Samples: %d)      \n", avg_time,
-             samples_count);
-    }
-
-    // Reset statistiche
-    sum_execution_time = 0;
-    samples_count = 0;
-    last_print_time = end;
-  }
-
-  // 4. Logica di gioco standard...
   if (next_dir != -1) {
     return next_dir;
   } else {
-    printf("\033[%d;0H", GRID_ROWS + 6);
-    printf("Survival mode!\n");
     return runSurvivalMode(ctx);
   }
+}
+
+Directions aiBFSController(GameContext *ctx) {
+  return genericAiLogic(ctx, bfs_path);
+}
+
+Directions aiBfsPerfomanceController(GameContext *ctx) {
+  return genericAiLogic(ctx, bfs_path_measured);
 }
 GameState applyPhysics(int dir, GameContext *ctx) {
   if (dir == NO_DIRECTION) return GAME_OVER;
@@ -633,7 +631,7 @@ void initGame(GameContext *ctx, int mode_flag) {
   memset(ctx->parent, -1, sizeof(ctx->parent));
   ctx->mode = MODE_HUMAN;
   if (mode_flag == MODE_AI_BFS) {
-    ctx->snake->controller = aiBfsController;
+    ctx->snake->controller = aiBFSController;
   } else {
     ctx->snake->controller = humanInputController;
   }
@@ -643,13 +641,27 @@ int main(int argc, char **argv) {
   // Game Setup
   GameContext game_ctx;
 
-  if (argc > 1 && strcmp(argv[1], "bfs") == 0) {
-    printf("Running in AI mode: Breadth-First Search...\n");
-    initGame(&game_ctx, MODE_AI_BFS);
-  } else {
-    initGame(&game_ctx, MODE_HUMAN);
-    printf("Running in HUMAN mode...Try 'bfs' for AI mode.\n");
+  // Default
+  initGame(&game_ctx, MODE_HUMAN);
+
+  if (argc > 1) {
+    if (strcmp(argv[1], "bfs") == 0) {
+      game_ctx.mode = MODE_AI_BFS;
+
+      if (argc > 2 && strcmp(argv[2], "perf") == 0) {
+        printf("Mode: AI BFS (Performance Monitoring ON)\n");
+        game_ctx.snake->controller = aiBfsPerfomanceController;
+      } else {
+        printf("Mode: AI BFS (Standard)\n");
+        game_ctx.snake->controller = aiBFSController;
+      }
+    }
   }
+  if (game_ctx.mode == MODE_HUMAN) {
+    printf("Running in HUMAN mode...Try 'bfs' for AI mode or 'bfs perf' for AI "
+           "mode with metrics\n");
+  }
+
   sleep(2);
 
   srand(time(NULL));
