@@ -1,12 +1,18 @@
-#include <errno.h>
+// #include <errno.h>
+// #include <stdint.h>
+// #include <stdio.h>
+// #include <stdlib.h>
+// #include <string.h>
+// #include <sys/time.h>
+// #include <termios.h>
+// #include <time.h>
+// #include <unistd.h>
+
+#include "platform.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
-#include <termios.h>
-#include <time.h>
-#include <unistd.h>
 
 #define GRID_ROWS 15
 #define GRID_COLS 30
@@ -74,15 +80,6 @@ typedef struct {
   int count; // How many
 } InputBuffer;
 
-typedef enum {
-  ARROW_UP = 1000,
-  ARROW_DOWN,
-  ARROW_LEFT,
-  ARROW_RIGHT,
-  ESC_KEY,
-  NO_KEY
-} Keys;
-
 // POINT in the grid
 
 typedef struct {
@@ -124,7 +121,7 @@ struct GameContext {
 
 // ------------------------------------------------------------------------
 
-struct termios original;
+// struct termios original;
 
 // --- HELPER FUNCTIONS ---
 
@@ -163,7 +160,7 @@ void enqueueKey(InputBuffer *buf, int key) {
 }
 
 int dequeueKey(InputBuffer *buf) {
-  if (buf->count == 0) return NO_KEY;
+  if (buf->count == 0) return PLAT_KEY_NONE;
   int key = buf->keys[buf->tail];
   buf->tail = (buf->tail + 1) % QUEUE_KEY_PRESS_SIZE;
   buf->count--;
@@ -230,42 +227,6 @@ Point getNextHeadPosition(GameContext *ctx) {
   return p;
 }
 
-/* Reads the keyboard inputs  */
-Keys readKeyPress() {
-  ssize_t nread;
-  char c;
-
-  nread = read(STDIN_FILENO, &c, 1);
-  if (nread == 0) return 0;
-  if (c != '\033') {
-    return c;
-  }
-  char buf[2];
-  nread = read(STDIN_FILENO, buf, sizeof(buf));
-  if (nread == 0) {
-    return ESC_KEY;
-  }
-  if (buf[0] == '[') {
-    switch (buf[1]) {
-      case 'A':
-        return ARROW_UP;
-      case 'B':
-        return ARROW_DOWN;
-      case 'C':
-        return ARROW_RIGHT;
-      case 'D':
-        return ARROW_LEFT;
-    }
-  }
-  return 0;
-}
-
-/* Restores the terminal settings on game exit */
-void cleanup(void) {
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
-  printf("\033[?25h"); // show cursor
-}
-
 /* Updates the fruit location on the grid */
 void updateFruit(GameContext *ctx) {
   char x = rand() % GRID_COLS;
@@ -281,27 +242,11 @@ void updateFruit(GameContext *ctx) {
 }
 
 /* Helper function to get the time in microseconds */
-int64_t current_timestamp() {
-  struct timeval te;
-  gettimeofday(&te, NULL); // get current time
-  return te.tv_sec * 1000000LL + te.tv_usec;
-}
-
-// Input: Returns key pressed or NO_KEY
-Keys input(void) {
-  int pressedKey = readKeyPress();
-
-  switch (pressedKey) {
-    case ARROW_UP:
-    case ARROW_DOWN:
-    case ARROW_LEFT:
-    case ARROW_RIGHT:
-    case ESC_KEY:
-      return pressedKey;
-    default:
-      return NO_KEY;
-  }
-}
+// int64_t current_timestamp() {
+//   struct timeval te;
+//   gettimeofday(&te, NULL); // get current time
+//   return te.tv_sec * 1000000LL + te.tv_usec;
+// }
 
 // BFS
 
@@ -378,11 +323,11 @@ Directions bfs_path_measured(GameContext *ctx) {
   static int samples = 0;
   static int64_t last_print = 0;
 
-  int64_t start = current_timestamp();
+  int64_t start = platform_get_time_us();
 
   int res = bfs_path(ctx);
 
-  int64_t end = current_timestamp();
+  int64_t end = platform_get_time_us();
 
   sum_time += (end - start);
   samples++;
@@ -399,18 +344,18 @@ Directions bfs_path_measured(GameContext *ctx) {
 }
 Directions humanInputController(GameContext *ctx) {
   int key = dequeueKey(&ctx->inputBuf);
-  if (key != NO_KEY) {
+  if (key != PLAT_KEY_NONE) {
     switch (key) {
-      case ARROW_UP:
+      case PLAT_KEY_UP:
         if (ctx->snake.direction != MOVE_DOWN) return MOVE_UP;
         break;
-      case ARROW_DOWN:
+      case PLAT_KEY_DOWN:
         if (ctx->snake.direction != MOVE_UP) return MOVE_DOWN;
         break;
-      case ARROW_LEFT:
+      case PLAT_KEY_LEFT:
         if (ctx->snake.direction != MOVE_RIGHT) return MOVE_LEFT;
         break;
-      case ARROW_RIGHT:
+      case PLAT_KEY_RIGHT:
         if (ctx->snake.direction != MOVE_LEFT) return MOVE_RIGHT;
         break;
     }
@@ -571,6 +516,12 @@ void initGame(GameContext *ctx, int mode_flag) {
 }
 
 int main(int argc, char **argv) {
+  platform_init();
+  platform_random_seed();
+  atexit(platform_cleanup);
+
+  platform_clear_screen();
+
   // Game Setup
   GameContext game_ctx;
 
@@ -595,18 +546,11 @@ int main(int argc, char **argv) {
            "mode with metrics\n");
   }
 
-  sleep(2);
+  // sleep(2);
+  platform_sleep_us(2000000);
 
-  srand(time(NULL));
-
-  // Terminal setup
-  tcgetattr(STDIN_FILENO, &original); // saves the terminal settings
-  atexit(cleanup);
-  struct termios raw = original;
-  raw.c_lflag &= ~(ICANON | ECHO); // switch off buffer and echo
-  raw.c_cc[VMIN] = 0;
-  raw.c_cc[VTIME] = 0;
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw); // sets the terminal in raw mode
+  // srand(time(NULL));
+  platform_random_seed();
 
   // Initial render
   printf("\033[?25l"); // hide cursor
@@ -618,12 +562,12 @@ int main(int argc, char **argv) {
   int frame_count = 0;
   int64_t total_dt = 0;
   int64_t total_dt_snake = 0;
-  int64_t end = current_timestamp();
+  int64_t end = platform_get_time_us();
   int gameState = CONTINUE;
 
   // GAME LOOP
   while (1) {
-    int64_t start = current_timestamp();
+    int64_t start = platform_get_time_us();
     int64_t dt = start - end;
     end = start;
 
@@ -639,12 +583,13 @@ int main(int argc, char **argv) {
     }
 
     // 1. Input phase
-    int key = input();
-    if (key == ESC_KEY) {
+    // int key = input();
+    PlatformKey key = platform_get_input();
+    if (key == PLAT_KEY_ESC) {
       printf("\033[%d;%dHExiting...\n", GRID_ROWS + 2, 0);
       goto endgame;
     }
-    if (game_ctx.mode == MODE_HUMAN && key != NO_KEY) {
+    if (game_ctx.mode == MODE_HUMAN && key != PLAT_KEY_NONE) {
       enqueueKey(&game_ctx.inputBuf, key);
     }
 
@@ -667,9 +612,9 @@ int main(int argc, char **argv) {
     render(&game_ctx);
 
     // 4. Capping
-    int64_t work_done = current_timestamp() - start;
+    int64_t work_done = platform_get_time_us() - start;
     if (work_done < FRAME_TIME) {
-      usleep(FRAME_TIME - work_done);
+      platform_sleep_us(FRAME_TIME - work_done);
     }
   }
 
