@@ -26,8 +26,6 @@ const int64_t SNAKE_MOVE_TIME = 1000000 / SNAKE_SPEED; // 100.000 us
 
 // ---------------------- DATA STRUCTURES -------------------------------
 
-//  SNAKE is modelled as a doubly linked list
-
 // Forward Declaration
 struct GameContext;
 typedef struct GameContext GameContext;
@@ -45,17 +43,12 @@ typedef enum {
 
 typedef Directions (*PathfinderFunction)(GameContext *ctx);
 
-typedef struct Node {
-  char x;
-  char y;
-  struct Node *next;
-  struct Node *prev;
-} Node;
-
 typedef struct {
-  Node *head;
-  Node *tail;
+  int body[GRID_CELLS];
+  int head;
+  int tail;
   int direction;
+  int count;
   InputStrategy controller;
 } Snake;
 
@@ -119,8 +112,8 @@ typedef struct {
 // Game context
 struct GameContext {
   char grid[GRID_CELLS];
-  Snake *snake;
-  Fruit *f;
+  Snake snake;
+  Fruit f;
   InputBuffer inputBuf;
   GameMode mode;
   int score;
@@ -134,6 +127,26 @@ struct GameContext {
 struct termios original;
 
 // --- HELPER FUNCTIONS ---
+
+/* Sets the state of the element of the grid positioned at x and y
+ * coordinates */
+void setCell(char *grid, char x, char y, char state) {
+  int index = x + GRID_COLS * y;
+  grid[index] = state;
+}
+
+/* Gets the state of the element of the grid positioned at x and y
+  coordinates */
+char getCell(char *grid, char x, char y) {
+  int index = x + GRID_COLS * y;
+  return grid[index];
+}
+
+Point getCoord(int i) {
+  char x = i % GRID_COLS;
+  char y = i / GRID_COLS;
+  return (Point){x, y};
+}
 
 void initBuffer(InputBuffer *buf) {
   buf->head = 0;
@@ -175,10 +188,32 @@ Point dequeueBFS(BFSQueue *q) {
   return p;
 }
 
+int gridCellIdx(Point p) {
+  return p.y * GRID_COLS + p.x;
+}
+
+void enqueueSnake(GameContext *ctx, Point p) {
+  ctx->snake.body[ctx->snake.head] = gridCellIdx(p);
+  ctx->snake.head = (ctx->snake.head + 1) % GRID_CELLS;
+  ctx->snake.count++;
+  setCell(ctx->grid, p.x, p.y, BODY);
+}
+Point dequeueSnake(GameContext *ctx) {
+  int tailIdx = ctx->snake.body[ctx->snake.tail];
+  Point t = getCoord(tailIdx);
+  setCell(ctx->grid, t.x, t.y, GROUND);
+  ctx->snake.tail = (ctx->snake.tail + 1) % GRID_CELLS;
+  ctx->snake.count--;
+
+  return t;
+}
+
 /* Get new head position based on the direction */
-Point getNextHeadPosition(Snake *s) {
-  Point p = {s->head->x, s->head->y};
-  switch (s->direction) {
+Point getNextHeadPosition(GameContext *ctx) {
+  int currentHeadIdxInArray = (ctx->snake.head - 1 + GRID_CELLS) % GRID_CELLS;
+  int gridIdx = ctx->snake.body[currentHeadIdxInArray];
+  Point p = getCoord(gridIdx);
+  switch (ctx->snake.direction) {
     case MOVE_UP:
       p.y--;
       break;
@@ -195,11 +230,6 @@ Point getNextHeadPosition(Snake *s) {
       break;
   }
   return p;
-}
-Point getCoord(int i) {
-  char x = i % GRID_COLS;
-  char y = i / GRID_COLS;
-  return (Point){x, y};
 }
 
 /* Reads the keyboard inputs  */
@@ -232,83 +262,6 @@ Keys readKeyPress() {
   return 0;
 }
 
-/* Sets the state of the element of the grid positioned at x and y
- * coordinates */
-void setCell(char *grid, char x, char y, char state) {
-  int index = x + GRID_COLS * y;
-  grid[index] = state;
-}
-
-/* Gets the state of the element of the grid positioned at x and y
-  coordinates */
-char getCell(char *grid, char x, char y) {
-  int index = x + GRID_COLS * y;
-  return grid[index];
-}
-
-/*  Creates an element of the snake body */
-Node *createNode(char x, char y) {
-  Node *new = malloc(sizeof(Node));
-
-  new->x = x;
-  new->y = y;
-  new->next = NULL;
-  new->prev = NULL;
-
-  return new;
-}
-
-/* Creates a snake. The snake is modelled as a doubly linked list
- * for fast adding to the head e removing from the tail. */
-Snake *createSnake(char x, char y, char *grid) {
-  Node *newNode = malloc(sizeof(Node));
-  newNode->x = x;
-  newNode->y = y;
-  newNode->next = NULL;
-  newNode->prev = NULL;
-  Snake *s = malloc(sizeof(Snake));
-  s->head = newNode;
-  s->tail = newNode;
-  s->direction = IDLE;
-  setCell(grid, x, y, BODY);
-  return s;
-}
-
-/* Prepends a new head to the snake body */
-Snake *prepend(Snake *s, char x, char y, char *grid) {
-  Node *newNode = createNode(x, y);
-  s->head->prev = newNode;
-  newNode->next = s->head;
-  s->head = newNode;
-  setCell(grid, x, y, BODY);
-  return s;
-}
-
-/* Deletes the tail of the snake */
-Snake *deleteTail(Snake *s, char *grid) {
-  Node *newTail = s->tail->prev;
-  newTail->next = NULL;
-  setCell(grid, s->tail->x, s->tail->y, GROUND);
-  free(s->tail);
-  s->tail = newTail;
-  return s;
-}
-
-/* Prints the snake body to stdout */
-void printNode(Node *head) {
-  if (head == NULL) return;
-  while (head != NULL) {
-    printf("(%d, %d) (head: %p) (next: %p, prev: %p)\n", head->x, head->y, head,
-           head->next, head->prev);
-    head = head->next;
-  }
-}
-void freeSnake(Node *head) {
-  if (head == NULL) return;
-  freeSnake(head->next);
-  free(head);
-}
-
 /* Restores the terminal settings on game exit */
 void cleanup(void) {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
@@ -316,32 +269,17 @@ void cleanup(void) {
 }
 
 /* Updates the fruit location on the grid */
-void updateFruit(Fruit *f, char *grid) {
+void updateFruit(GameContext *ctx) {
   char x = rand() % GRID_COLS;
   char y = rand() % GRID_ROWS;
 
-  while (getCell(grid, x, y) == BODY) {
+  while (getCell(ctx->grid, x, y) == BODY) {
     x = rand() % GRID_COLS;
     y = rand() % GRID_ROWS;
   }
-  f->x = x;
-  f->y = y;
-  setCell(grid, x, y, FRUIT);
-}
-
-/* Place the fruit on the grid randomly */
-Fruit *createFruit(char *grid) {
-  Fruit *f = malloc(sizeof(*f));
-  char x = rand() % GRID_COLS;
-  char y = rand() % GRID_ROWS;
-  while (getCell(grid, x, y) == BODY) {
-    x = rand() % GRID_COLS;
-    y = rand() % GRID_ROWS;
-  }
-  f->x = x;
-  f->y = y;
-  setCell(grid, x, y, FRUIT);
-  return f;
+  ctx->f.x = x;
+  ctx->f.y = y;
+  setCell(ctx->grid, x, y, FRUIT);
 }
 
 /* Helper function to get the time in microseconds */
@@ -367,38 +305,13 @@ Keys input(void) {
   }
 }
 
-int update_physics_only(char *grid, Snake *s, Fruit *f) {
-  Point next = getNextHeadPosition(s);
-
-  // Wall collision
-  if (next.x < 0 || next.x >= GRID_COLS || next.y < 0 || next.y >= GRID_ROWS) {
-    return GAME_OVER_WALL;
-  }
-
-  // Body collision
-  if (getCell(grid, next.x, next.y) == BODY) {
-    return GAME_OVER_BODY;
-  }
-
-  // Movement
-  s = prepend(s, next.x, next.y, grid);
-
-  // Fruit collision
-  if (next.x == f->x && next.y == f->y) {
-    updateFruit(f, grid);
-    return SCORE_UP;
-  } else {
-    s = deleteTail(s, grid);
-    return CONTINUE;
-  }
-}
-
 // BFS
 
 Directions bfs_path(GameContext *ctx) {
   BFSQueue q;
-  Point start = {ctx->snake->head->x, ctx->snake->head->y};
-  int startIdx = start.y * GRID_COLS + start.x;
+  int currentHeadIdxInArray = (ctx->snake.head - 1 + GRID_CELLS) % GRID_CELLS;
+  int startIdx = ctx->snake.body[currentHeadIdxInArray];
+  Point start = getCoord(startIdx);
 
   // Data structures reset
   initBFSQueue(&q);
@@ -436,7 +349,7 @@ Directions bfs_path(GameContext *ctx) {
       enqueueBFS(&q, (Point){nx, ny});
 
       // Fruit found!
-      if (nx == ctx->f->x && ny == ctx->f->y) {
+      if (nx == ctx->f.x && ny == ctx->f.y) {
 
         // Backtracking
         int curr = nIdx;
@@ -492,23 +405,24 @@ Directions humanInputController(GameContext *ctx) {
   if (key != NO_KEY) {
     switch (key) {
       case ARROW_UP:
-        if (ctx->snake->direction != MOVE_DOWN) return MOVE_UP;
+        if (ctx->snake.direction != MOVE_DOWN) return MOVE_UP;
         break;
       case ARROW_DOWN:
-        if (ctx->snake->direction != MOVE_UP) return MOVE_DOWN;
+        if (ctx->snake.direction != MOVE_UP) return MOVE_DOWN;
         break;
       case ARROW_LEFT:
-        if (ctx->snake->direction != MOVE_RIGHT) return MOVE_LEFT;
+        if (ctx->snake.direction != MOVE_RIGHT) return MOVE_LEFT;
         break;
       case ARROW_RIGHT:
-        if (ctx->snake->direction != MOVE_LEFT) return MOVE_RIGHT;
+        if (ctx->snake.direction != MOVE_LEFT) return MOVE_RIGHT;
         break;
     }
   }
   return IDLE;
 }
 Directions runSurvivalMode(GameContext *ctx) {
-  Point head = {ctx->snake->head->x, ctx->snake->head->y};
+  int headIdx = ctx->snake.body[ctx->snake.head - 1];
+  Point head = getCoord(headIdx);
   int dirs[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
   int safe_dir = -1;
 
@@ -551,6 +465,7 @@ Directions genericAiLogic(GameContext *ctx, PathfinderFunction algo) {
   if (next_dir != -1) {
     return next_dir;
   } else {
+    printf("\033[%d;%dHSurvivalMode!...\n", GRID_ROWS + 4, 0);
     return runSurvivalMode(ctx);
   }
 }
@@ -565,13 +480,13 @@ Directions aiBfsPerfomanceController(GameContext *ctx) {
 GameState applyPhysics(int dir, GameContext *ctx) {
   if (dir == NO_DIRECTION) return GAME_OVER;
   if (dir != IDLE) {
-    ctx->snake->direction = dir;
+    ctx->snake.direction = dir;
   };
-  if (ctx->snake->direction == IDLE) {
+  if (ctx->snake.direction == IDLE) {
     return CONTINUE;
   }
 
-  Point next = getNextHeadPosition(ctx->snake);
+  Point next = getNextHeadPosition(ctx);
 
   // Wall collision
   if (next.x < 0 || next.x >= GRID_COLS || next.y < 0 || next.y >= GRID_ROWS) {
@@ -584,21 +499,21 @@ GameState applyPhysics(int dir, GameContext *ctx) {
   }
 
   // Movement
-  ctx->snake = prepend(ctx->snake, next.x, next.y, ctx->grid);
+  enqueueSnake(ctx, next);
 
   // Fruit collision
-  if (next.x == ctx->f->x && next.y == ctx->f->y) {
-    updateFruit(ctx->f, ctx->grid);
+  if (next.x == ctx->f.x && next.y == ctx->f.y) {
+    updateFruit(ctx);
     return SCORE_UP;
   } else {
-    ctx->snake = deleteTail(ctx->snake, ctx->grid);
+    dequeueSnake(ctx);
     return CONTINUE;
   }
 }
 
 // Update state
 GameState update(GameContext *ctx) {
-  int new_dir = ctx->snake->controller(ctx);
+  int new_dir = ctx->snake.controller(ctx);
   return applyPhysics(new_dir, ctx);
 }
 
@@ -620,20 +535,42 @@ void render(GameContext *ctx) {
   printf("\033[H");
   printGrid(ctx->grid, ctx->score);
 }
+void initSnake(char x, char y, GameContext *ctx) {
+  ctx->snake.head = 0;
+  ctx->snake.tail = 0;
+  ctx->snake.count = 0;
+  ctx->snake.direction = IDLE;
+  Point p = {x, y};
+  enqueueSnake(ctx, p);
+  setCell(ctx->grid, x, y, BODY);
+}
+
+// /* Place the fruit on the grid randomly */
+void initFruit(GameContext *ctx) {
+  char x = rand() % GRID_COLS;
+  char y = rand() % GRID_ROWS;
+  while (getCell(ctx->grid, x, y) == BODY) {
+    x = rand() % GRID_COLS;
+    y = rand() % GRID_ROWS;
+  }
+  ctx->f.x = x;
+  ctx->f.y = y;
+  setCell(ctx->grid, x, y, FRUIT);
+}
 
 void initGame(GameContext *ctx, int mode_flag) {
   memset(ctx->grid, GROUND, GRID_CELLS);
-  ctx->snake = createSnake(5, 5, ctx->grid);
+  initSnake(5, 5, ctx);
   ctx->score = 0;
-  ctx->f = createFruit(ctx->grid);
+  initFruit(ctx);
   initBuffer(&ctx->inputBuf);
   memset(ctx->visited, 0, sizeof(ctx->visited));
   memset(ctx->parent, -1, sizeof(ctx->parent));
   ctx->mode = MODE_HUMAN;
   if (mode_flag == MODE_AI_BFS) {
-    ctx->snake->controller = aiBFSController;
+    ctx->snake.controller = aiBFSController;
   } else {
-    ctx->snake->controller = humanInputController;
+    ctx->snake.controller = humanInputController;
   }
 }
 
@@ -650,10 +587,10 @@ int main(int argc, char **argv) {
 
       if (argc > 2 && strcmp(argv[2], "perf") == 0) {
         printf("Mode: AI BFS (Performance Monitoring ON)\n");
-        game_ctx.snake->controller = aiBfsPerfomanceController;
+        game_ctx.snake.controller = aiBfsPerfomanceController;
       } else {
         printf("Mode: AI BFS (Standard)\n");
-        game_ctx.snake->controller = aiBFSController;
+        game_ctx.snake.controller = aiBFSController;
       }
     }
   }
@@ -680,7 +617,6 @@ int main(int argc, char **argv) {
   printf("\033[2J");   // clean screen
   printf("\033[H");    // cursor at Home
   render(&game_ctx);
-  // printf("Fruit is at: (%d, %d)\n", f->x, f->y);
 
   // Time variables
   int frame_count = 0;
@@ -742,8 +678,6 @@ int main(int argc, char **argv) {
   }
 
 endgame:
-  freeSnake(game_ctx.snake->head);
-  free(game_ctx.snake);
-  free(game_ctx.f);
+  // free(game_ctx.f);
   return 0;
 }
