@@ -43,12 +43,12 @@ typedef enum {
 
 typedef Directions (*PathfinderFunction)(GameContext *ctx);
 
+// Snake is implemented as a Ring Buffer
 typedef struct {
   int body[GRID_CELLS];
   int head;
   int tail;
   int direction;
-  int count;
   InputStrategy controller;
 } Snake;
 
@@ -118,7 +118,7 @@ struct GameContext {
   GameMode mode;
   int score;
   // BFS state
-  char visited[GRID_CELLS];
+  int visited[GRID_CELLS];
   int parent[GRID_CELLS];
 };
 
@@ -195,7 +195,6 @@ int gridCellIdx(Point p) {
 void enqueueSnake(GameContext *ctx, Point p) {
   ctx->snake.body[ctx->snake.head] = gridCellIdx(p);
   ctx->snake.head = (ctx->snake.head + 1) % GRID_CELLS;
-  ctx->snake.count++;
   setCell(ctx->grid, p.x, p.y, BODY);
 }
 Point dequeueSnake(GameContext *ctx) {
@@ -203,7 +202,6 @@ Point dequeueSnake(GameContext *ctx) {
   Point t = getCoord(tailIdx);
   setCell(ctx->grid, t.x, t.y, GROUND);
   ctx->snake.tail = (ctx->snake.tail + 1) % GRID_CELLS;
-  ctx->snake.count--;
 
   return t;
 }
@@ -308,18 +306,18 @@ Keys input(void) {
 // BFS
 
 Directions bfs_path(GameContext *ctx) {
+  static int run_id = 0;
   BFSQueue q;
   int currentHeadIdxInArray = (ctx->snake.head - 1 + GRID_CELLS) % GRID_CELLS;
   int startIdx = ctx->snake.body[currentHeadIdxInArray];
   Point start = getCoord(startIdx);
+  run_id++;
 
   // Data structures reset
   initBFSQueue(&q);
-  memset(ctx->visited, 0, sizeof(ctx->visited));
-  memset(ctx->parent, -1, sizeof(ctx->parent));
 
   enqueueBFS(&q, start);
-  setCell(ctx->visited, start.x, start.y, 1);
+  ctx->visited[startIdx] = run_id;
 
   while (!isBFSQueueEmpty(&q)) {
     Point current = dequeueBFS(&q);
@@ -338,13 +336,12 @@ Directions bfs_path(GameContext *ctx) {
       if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
 
       // Visited and body checks
-      if (getCell(ctx->visited, nx, ny) == 1 ||
-          getCell(ctx->grid, nx, ny) == BODY)
+      if (ctx->visited[nIdx] == run_id || getCell(ctx->grid, nx, ny) == BODY)
         continue;
 
       ctx->parent[nIdx] = currentIdx;
 
-      setCell(ctx->visited, nx, ny, 1);
+      ctx->visited[nIdx] = run_id;
 
       enqueueBFS(&q, (Point){nx, ny});
 
@@ -538,7 +535,6 @@ void render(GameContext *ctx) {
 void initSnake(char x, char y, GameContext *ctx) {
   ctx->snake.head = 0;
   ctx->snake.tail = 0;
-  ctx->snake.count = 0;
   ctx->snake.direction = IDLE;
   Point p = {x, y};
   enqueueSnake(ctx, p);
@@ -678,6 +674,5 @@ int main(int argc, char **argv) {
   }
 
 endgame:
-  // free(game_ctx.f);
   return 0;
 }
