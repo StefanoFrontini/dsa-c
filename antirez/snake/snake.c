@@ -1,13 +1,3 @@
-// #include <errno.h>
-// #include <stdint.h>
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <sys/time.h>
-// #include <termios.h>
-// #include <time.h>
-// #include <unistd.h>
-
 #include "platform.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -58,10 +48,7 @@ typedef struct {
   InputStrategy controller;
 } Snake;
 
-typedef enum {
-  MODE_HUMAN,
-  MODE_AI_BFS,
-} GameMode;
+typedef enum { MODE_HUMAN, MODE_AI_BFS, MODE_AI_ASTAR } GameMode;
 
 //  FRUIT
 
@@ -106,6 +93,19 @@ typedef struct {
   int tail;
 } BFSQueue;
 
+// Min Heap
+typedef struct {
+  Point p;
+  int g; // Costo esatto: passi dal punto di partenza
+  int h; // Euristica: distanza di Manhattan dal cella n al frutto
+  int f; // Costo totale: g + h
+} Node;
+
+typedef struct {
+  Node frontier[GRID_CELLS];
+  int count;
+} minHeap;
+
 // Game context
 struct GameContext {
   char grid[GRID_CELLS];
@@ -121,9 +121,80 @@ struct GameContext {
 
 // ------------------------------------------------------------------------
 
-// struct termios original;
-
 // --- HELPER FUNCTIONS ---
+
+// ---- MinHeap -----
+void initHeap(minHeap *h) {
+  h->count = 0;
+}
+
+// BUBBLE-UP: Inserts a node and makes it "float" upwards
+void insertHeap(minHeap *h, Node n) {
+  int index = h->count;
+  h->count++;
+  // "Hole" optimization: we slide parents down instead of swapping
+  while (index > 0) {
+    int pIdx = (index - 1) / 2;
+    Node parent = h->frontier[pIdx];
+
+    int should_swap = 0;
+    if (n.f < parent.f) {
+      should_swap = 1;
+    } else if (n.f == parent.f && n.h < parent.h) {
+      should_swap = 1; // A* prefers nodes closest to the target!
+    }
+    if (!should_swap) break;
+
+    h->frontier[index] = parent; // Move the parent down
+    index = pIdx;                // Move up
+  }
+  h->frontier[index] = n; // We insert the node into the final "hole"
+}
+
+// TRICKLE-DOWN: Extracts the root and rearranges the tree
+Node deleteHeap(minHeap *h) {
+  Node root = h->frontier[0];
+  h->count--;
+  if (h->count == 0) return root;
+
+  // Take the last node and look for where to put it starting from the root
+  Node lastNode = h->frontier[h->count];
+  int index = 0;
+
+  // Continue until there is at least one left child
+  while ((index * 2) + 1 < h->count) {
+    int leftChild = (index * 2) + 1;
+    int rightChild = (index * 2) + 2;
+    int smallerChild = leftChild;
+
+    // Find the "smaller" child of the two
+    if (rightChild < h->count) {
+      Node lNode = h->frontier[leftChild];
+      Node rNode = h->frontier[rightChild];
+
+      if (rNode.f < lNode.f || (rNode.f == lNode.f && rNode.h < lNode.h)) {
+        smallerChild = rightChild;
+      }
+    }
+
+    // If the last node is smaller than the smallest child, we are good to go.
+    Node sNode = h->frontier[smallerChild];
+    if (lastNode.f < sNode.f ||
+        (lastNode.f == sNode.f && lastNode.h <= sNode.h)) {
+      break;
+    }
+    // Make the smallest node "go up"
+    h->frontier[index] = sNode;
+    index = smallerChild; // go down
+  }
+
+  // We insert the last node into the final "hole"
+  h->frontier[index] = lastNode;
+
+  return root;
+}
+
+// -------------- A* ---------------------
 
 /* Sets the state of the element of the grid positioned at x and y
  * coordinates */
@@ -241,12 +312,97 @@ void updateFruit(GameContext *ctx) {
   setCell(ctx->grid, x, y, FRUIT);
 }
 
-/* Helper function to get the time in microseconds */
-// int64_t current_timestamp() {
-//   struct timeval te;
-//   gettimeofday(&te, NULL); // get current time
-//   return te.tv_sec * 1000000LL + te.tv_usec;
-// }
+// A*
+
+//  Manhattan distance on a square grid
+int heuristic(Point a, Point b) {
+  return abs(a.x - b.x) + abs(a.y - b.y);
+}
+
+Directions a_star(GameContext *ctx) {
+  static int run_id = 0;
+  run_id++;
+
+  minHeap heap;
+  initHeap(&heap);
+
+  // Array locale per tracciare i percorsi migliori.
+  // Non serve inizializzarlo grazie al run_id!
+  int g_score[GRID_CELLS];
+
+  int currentHeadIdxInArray = (ctx->snake.head - 1 + GRID_CELLS) % GRID_CELLS;
+  int startIdx = ctx->snake.body[currentHeadIdxInArray];
+  Point a = getCoord(startIdx);
+  Point b = (Point){ctx->f.x, ctx->f.y};
+
+  // Setup nodo di partenza
+  Node start = {.p = a, .g = 0, .h = heuristic(a, b)};
+  start.f = start.g + start.h;
+  insertHeap(&heap, start);
+
+  ctx->visited[startIdx] = run_id;
+  g_score[startIdx] = 0;
+
+  int goal_idx = -1;
+
+  while (heap.count > 0) {
+    Node cur = deleteHeap(&heap);
+    int currIdx = gridCellIdx(cur.p);
+
+    if (cur.p.x == b.x && cur.p.y == b.y) {
+      goal_idx = currIdx;
+      break;
+    }
+
+    int dx[] = {0, 0, -1, 1};
+    int dy[] = {-1, 1, 0, 0};
+
+    for (int i = 0; i < 4; i++) {
+      int nx = cur.p.x + dx[i];
+      int ny = cur.p.y + dy[i];
+
+      // Borders checks
+      if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+
+      int nIdx = gridCellIdx((Point){nx, ny});
+
+      // Body checks
+      if (getCell(ctx->grid, nx, ny) == BODY) continue;
+
+      int tentative_g = cur.g + 1;
+      int is_visited = (ctx->visited[nIdx] == run_id);
+
+      if (is_visited && tentative_g >= g_score[nIdx]) continue;
+      ctx->visited[nIdx] = run_id;
+      g_score[nIdx] = tentative_g;
+      ctx->parent[nIdx] = currIdx;
+
+      Node n = {.p = (Point){nx, ny}, .g = tentative_g, .h = heuristic(n.p, b)};
+      n.f = n.g + n.h;
+
+      insertHeap(&heap, n);
+    }
+  }
+  if (goal_idx == -1) return -1;
+
+  // Backtracking
+  int curr = goal_idx;
+  while (ctx->parent[curr] != startIdx) {
+    curr = ctx->parent[curr];
+    if (curr == -1) return -1;
+  }
+
+  Point nextMovePoint = getCoord(curr);
+
+  int x_diff = nextMovePoint.x - start.p.x;
+  int y_diff = nextMovePoint.y - start.p.y;
+
+  if (x_diff == 0 && y_diff == -1) return MOVE_UP;
+  if (x_diff == 1 && y_diff == 0) return MOVE_RIGHT;
+  if (x_diff == 0 && y_diff == 1) return MOVE_DOWN;
+  if (x_diff == -1 && y_diff == 0) return MOVE_LEFT;
+  return -1;
+}
 
 // BFS
 
@@ -275,10 +431,11 @@ Directions bfs_path(GameContext *ctx) {
       int nx = current.x + dx[i];
       int ny = current.y + dy[i];
       int currentIdx = current.y * GRID_COLS + current.x;
-      int nIdx = ny * GRID_COLS + nx;
 
       // Borders checks
       if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+
+      int nIdx = ny * GRID_COLS + nx;
 
       // Visited and body checks
       if (ctx->visited[nIdx] == run_id || getCell(ctx->grid, nx, ny) == BODY)
@@ -411,6 +568,9 @@ Directions genericAiLogic(GameContext *ctx, PathfinderFunction algo) {
     return runSurvivalMode(ctx);
   }
 }
+Directions aiAStarController(GameContext *ctx) {
+  return genericAiLogic(ctx, a_star);
+}
 
 Directions aiBFSController(GameContext *ctx) {
   return genericAiLogic(ctx, bfs_path);
@@ -510,6 +670,8 @@ void initGame(GameContext *ctx, int mode_flag) {
   ctx->mode = MODE_HUMAN;
   if (mode_flag == MODE_AI_BFS) {
     ctx->snake.controller = aiBFSController;
+  } else if (mode_flag == MODE_AI_ASTAR) {
+    ctx->snake.controller = aiAStarController;
   } else {
     ctx->snake.controller = humanInputController;
   }
@@ -539,6 +701,10 @@ int main(int argc, char **argv) {
         printf("Mode: AI BFS (Standard)\n");
         game_ctx.snake.controller = aiBFSController;
       }
+    }
+    if (strcmp(argv[1], "astar") == 0) {
+      game_ctx.mode = MODE_AI_ASTAR;
+      game_ctx.snake.controller = aiAStarController;
     }
   }
   if (game_ctx.mode == MODE_HUMAN) {
