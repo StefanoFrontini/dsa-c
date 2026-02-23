@@ -96,9 +96,9 @@ typedef struct {
 // Min Heap
 typedef struct {
   Point p;
-  int g; // Costo esatto: passi dal punto di partenza
-  int h; // Euristica: distanza di Manhattan dal cella n al frutto
-  int f; // Costo totale: g + h
+  int g; // Exact cost: steps from the starting point
+  int h; // Heuristic: Manhattan distance from cell n to the fruit
+  int f; // Total cost: g + h
 } Node;
 
 typedef struct {
@@ -114,87 +114,14 @@ struct GameContext {
   InputBuffer inputBuf;
   GameMode mode;
   int score;
-  // BFS state
+  // BFS and A* state
   int visited[GRID_CELLS];
   int parent[GRID_CELLS];
 };
 
-// ------------------------------------------------------------------------
+// ------------------------- HELPER FUNCTIONS -----------------------------
 
-// --- HELPER FUNCTIONS ---
-
-// ---- MinHeap -----
-void initHeap(minHeap *h) {
-  h->count = 0;
-}
-
-// BUBBLE-UP: Inserts a node and makes it "float" upwards
-void insertHeap(minHeap *h, Node n) {
-  int index = h->count;
-  h->count++;
-  // "Hole" optimization: we slide parents down instead of swapping
-  while (index > 0) {
-    int pIdx = (index - 1) / 2;
-    Node parent = h->frontier[pIdx];
-
-    int should_swap = 0;
-    if (n.f < parent.f) {
-      should_swap = 1;
-    } else if (n.f == parent.f && n.h < parent.h) {
-      should_swap = 1; // A* prefers nodes closest to the target!
-    }
-    if (!should_swap) break;
-
-    h->frontier[index] = parent; // Move the parent down
-    index = pIdx;                // Move up
-  }
-  h->frontier[index] = n; // We insert the node into the final "hole"
-}
-
-// TRICKLE-DOWN: Extracts the root and rearranges the tree
-Node deleteHeap(minHeap *h) {
-  Node root = h->frontier[0];
-  h->count--;
-  if (h->count == 0) return root;
-
-  // Take the last node and look for where to put it starting from the root
-  Node lastNode = h->frontier[h->count];
-  int index = 0;
-
-  // Continue until there is at least one left child
-  while ((index * 2) + 1 < h->count) {
-    int leftChild = (index * 2) + 1;
-    int rightChild = (index * 2) + 2;
-    int smallerChild = leftChild;
-
-    // Find the "smaller" child of the two
-    if (rightChild < h->count) {
-      Node lNode = h->frontier[leftChild];
-      Node rNode = h->frontier[rightChild];
-
-      if (rNode.f < lNode.f || (rNode.f == lNode.f && rNode.h < lNode.h)) {
-        smallerChild = rightChild;
-      }
-    }
-
-    // If the last node is smaller than the smallest child, we are good to go.
-    Node sNode = h->frontier[smallerChild];
-    if (lastNode.f < sNode.f ||
-        (lastNode.f == sNode.f && lastNode.h <= sNode.h)) {
-      break;
-    }
-    // Make the smallest node "go up"
-    h->frontier[index] = sNode;
-    index = smallerChild; // go down
-  }
-
-  // We insert the last node into the final "hole"
-  h->frontier[index] = lastNode;
-
-  return root;
-}
-
-// -------------- A* ---------------------
+// ---------------------------- GRID -----------------------------------
 
 /* Sets the state of the element of the grid positioned at x and y
  * coordinates */
@@ -216,49 +143,40 @@ Point getCoord(int i) {
   return (Point){x, y};
 }
 
-void initBuffer(InputBuffer *buf) {
-  buf->head = 0;
-  buf->tail = 0;
-  buf->count = 0;
-}
-
-void enqueueKey(InputBuffer *buf, int key) {
-  if (buf->count < QUEUE_KEY_PRESS_SIZE) {
-    buf->keys[buf->head] = key;
-    buf->head = (buf->head + 1) % QUEUE_KEY_PRESS_SIZE;
-    buf->count++;
-  }
-}
-
-int dequeueKey(InputBuffer *buf) {
-  if (buf->count == 0) return PLAT_KEY_NONE;
-  int key = buf->keys[buf->tail];
-  buf->tail = (buf->tail + 1) % QUEUE_KEY_PRESS_SIZE;
-  buf->count--;
-  return key;
-}
-
-void initBFSQueue(BFSQueue *q) {
-  q->head = 0;
-  q->tail = 0;
-}
-int isBFSQueueEmpty(BFSQueue *q) {
-  return q->head == q->tail;
-}
-
-void enqueueBFS(BFSQueue *q, Point p) {
-  q->items[q->head] = p;
-  q->head++;
-}
-Point dequeueBFS(BFSQueue *q) {
-  Point p = q->items[q->tail];
-  q->tail++;
-  return p;
-}
-
 int gridCellIdx(Point p) {
   return p.y * GRID_COLS + p.x;
 }
+
+// ---------------------------- FRUIT -----------------------------------
+
+/* Updates the fruit location on the grid */
+void updateFruit(GameContext *ctx) {
+  char x = rand() % GRID_COLS;
+  char y = rand() % GRID_ROWS;
+
+  while (getCell(ctx->grid, x, y) == BODY) {
+    x = rand() % GRID_COLS;
+    y = rand() % GRID_ROWS;
+  }
+  ctx->f.x = x;
+  ctx->f.y = y;
+  setCell(ctx->grid, x, y, FRUIT);
+}
+
+/* Place the fruit on the grid randomly */
+void initFruit(GameContext *ctx) {
+  char x = rand() % GRID_COLS;
+  char y = rand() % GRID_ROWS;
+  while (getCell(ctx->grid, x, y) == BODY) {
+    x = rand() % GRID_COLS;
+    y = rand() % GRID_ROWS;
+  }
+  ctx->f.x = x;
+  ctx->f.y = y;
+  setCell(ctx->grid, x, y, FRUIT);
+}
+
+// ---------------------------- SNAKE -----------------------------------
 
 void enqueueSnake(GameContext *ctx, Point p) {
   ctx->snake.body[ctx->snake.head] = gridCellIdx(p);
@@ -272,6 +190,15 @@ Point dequeueSnake(GameContext *ctx) {
   ctx->snake.tail = (ctx->snake.tail + 1) % GRID_CELLS;
 
   return t;
+}
+
+void initSnake(char x, char y, GameContext *ctx) {
+  ctx->snake.head = 0;
+  ctx->snake.tail = 0;
+  ctx->snake.direction = IDLE;
+  Point p = {x, y};
+  enqueueSnake(ctx, p);
+  setCell(ctx->grid, x, y, BODY);
 }
 
 /* Get new head position based on the direction */
@@ -298,113 +225,48 @@ Point getNextHeadPosition(GameContext *ctx) {
   return p;
 }
 
-/* Updates the fruit location on the grid */
-void updateFruit(GameContext *ctx) {
-  char x = rand() % GRID_COLS;
-  char y = rand() % GRID_ROWS;
+// --------------------------- INPUT -------------------------------
 
-  while (getCell(ctx->grid, x, y) == BODY) {
-    x = rand() % GRID_COLS;
-    y = rand() % GRID_ROWS;
-  }
-  ctx->f.x = x;
-  ctx->f.y = y;
-  setCell(ctx->grid, x, y, FRUIT);
+void initBuffer(InputBuffer *buf) {
+  buf->head = 0;
+  buf->tail = 0;
+  buf->count = 0;
 }
 
-// A*
-
-//  Manhattan distance on a square grid
-int heuristic(Point a, Point b) {
-  return abs(a.x - b.x) + abs(a.y - b.y);
+void enqueueKey(InputBuffer *buf, int key) {
+  if (buf->count < QUEUE_KEY_PRESS_SIZE) {
+    buf->keys[buf->head] = key;
+    buf->head = (buf->head + 1) % QUEUE_KEY_PRESS_SIZE;
+    buf->count++;
+  }
 }
 
-Directions a_star(GameContext *ctx) {
-  static int run_id = 0;
-  run_id++;
+int dequeueKey(InputBuffer *buf) {
+  if (buf->count == 0) return PLAT_KEY_NONE;
+  int key = buf->keys[buf->tail];
+  buf->tail = (buf->tail + 1) % QUEUE_KEY_PRESS_SIZE;
+  buf->count--;
+  return key;
+}
+// --------------------------- BFS -------------------------------
 
-  minHeap heap;
-  initHeap(&heap);
-
-  // Array locale per tracciare i percorsi migliori.
-  // Non serve inizializzarlo grazie al run_id!
-  int g_score[GRID_CELLS];
-
-  int currentHeadIdxInArray = (ctx->snake.head - 1 + GRID_CELLS) % GRID_CELLS;
-  int startIdx = ctx->snake.body[currentHeadIdxInArray];
-  Point a = getCoord(startIdx);
-  Point b = (Point){ctx->f.x, ctx->f.y};
-
-  // Setup nodo di partenza
-  Node start = {.p = a, .g = 0, .h = heuristic(a, b)};
-  start.f = start.g + start.h;
-  insertHeap(&heap, start);
-
-  ctx->visited[startIdx] = run_id;
-  g_score[startIdx] = 0;
-
-  int goal_idx = -1;
-
-  while (heap.count > 0) {
-    Node cur = deleteHeap(&heap);
-    int currIdx = gridCellIdx(cur.p);
-
-    if (cur.p.x == b.x && cur.p.y == b.y) {
-      goal_idx = currIdx;
-      break;
-    }
-
-    int dx[] = {0, 0, -1, 1};
-    int dy[] = {-1, 1, 0, 0};
-
-    for (int i = 0; i < 4; i++) {
-      int nx = cur.p.x + dx[i];
-      int ny = cur.p.y + dy[i];
-
-      // Borders checks
-      if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
-
-      int nIdx = gridCellIdx((Point){nx, ny});
-
-      // Body checks
-      if (getCell(ctx->grid, nx, ny) == BODY) continue;
-
-      int tentative_g = cur.g + 1;
-      int is_visited = (ctx->visited[nIdx] == run_id);
-
-      if (is_visited && tentative_g >= g_score[nIdx]) continue;
-      ctx->visited[nIdx] = run_id;
-      g_score[nIdx] = tentative_g;
-      ctx->parent[nIdx] = currIdx;
-
-      Node n = {.p = (Point){nx, ny}, .g = tentative_g, .h = heuristic(n.p, b)};
-      n.f = n.g + n.h;
-
-      insertHeap(&heap, n);
-    }
-  }
-  if (goal_idx == -1) return -1;
-
-  // Backtracking
-  int curr = goal_idx;
-  while (ctx->parent[curr] != startIdx) {
-    curr = ctx->parent[curr];
-    if (curr == -1) return -1;
-  }
-
-  Point nextMovePoint = getCoord(curr);
-
-  int x_diff = nextMovePoint.x - start.p.x;
-  int y_diff = nextMovePoint.y - start.p.y;
-
-  if (x_diff == 0 && y_diff == -1) return MOVE_UP;
-  if (x_diff == 1 && y_diff == 0) return MOVE_RIGHT;
-  if (x_diff == 0 && y_diff == 1) return MOVE_DOWN;
-  if (x_diff == -1 && y_diff == 0) return MOVE_LEFT;
-  return -1;
+void initBFSQueue(BFSQueue *q) {
+  q->head = 0;
+  q->tail = 0;
+}
+int isBFSQueueEmpty(BFSQueue *q) {
+  return q->head == q->tail;
 }
 
-// BFS
+void enqueueBFS(BFSQueue *q, Point p) {
+  q->items[q->head] = p;
+  q->head++;
+}
+Point dequeueBFS(BFSQueue *q) {
+  Point p = q->items[q->tail];
+  q->tail++;
+  return p;
+}
 
 Directions bfs_path(GameContext *ctx) {
   static int run_id = 0;
@@ -499,26 +361,170 @@ Directions bfs_path_measured(GameContext *ctx) {
   }
   return res;
 }
-Directions humanInputController(GameContext *ctx) {
-  int key = dequeueKey(&ctx->inputBuf);
-  if (key != PLAT_KEY_NONE) {
-    switch (key) {
-      case PLAT_KEY_UP:
-        if (ctx->snake.direction != MOVE_DOWN) return MOVE_UP;
-        break;
-      case PLAT_KEY_DOWN:
-        if (ctx->snake.direction != MOVE_UP) return MOVE_DOWN;
-        break;
-      case PLAT_KEY_LEFT:
-        if (ctx->snake.direction != MOVE_RIGHT) return MOVE_LEFT;
-        break;
-      case PLAT_KEY_RIGHT:
-        if (ctx->snake.direction != MOVE_LEFT) return MOVE_RIGHT;
-        break;
+
+// ---------------------------- MinHeap -----------------------------------
+void initHeap(minHeap *h) {
+  h->count = 0;
+}
+
+// BUBBLE-UP: Inserts a node and makes it "float" upwards
+void insertHeap(minHeap *h, Node n) {
+  int index = h->count;
+  h->count++;
+  // "Hole" optimization: we slide parents down instead of swapping
+  while (index > 0) {
+    int pIdx = (index - 1) / 2;
+    Node parent = h->frontier[pIdx];
+
+    int should_swap = 0;
+    if (n.f < parent.f) {
+      should_swap = 1;
+    } else if (n.f == parent.f && n.h < parent.h) {
+      should_swap = 1; // A* prefers nodes closest to the target!
+    }
+    if (!should_swap) break;
+
+    h->frontier[index] = parent; // Move the parent down
+    index = pIdx;                // Move up
+  }
+  h->frontier[index] = n; // We insert the node into the final "hole"
+}
+
+// TRICKLE-DOWN: Extracts the root and rearranges the tree
+Node deleteHeap(minHeap *h) {
+  Node root = h->frontier[0];
+  h->count--;
+  if (h->count == 0) return root;
+
+  // Take the last node and look for where to put it starting from the root
+  Node lastNode = h->frontier[h->count];
+  int index = 0;
+
+  // Continue until there is at least one left child
+  while ((index * 2) + 1 < h->count) {
+    int leftChild = (index * 2) + 1;
+    int rightChild = (index * 2) + 2;
+    int smallerChild = leftChild;
+
+    // Find the "smaller" child of the two
+    if (rightChild < h->count) {
+      Node lNode = h->frontier[leftChild];
+      Node rNode = h->frontier[rightChild];
+
+      if (rNode.f < lNode.f || (rNode.f == lNode.f && rNode.h < lNode.h)) {
+        smallerChild = rightChild;
+      }
+    }
+
+    // If the last node is smaller than the smallest child, we are good to go.
+    Node sNode = h->frontier[smallerChild];
+    if (lastNode.f < sNode.f ||
+        (lastNode.f == sNode.f && lastNode.h <= sNode.h)) {
+      break;
+    }
+    // Make the smallest node "go up"
+    h->frontier[index] = sNode;
+    index = smallerChild; // go down
+  }
+
+  // We insert the last node into the final "hole"
+  h->frontier[index] = lastNode;
+
+  return root;
+}
+
+// ---------------------------- A* -----------------------------------
+
+//  Manhattan distance
+int heuristic(Point a, Point b) {
+  return abs(a.x - b.x) + abs(a.y - b.y);
+}
+
+Directions a_star(GameContext *ctx) {
+  static int run_id = 0;
+  run_id++;
+
+  minHeap heap;
+  initHeap(&heap);
+
+  int g_score[GRID_CELLS];
+
+  int currentHeadIdxInArray = (ctx->snake.head - 1 + GRID_CELLS) % GRID_CELLS;
+  int startIdx = ctx->snake.body[currentHeadIdxInArray];
+  Point a = getCoord(startIdx);
+  Point b = (Point){ctx->f.x, ctx->f.y};
+
+  // Setup nodo di partenza
+  Node start = {.p = a, .g = 0, .h = heuristic(a, b)};
+  start.f = start.g + start.h;
+  insertHeap(&heap, start);
+
+  ctx->visited[startIdx] = run_id;
+  g_score[startIdx] = 0;
+
+  int goal_idx = -1;
+
+  while (heap.count > 0) {
+    Node cur = deleteHeap(&heap);
+    int currIdx = gridCellIdx(cur.p);
+
+    if (cur.p.x == b.x && cur.p.y == b.y) {
+      goal_idx = currIdx;
+      break;
+    }
+
+    int dx[] = {0, 0, -1, 1};
+    int dy[] = {-1, 1, 0, 0};
+
+    for (int i = 0; i < 4; i++) {
+      int nx = cur.p.x + dx[i];
+      int ny = cur.p.y + dy[i];
+
+      // Borders checks
+      if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+
+      int nIdx = gridCellIdx((Point){nx, ny});
+
+      // Body checks
+      if (getCell(ctx->grid, nx, ny) == BODY) continue;
+
+      int tentative_g = cur.g + 1;
+      int is_visited = (ctx->visited[nIdx] == run_id);
+
+      if (is_visited && tentative_g >= g_score[nIdx]) continue;
+      ctx->visited[nIdx] = run_id;
+      g_score[nIdx] = tentative_g;
+      ctx->parent[nIdx] = currIdx;
+
+      Node n = {.p = (Point){nx, ny}, .g = tentative_g, .h = heuristic(n.p, b)};
+      n.f = n.g + n.h;
+
+      insertHeap(&heap, n);
     }
   }
-  return IDLE;
+  if (goal_idx == -1) return -1;
+
+  // Backtracking
+  int curr = goal_idx;
+  while (ctx->parent[curr] != startIdx) {
+    curr = ctx->parent[curr];
+    if (curr == -1) return -1;
+  }
+
+  Point nextMovePoint = getCoord(curr);
+
+  int x_diff = nextMovePoint.x - start.p.x;
+  int y_diff = nextMovePoint.y - start.p.y;
+
+  if (x_diff == 0 && y_diff == -1) return MOVE_UP;
+  if (x_diff == 1 && y_diff == 0) return MOVE_RIGHT;
+  if (x_diff == 0 && y_diff == 1) return MOVE_DOWN;
+  if (x_diff == -1 && y_diff == 0) return MOVE_LEFT;
+  return -1;
 }
+
+// ---------------------------- CONTROLLERS -----------------------------------
+
 Directions runSurvivalMode(GameContext *ctx) {
   int headIdx = ctx->snake.body[ctx->snake.head - 1];
   Point head = getCoord(headIdx);
@@ -557,6 +563,27 @@ Directions runSurvivalMode(GameContext *ctx) {
   return NO_DIRECTION;
 }
 
+Directions humanInputController(GameContext *ctx) {
+  int key = dequeueKey(&ctx->inputBuf);
+  if (key != PLAT_KEY_NONE) {
+    switch (key) {
+      case PLAT_KEY_UP:
+        if (ctx->snake.direction != MOVE_DOWN) return MOVE_UP;
+        break;
+      case PLAT_KEY_DOWN:
+        if (ctx->snake.direction != MOVE_UP) return MOVE_DOWN;
+        break;
+      case PLAT_KEY_LEFT:
+        if (ctx->snake.direction != MOVE_RIGHT) return MOVE_LEFT;
+        break;
+      case PLAT_KEY_RIGHT:
+        if (ctx->snake.direction != MOVE_LEFT) return MOVE_RIGHT;
+        break;
+    }
+  }
+  return IDLE;
+}
+
 // Generic AI Orchestrator
 Directions genericAiLogic(GameContext *ctx, PathfinderFunction algo) {
   int next_dir = algo(ctx);
@@ -579,6 +606,8 @@ Directions aiBFSController(GameContext *ctx) {
 Directions aiBfsPerfomanceController(GameContext *ctx) {
   return genericAiLogic(ctx, bfs_path_measured);
 }
+// ---------------------------- UPDATE STATE -----------------------------------
+
 GameState applyPhysics(int dir, GameContext *ctx) {
   if (dir == NO_DIRECTION) return GAME_OVER;
   if (dir != IDLE) {
@@ -613,13 +642,12 @@ GameState applyPhysics(int dir, GameContext *ctx) {
   }
 }
 
-// Update state
 GameState update(GameContext *ctx) {
   int new_dir = ctx->snake.controller(ctx);
   return applyPhysics(new_dir, ctx);
 }
 
-// Rendering: moves the cursor at Home and redraw
+// ---------------------------- RENDERING -----------------------------------
 
 /* Draws the grid */
 void printGrid(char *grid, char score) {
@@ -637,27 +665,8 @@ void render(GameContext *ctx) {
   printf("\033[H");
   printGrid(ctx->grid, ctx->score);
 }
-void initSnake(char x, char y, GameContext *ctx) {
-  ctx->snake.head = 0;
-  ctx->snake.tail = 0;
-  ctx->snake.direction = IDLE;
-  Point p = {x, y};
-  enqueueSnake(ctx, p);
-  setCell(ctx->grid, x, y, BODY);
-}
 
-// /* Place the fruit on the grid randomly */
-void initFruit(GameContext *ctx) {
-  char x = rand() % GRID_COLS;
-  char y = rand() % GRID_ROWS;
-  while (getCell(ctx->grid, x, y) == BODY) {
-    x = rand() % GRID_COLS;
-    y = rand() % GRID_ROWS;
-  }
-  ctx->f.x = x;
-  ctx->f.y = y;
-  setCell(ctx->grid, x, y, FRUIT);
-}
+// ---------------------------- INIT GAME -----------------------------------
 
 void initGame(GameContext *ctx, int mode_flag) {
   memset(ctx->grid, GROUND, GRID_CELLS);
@@ -676,6 +685,8 @@ void initGame(GameContext *ctx, int mode_flag) {
     ctx->snake.controller = humanInputController;
   }
 }
+
+// ---------------------------- MAIN -----------------------------------
 
 int main(int argc, char **argv) {
   platform_init();
@@ -703,6 +714,7 @@ int main(int argc, char **argv) {
       }
     }
     if (strcmp(argv[1], "astar") == 0) {
+      printf("Mode: AI A*\n");
       game_ctx.mode = MODE_AI_ASTAR;
       game_ctx.snake.controller = aiAStarController;
     }
@@ -715,7 +727,6 @@ int main(int argc, char **argv) {
   // sleep(2);
   platform_sleep_us(2000000);
 
-  // srand(time(NULL));
   platform_random_seed();
 
   // Initial render
@@ -749,7 +760,6 @@ int main(int argc, char **argv) {
     }
 
     // 1. Input phase
-    // int key = input();
     PlatformKey key = platform_get_input();
     if (key == PLAT_KEY_ESC) {
       printf("\033[%d;%dHExiting...\n", GRID_ROWS + 2, 0);
