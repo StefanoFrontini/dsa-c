@@ -68,14 +68,12 @@ typedef struct {
 } InputBuffer;
 
 // POINT in the grid
-
 typedef struct {
   char x;
   char y;
 } Point;
 
 // GAME STATE
-
 typedef enum {
   CONTINUE = 2000,
   GAME_OVER,
@@ -86,14 +84,13 @@ typedef enum {
 
 // BFS Queue. The queue is modeled as an array that resets every time BFS
 // starts.
-
 typedef struct {
   Point items[GRID_CELLS];
   int head;
   int tail;
 } BFSQueue;
 
-// Min Heap
+// Min-Heap Node
 typedef struct {
   Point p;
   int g; // Exact cost: steps from the starting point
@@ -101,6 +98,7 @@ typedef struct {
   int f; // Total cost: g + h
 } Node;
 
+// Min-Heap
 typedef struct {
   Node frontier[GRID_CELLS];
   int count;
@@ -118,8 +116,6 @@ struct GameContext {
   int visited[GRID_CELLS];
   int parent[GRID_CELLS];
 };
-
-// ------------------------- HELPER FUNCTIONS -----------------------------
 
 // ---------------------------- GRID -----------------------------------
 
@@ -362,7 +358,7 @@ Directions bfs_path_measured(GameContext *ctx) {
   return res;
 }
 
-// ---------------------------- MinHeap -----------------------------------
+// ---------------------------- MIN-HEAP -----------------------------------
 void initHeap(minHeap *h) {
   h->count = 0;
 }
@@ -454,7 +450,6 @@ Directions a_star(GameContext *ctx) {
   Point a = getCoord(startIdx);
   Point b = (Point){ctx->f.x, ctx->f.y};
 
-  // Setup nodo di partenza
   Node start = {.p = a, .g = 0, .h = heuristic(a, b)};
   start.f = start.g + start.h;
   insertHeap(&heap, start);
@@ -649,7 +644,6 @@ GameState update(GameContext *ctx) {
 
 // ---------------------------- RENDERING -----------------------------------
 
-/* Draws the grid */
 void printGrid(char *grid, char score) {
   for (int y = 0; y < GRID_ROWS; y++) {
     for (int x = 0; x < GRID_COLS; x++) {
@@ -724,7 +718,7 @@ int main(int argc, char **argv) {
            "mode with metrics\n");
   }
 
-  // sleep(2);
+  // Sleeps 2 seconds
   platform_sleep_us(2000000);
 
   platform_random_seed();
