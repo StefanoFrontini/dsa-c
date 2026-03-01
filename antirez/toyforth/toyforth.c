@@ -3,6 +3,7 @@
 // "Hello World" strlen print
 // [dup *] [dup +] [10 20 <] if
 
+#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,6 +91,48 @@ TfObj *createListObject(void) {
   o->list.len = 0;
   return o;
 }
+/* ----------- Turn program into toy forth list      */
+
+int parseNumber(Tfparser *parser) {
+  char buf[128];
+  char *start = parser->p;
+  char *end;
+  if (*parser->p == '-') parser->p++;
+
+  while (*parser->p && isdigit(*parser->p))
+    parser->p++;
+
+  end = parser->p;
+  size_t len = end - start;
+  memcpy(buf, start, len);
+  buf[len] = 0;
+  return atoi(buf);
+}
+
+void parseSpaces(Tfparser *parser) {
+  while (isspace(*parser->p)) {
+    (parser->p)++;
+  }
+}
+
+void parse(char *prg) {
+  Tfparser parser;
+  parser.prg = prg;
+  parser.p = prg;
+  while (*(parser.p)) {
+    parseSpaces(&parser);
+    if (isdigit(*(parser.p)) || *(parser.p) == '-') {
+      int i = parseNumber(&parser);
+      printf("%d\n", i);
+      // printf("%c is digit\n", *(parser.p));
+    } else {
+
+      // printf("%c is not a digit\n", *(parser.p));
+    }
+    // parser.p++;
+  }
+  // printf("after while: %d\n", *(parser.p));
+}
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -104,22 +147,13 @@ int main(int argc, char **argv) {
   }
   fseek(fp, 0, SEEK_END);
   long file_size = ftell(fp);
-  printf("file size is: %lu\n", file_size);
+  // printf("file size is: %lu\n", file_size);
   fseek(fp, 0, SEEK_SET);
   char *prgtext = xmalloc(file_size + 1);
-  fread(prgtext, 1, sizeof(prgtext), fp);
+  fread(prgtext, file_size, 1, fp);
   prgtext[file_size] = 0;
   printf("\"%s\"\n", prgtext);
   fclose(fp);
-
-  // char buf[10];
-  // size_t nread;
-  // while (1) {
-  //   nread = fread(buf, 1, sizeof(buf), fp);
-  //   printf("%zu\n", nread);
-  //   if (nread == 0) break;
-  // }
-  // printf("%c\n", buf[0]);
-  //   printf("%s %d\n", argv[0], argc);
+  parse(prgtext);
   return 0;
 }
