@@ -13,7 +13,7 @@
 // ---------------------  Data Structures --------------------------
 typedef enum { INT = 0, STR, BOOL, LIST, SYMBOL } TfobjType;
 
-typedef struct {
+typedef struct TfObj {
   int refcount;
   int type;
   union {
@@ -112,19 +112,18 @@ TfObj *parseNumber(Tfparser *parser) {
 
 void parseSpaces(Tfparser *parser) {
   while (isspace(*parser->p)) {
-    (parser->p)++;
+    parser->p++;
   }
 }
 /* add the new element at the end of the list. It is up to the caller to
  * increment the reference count to the list. */
 void listPush(TfObj *l, TfObj *ele) {
-  // if l->list-ele == NULL realloc = malloc
   l->list.ele = realloc(l->list.ele, sizeof(TfObj *) * (l->list.len + 1));
   l->list.ele[l->list.len] = ele;
   l->list.len++;
 }
 
-void parse(char *prg) {
+TfObj *parse(char *prg) {
   Tfparser parser;
   parser.prg = prg;
   parser.p = prg;
@@ -136,16 +135,33 @@ void parse(char *prg) {
     parseSpaces(&parser);
     if (isdigit(*parser.p) || *parser.p == '-') {
       o = parseNumber(&parser);
-      listPush(parsed, o);
       // printf("%d\n", i);
       // printf("%c is digit\n", *(parser.p));
     } else {
-
+      o = NULL;
       // printf("%c is not a digit\n", *(parser.p));
     }
-    // parser.p++;
+    if (o == NULL) {
+      perror("Error parsing\n");
+      return NULL;
+    } else {
+      listPush(parsed, o);
+    }
   }
+  return parsed;
   // printf("after while: %d\n", *(parser.p));
+}
+void eval(TfObj *prg) {
+  for (size_t i = 0; i < prg->list.len; i++) {
+    TfObj *o = prg->list.ele[i];
+    switch (o->type) {
+      case INT:
+        printf("%d\n", o->i);
+        break;
+      default:
+        break;
+    }
+  }
 }
 
 int main(int argc, char **argv) {
@@ -168,6 +184,7 @@ int main(int argc, char **argv) {
   prgtext[file_size] = 0;
   printf("\"%s\"\n", prgtext);
   fclose(fp);
-  parse(prgtext);
+  TfObj *parsed = parse(prgtext);
+  eval(parsed);
   return 0;
 }
