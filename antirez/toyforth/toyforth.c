@@ -93,7 +93,7 @@ TfObj *createListObject(void) {
 }
 /* ----------- Turn program into toy forth list      */
 
-int parseNumber(Tfparser *parser) {
+TfObj *parseNumber(Tfparser *parser) {
   char buf[128];
   char *start = parser->p;
   char *end;
@@ -106,7 +106,8 @@ int parseNumber(Tfparser *parser) {
   size_t len = end - start;
   memcpy(buf, start, len);
   buf[len] = 0;
-  return atoi(buf);
+  return createIntObject(atoi(buf));
+  // return atoi(buf);
 }
 
 void parseSpaces(Tfparser *parser) {
@@ -114,16 +115,29 @@ void parseSpaces(Tfparser *parser) {
     (parser->p)++;
   }
 }
+/* add the new element at the end of the list. It is up to the caller to
+ * increment the reference count to the list. */
+void listPush(TfObj *l, TfObj *ele) {
+  // if l->list-ele == NULL realloc = malloc
+  l->list.ele = realloc(l->list.ele, sizeof(TfObj *) * (l->list.len + 1));
+  l->list.ele[l->list.len] = ele;
+  l->list.len++;
+}
 
 void parse(char *prg) {
   Tfparser parser;
   parser.prg = prg;
   parser.p = prg;
-  while (*(parser.p)) {
+  TfObj *o;
+
+  TfObj *parsed = createListObject();
+
+  while (*parser.p) {
     parseSpaces(&parser);
-    if (isdigit(*(parser.p)) || *(parser.p) == '-') {
-      int i = parseNumber(&parser);
-      printf("%d\n", i);
+    if (isdigit(*parser.p) || *parser.p == '-') {
+      o = parseNumber(&parser);
+      listPush(parsed, o);
+      // printf("%d\n", i);
       // printf("%c is digit\n", *(parser.p));
     } else {
 
