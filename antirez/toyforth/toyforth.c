@@ -3,6 +3,7 @@
 // "Hello World" strlen print
 // [dup *] [dup +] [10 20 <] if
 
+#include <assert.h>
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -42,6 +43,15 @@ typedef struct {
 
 void *xmalloc(size_t size) {
   void *ptr = malloc(size);
+  if (ptr == NULL) {
+    fprintf(stderr, "Out of memory allocation %zu bytes\n", size);
+    exit(1);
+  }
+  return ptr;
+}
+
+void *xrealloc(void *old_ptr, size_t size) {
+  void *ptr = realloc(old_ptr, size);
   if (ptr == NULL) {
     fprintf(stderr, "Out of memory allocation %zu bytes\n", size);
     exit(1);
@@ -133,7 +143,7 @@ void parseSpaces(Tfparser *parser) {
 /* add the new element at the end of the list. It is up to the caller to
  * increment the reference count to the list. */
 void listPush(TfObj *l, TfObj *ele) {
-  l->list.ele = realloc(l->list.ele, sizeof(TfObj *) * (l->list.len + 1));
+  l->list.ele = xrealloc(l->list.ele, sizeof(TfObj *) * (l->list.len + 1));
   l->list.ele[l->list.len] = ele;
   l->list.len++;
 }
@@ -166,7 +176,7 @@ TfObj *parse(char *prg) {
   return parsed;
   // printf("after while: %d\n", *(parser.p));
 }
-void print_object(TfObj *o) {
+void printObject(TfObj *o) {
   switch (o->type) {
     case INT:
       printf("%d", o->i);
@@ -176,8 +186,10 @@ void print_object(TfObj *o) {
       printf("[");
       for (size_t i = 0; i < o->list.len; i++) {
         TfObj *el = o->list.ele[i];
-        print_object(el);
-        printf(" ");
+        printObject(el);
+        if (i != o->list.len - 1) {
+          printf(" ");
+        }
       }
       printf("]");
       break;
@@ -189,6 +201,45 @@ void print_object(TfObj *o) {
       break;
   }
 }
+/* --------------------- Execution and context ----------------------- */
+
+Tfctx *createContext(void) {
+  Tfctx *ctx = xmalloc(sizeof(*ctx));
+  ctx->stack = createListObject();
+  return ctx;
+}
+
+/* Function table entry: each of this entry represents a symbol name associated
+ * with a function implementation. */
+struct FunctionTableEntry {
+  TfObj *name;
+  void (*callback)(Tfctx *ctx, TfObj *name);
+  TfObj *user_list;
+};
+
+/* Try to resolve and call the function associated with the symbol name 'word'.
+ * Return 0 if the symbol was actually bound to some function, return 1
+ * otherwise. */
+int callSymbol(Tfctx *ctx, TfObj *word) {
+}
+
+/* Execute the Toy Forth program stored into the list 'prg'. */
+void eval(Tfctx *ctx, TfObj *prg) {
+  assert(prg->type == LIST);
+  for (size_t i = 0; i < prg->list.len; i++) {
+    TfObj *word = prg->list.ele[i];
+    switch (word->type) {
+      case SYMBOL:
+        callSymbol(ctx, word);
+        break;
+      default:
+        listPush(ctx->stack, word);
+        break;
+    }
+  }
+}
+
+/* -------------------------  Main ----------------------------- */
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -211,7 +262,15 @@ int main(int argc, char **argv) {
   printf("\"%s\"\n", prgtext);
   fclose(fp);
   TfObj *parsed = parse(prgtext);
-  print_object(parsed);
+  printObject(parsed);
   printf("\n");
+
+  Tfctx *ctx = createContext();
+  eval(ctx, parsed);
+
+  printf("Stack content at end: ");
+  printObject(ctx->stack);
+  printf("\n");
+
   return 0;
 }

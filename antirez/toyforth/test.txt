@@ -1,1 +1,1 @@
-5 10 20 + print
+5 10 + dup * print
