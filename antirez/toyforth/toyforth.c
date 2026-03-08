@@ -62,8 +62,10 @@ TfObj *createObject(int type) {
 
 TfObj *createStringObject(char *s, size_t len) {
   TfObj *o = createObject(STR);
-  o->str.ptr = s;
+  o->str.ptr = xmalloc(len + 1);
   o->str.len = len;
+  memcpy(o->str.ptr, s, len);
+  o->str.ptr[len] = 0;
   return o;
 }
 
@@ -107,7 +109,20 @@ TfObj *parseNumber(Tfparser *parser) {
   memcpy(buf, start, len);
   buf[len] = 0;
   return createIntObject(atoi(buf));
-  // return atoi(buf);
+}
+/* Return true if the character 'c' is one of the characters acceptable for our
+ * symbols. */
+int isSymbolChar(int c) {
+  char symchars[] = "+-*/%";
+  return isalpha(c) || strchr(symchars, c) != NULL;
+}
+
+TfObj *parseSymbol(Tfparser *parser) {
+  char *start = parser->p;
+  while (*parser->p && isSymbolChar(*parser->p))
+    parser->p++;
+  int len = parser->p - start;
+  return createSymbolObject(start, len);
 }
 
 void parseSpaces(Tfparser *parser) {
@@ -133,13 +148,13 @@ TfObj *parse(char *prg) {
 
   while (*parser.p) {
     parseSpaces(&parser);
-    if (isdigit(*parser.p) || *parser.p == '-') {
+    if (*parser.p == 0) break;
+    if (isdigit(*parser.p) || (*parser.p == '-' && isdigit(parser.p[1]))) {
       o = parseNumber(&parser);
-      // printf("%d\n", i);
-      // printf("%c is digit\n", *(parser.p));
+    } else if (isSymbolChar(*parser.p)) {
+      o = parseSymbol(&parser);
     } else {
       o = NULL;
-      // printf("%c is not a digit\n", *(parser.p));
     }
     if (o == NULL) {
       perror("Error parsing\n");
@@ -151,16 +166,27 @@ TfObj *parse(char *prg) {
   return parsed;
   // printf("after while: %d\n", *(parser.p));
 }
-void eval(TfObj *prg) {
-  for (size_t i = 0; i < prg->list.len; i++) {
-    TfObj *o = prg->list.ele[i];
-    switch (o->type) {
-      case INT:
-        printf("%d\n", o->i);
-        break;
-      default:
-        break;
-    }
+void print_object(TfObj *o) {
+  switch (o->type) {
+    case INT:
+      printf("%d", o->i);
+      break;
+
+    case LIST:
+      printf("[");
+      for (size_t i = 0; i < o->list.len; i++) {
+        TfObj *el = o->list.ele[i];
+        print_object(el);
+        printf(" ");
+      }
+      printf("]");
+      break;
+    case SYMBOL:
+      printf("%s", o->str.ptr);
+      break;
+
+    default:
+      break;
   }
 }
 
@@ -185,6 +211,7 @@ int main(int argc, char **argv) {
   printf("\"%s\"\n", prgtext);
   fclose(fp);
   TfObj *parsed = parse(prgtext);
-  eval(parsed);
+  print_object(parsed);
+  printf("\n");
   return 0;
 }
