@@ -35,12 +35,13 @@ typedef struct Tfparser {
   char *p;   // Next token to parse;
 } Tfparser;
 
+struct Tfctx;
 /* Function table entry: each of this entry represents a symbol name associated
  * with a function implementation. */
 typedef struct FunctionTableEntry {
   TfObj *name;
-  void (*callback)(Tfctx *ctx, TfObj *name);
-  TfObj *user_list;
+  void (*callback)(struct Tfctx *ctx, TfObj *name);
+  TfObj *user_func;
 } Tffuncentry;
 
 struct FunctionTable {
@@ -53,6 +54,11 @@ typedef struct Tfctx {
   TfObj *stack;
   struct FunctionTable functable;
 } Tfctx;
+
+/* ----------------------   Function prototypes ---------------------------- */
+
+void retain(TfObj *o);
+void release(TfObj *o);
 
 /* ------------------------ Allocation wrappers ----------------------------*/
 
@@ -274,22 +280,53 @@ TfObj *parse(char *prg) {
   return parsed;
   // printf("after while: %d\n", *(parser.p));
 }
+/* ----------------------Basic standard library -----------------------*/
+
+void basicMathFunctions(Tfctx *ctx, TfObj *name) {
+}
 /* --------------------- Execution and context ----------------------- */
-Tffuncentry *getFunctionByName(Tfctx *ctx, char *name) {
+Tffuncentry *getFunctionByName(Tfctx *ctx, TfObj *name) {
   for (size_t i = 0; i < ctx->functable.func_count; i++) {
     Tffuncentry *fe = ctx->functable.func_table[i];
     if (compareStringObject(fe->name, name) == 0) return fe;
   }
   return NULL;
 }
+
+/* Push a new function entry in the context. It's up to the caller to set either
+ * the C callback or the list representing the user defined function. */
+Tffuncentry *registerFunction(Tfctx *ctx, TfObj *name) {
+  ctx->functable.func_table =
+      xrealloc(ctx->functable.func_table,
+               sizeof(Tffuncentry *) * (ctx->functable.func_count + 1));
+  Tffuncentry *fe = xmalloc(sizeof(Tffuncentry));
+  ctx->functable.func_table[ctx->functable.func_count] = fe;
+  ctx->functable.func_count++;
+  fe->name = name;
+  retain(name);
+  fe->callback = NULL;
+  fe->user_func = NULL;
+  return fe;
+}
+
+/* Register a new function with the given name in the function table of the
+ * context. The function can fail since if a function with the same name already
+ * exist, it gets replaced by the new one. */
 void registerCfunction(Tfctx *ctx, char *name,
                        void (*callback)(Tfctx *ctx, TfObj *name)) {
   Tffuncentry *fe;
   TfObj *oname = createStringObject(name, strlen(name));
   fe = getFunctionByName(ctx, oname);
   if (fe) {
+    if (fe->user_func) {
+      release(fe->user_func);
+      fe->user_func = NULL;
+    }
+    fe->callback = callback;
 
   } else {
+    fe = registerFunction(ctx, oname);
+    fe->callback = callback;
   }
   release(oname);
 }
