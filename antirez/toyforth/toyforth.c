@@ -30,13 +30,28 @@ typedef struct TfObj {
   };
 } TfObj;
 
-typedef struct {
+typedef struct Tfparser {
   char *prg; // The program to parse into a list;
   char *p;   // Next token to parse;
 } Tfparser;
 
-typedef struct {
+/* Function table entry: each of this entry represents a symbol name associated
+ * with a function implementation. */
+typedef struct FunctionTableEntry {
+  TfObj *name;
+  void (*callback)(Tfctx *ctx, TfObj *name);
+  TfObj *user_list;
+} Tffuncentry;
+
+struct FunctionTable {
+  Tffuncentry **func_table;
+  size_t func_count;
+};
+
+/* Our execution context. */
+typedef struct Tfctx {
   TfObj *stack;
+  struct FunctionTable functable;
 } Tfctx;
 
 /* ------------------------ Allocation wrappers ----------------------------*/
@@ -241,21 +256,19 @@ TfObj *parse(char *prg) {
 Tfctx *createContext(void) {
   Tfctx *ctx = xmalloc(sizeof(*ctx));
   ctx->stack = createListObject();
+  ctx->functable.func_table = NULL;
+  ctx->functable.func_count = 0;
+  registerFunction(ctx, "+", basicMathFunctions);
   return ctx;
 }
 
-/* Function table entry: each of this entry represents a symbol name associated
- * with a function implementation. */
-struct FunctionTableEntry {
-  TfObj *name;
-  void (*callback)(Tfctx *ctx, TfObj *name);
-  TfObj *user_list;
-};
-
 /* Try to resolve and call the function associated with the symbol name 'word'.
- * Return 0 if the symbol was actually bound to some function, return 1
- * otherwise. */
+ * Return 0 if the symbol was actually bound to some function and was executed,
+ * return 1 otherwise (on error). */
 int callSymbol(Tfctx *ctx, TfObj *word) {
+  Tffuncentry *fe = getFunctionByName(ctx, word);
+  if (fe == NULL) return 1;
+  return 0;
 }
 
 /* Execute the Toy Forth program stored into the list 'prg'. */
