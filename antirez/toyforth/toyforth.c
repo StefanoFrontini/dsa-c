@@ -97,6 +97,63 @@ TfObj *createBoolObject(int i) {
   return o;
 }
 
+/* Free an object and all the other nested objects. */
+void freeObject(TfObj *o) {
+  switch (o->type) {
+    case LIST:
+      for (size_t i = 0; i < o->list.len; i++) {
+        TfObj *el = o->list.ele[i];
+        release(el);
+      }
+      break;
+    case SYMBOL:
+    case STR:
+      free(o->str.ptr);
+      break;
+  }
+  free(o);
+}
+
+void retain(TfObj *o) {
+  o->refcount++;
+}
+
+void release(TfObj *o) {
+  assert(o->refcount > 0);
+  o->refcount--;
+  if (o->refcount == 0) freeObject(o);
+}
+
+void printObject(TfObj *o) {
+  switch (o->type) {
+    case INT:
+      printf("%d", o->i);
+      break;
+
+    case LIST:
+      printf("[");
+      for (size_t i = 0; i < o->list.len; i++) {
+        TfObj *el = o->list.ele[i];
+        printObject(el);
+        if (i != o->list.len - 1) {
+          printf(" ");
+        }
+      }
+      printf("]");
+      break;
+    case STR:
+      printf("\"%s\"", o->str.ptr);
+      break;
+    case SYMBOL:
+      printf("%s", o->str.ptr);
+      break;
+
+    default:
+      printf("?");
+      break;
+  }
+}
+
 TfObj *createListObject(void) {
   TfObj *o = createObject(LIST);
   o->list.ele = NULL;
@@ -166,7 +223,10 @@ TfObj *parse(char *prg) {
     } else {
       o = NULL;
     }
+
+    // Check if the current token produced a parsing error.
     if (o == NULL) {
+      release(parsed);
       perror("Error parsing\n");
       return NULL;
     } else {
@@ -175,31 +235,6 @@ TfObj *parse(char *prg) {
   }
   return parsed;
   // printf("after while: %d\n", *(parser.p));
-}
-void printObject(TfObj *o) {
-  switch (o->type) {
-    case INT:
-      printf("%d", o->i);
-      break;
-
-    case LIST:
-      printf("[");
-      for (size_t i = 0; i < o->list.len; i++) {
-        TfObj *el = o->list.ele[i];
-        printObject(el);
-        if (i != o->list.len - 1) {
-          printf(" ");
-        }
-      }
-      printf("]");
-      break;
-    case SYMBOL:
-      printf("%s", o->str.ptr);
-      break;
-
-    default:
-      break;
-  }
 }
 /* --------------------- Execution and context ----------------------- */
 
@@ -234,6 +269,7 @@ void eval(Tfctx *ctx, TfObj *prg) {
         break;
       default:
         listPush(ctx->stack, word);
+        retain(word);
         break;
     }
   }
