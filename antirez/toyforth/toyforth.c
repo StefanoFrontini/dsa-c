@@ -85,21 +85,6 @@ TfObj *createObject(int type) {
   return o;
 }
 
-TfObj *createStringObject(char *s, size_t len) {
-  TfObj *o = createObject(STR);
-  o->str.ptr = xmalloc(len + 1);
-  o->str.len = len;
-  memcpy(o->str.ptr, s, len);
-  o->str.ptr[len] = 0;
-  return o;
-}
-
-TfObj *createSymbolObject(char *s, size_t len) {
-  TfObj *o = createStringObject(s, len);
-  o->type = SYMBOL;
-  return o;
-}
-
 TfObj *createIntObject(int i) {
   TfObj *o = createObject(INT);
   o->i = i;
@@ -168,12 +153,57 @@ void printObject(TfObj *o) {
       break;
   }
 }
+/* ------------------------------ String object --------------------- */
+
+TfObj *createStringObject(char *s, size_t len) {
+  TfObj *o = createObject(STR);
+  o->str.ptr = xmalloc(len + 1);
+  o->str.len = len;
+  memcpy(o->str.ptr, s, len);
+  o->str.ptr[len] = 0;
+  return o;
+}
+
+TfObj *createSymbolObject(char *s, size_t len) {
+  TfObj *o = createStringObject(s, len);
+  o->type = SYMBOL;
+  return o;
+}
+/* Compare the two string objects 'a' and 'b', return 0 if they are the same,
+ * '1' if a>b, '-1' if a<b. The comparison is performed using memcmp(). */
+int compareStringObject(TfObj *a, TfObj *b) {
+  size_t minlen = a->str.len < b->str.len ? a->str.len : b->str.len;
+  int cmp = memcmp(a->str.ptr, b->str.ptr, minlen);
+  if (cmp == 0) {
+    if (a->str.len == b->str.len)
+      return 0;
+    else if (a->str.len > b->str.len)
+      return 1;
+    else
+      return -1;
+  } else {
+    if (cmp < 0)
+      return -1;
+    else
+      return 1;
+  }
+}
+
+/* ------------------------------ List object --------------------- */
 
 TfObj *createListObject(void) {
   TfObj *o = createObject(LIST);
   o->list.ele = NULL;
   o->list.len = 0;
   return o;
+}
+
+/* add the new element at the end of the list. It is up to the caller to
+ * increment the reference count to the list. */
+void listPush(TfObj *l, TfObj *ele) {
+  l->list.ele = xrealloc(l->list.ele, sizeof(TfObj *) * (l->list.len + 1));
+  l->list.ele[l->list.len] = ele;
+  l->list.len++;
 }
 /* ----------- Turn program into toy forth list      */
 
@@ -212,13 +242,6 @@ void parseSpaces(Tfparser *parser) {
     parser->p++;
   }
 }
-/* add the new element at the end of the list. It is up to the caller to
- * increment the reference count to the list. */
-void listPush(TfObj *l, TfObj *ele) {
-  l->list.ele = xrealloc(l->list.ele, sizeof(TfObj *) * (l->list.len + 1));
-  l->list.ele[l->list.len] = ele;
-  l->list.len++;
-}
 
 TfObj *parse(char *prg) {
   Tfparser parser;
@@ -252,13 +275,31 @@ TfObj *parse(char *prg) {
   // printf("after while: %d\n", *(parser.p));
 }
 /* --------------------- Execution and context ----------------------- */
+Tffuncentry *getFunctionByName(Tfctx *ctx, char *name) {
+  for (size_t i = 0; i < ctx->functable.func_count; i++) {
+    Tffuncentry *fe = ctx->functable.func_table[i];
+    if (compareStringObject(fe->name, name) == 0) return fe;
+  }
+  return NULL;
+}
+void registerCfunction(Tfctx *ctx, char *name,
+                       void (*callback)(Tfctx *ctx, TfObj *name)) {
+  Tffuncentry *fe;
+  TfObj *oname = createStringObject(name, strlen(name));
+  fe = getFunctionByName(ctx, oname);
+  if (fe) {
+
+  } else {
+  }
+  release(oname);
+}
 
 Tfctx *createContext(void) {
   Tfctx *ctx = xmalloc(sizeof(*ctx));
   ctx->stack = createListObject();
   ctx->functable.func_table = NULL;
   ctx->functable.func_count = 0;
-  registerFunction(ctx, "+", basicMathFunctions);
+  registerCFunction(ctx, "+", basicMathFunctions);
   return ctx;
 }
 
