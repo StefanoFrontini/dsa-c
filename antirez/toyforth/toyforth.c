@@ -424,15 +424,23 @@ int exec(Tfctx *ctx, TfObj *prg) {
 int basicMathFunctions(Tfctx *ctx, char *name) {
   if(ctxCheckStackMinLen(ctx, 2)) return TF_ERR;
   TfObj *b = ctxStackPop(ctx, INT);
+  if(b == NULL) return TF_ERR;
   TfObj *a = ctxStackPop(ctx, INT);
-  if(a == NULL || b == NULL) return TF_ERR;
+  if(a == NULL){
+    ctxStackPush(ctx, b);
+    return TF_ERR;
+  }
+
   int result;
   switch(name[0]){
     case '+': result = a->i + b->i; break;
     case '-': result = a->i - b->i; break;
     case '*': result = a->i * b->i; break;
   }
-  return result;
+  release(a);
+  release(b);
+  ctxStackPush(ctx, createIntObject(result));
+  return TF_OK;
 }
 
 /* -------------------------  Main ----------------------------- */
