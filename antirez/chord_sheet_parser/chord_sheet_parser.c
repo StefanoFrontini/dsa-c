@@ -64,5 +64,33 @@ stringVal() -> return the value of the token stringConstant
 /* Parser
 
 
-
 */
+
+/* DATA STRUCTURES LEXER
+*/
+
+#include <assert.h>
+#include <ctype.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+typedef enum { SYMBOL = 0, STR} TokenType;
+
+typedef struct Token {
+    int refcount;
+    TokenType type;
+    union {
+       char symbol;
+       struct {
+          char *ptr;
+          size_t len;
+       } value;
+       struct Token {
+          Token **ele;
+          size_t len;
+       } list;
+    };
+} Token;

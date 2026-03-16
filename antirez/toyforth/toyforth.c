@@ -19,7 +19,7 @@ typedef enum { INT = 0, STR, BOOL, LIST, SYMBOL, ALL } TfobjType;
 
 typedef struct TfObj {
   int refcount;
-  int type;
+  TfobjType type;
   union {
     int i;
     struct {
