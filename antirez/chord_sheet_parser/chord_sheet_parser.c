@@ -61,9 +61,9 @@ x*    : indicates that x appears 0 or more times;
 
 - Lexical elements (terminal elements or tokens):
 
-    symbol: '[' | ']' | '\n' | '\0'
+    symbol: '[' | ']' | '\n' | '\r' | '\0'
 
-    stringConstant: A sequence of letters, digits
+    stringConstant: A sequence of ascii chars, not including symbols
 
 
 - Syntax (non terminal elements):
@@ -150,9 +150,11 @@ void *xmalloc(size_t size) {
   return ptr;
 }
 
+/* Return true if the character 'c' is one of the characters acceptable for our
+ * lyrics. */
 int isLyric(Lexer *l){
-    return isalnum(l->p[0]) || isblank(l->p[0]);
-    // return isascii(l->p[0]);
+    char symbols_char[] = "[]\n\r";
+    return isascii(l->p[0]) && strchr(symbols_char, l->p[0]) == NULL;
 }
 
 
