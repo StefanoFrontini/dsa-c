@@ -1,1 +1,4 @@
-Now I've
+Now I've[C]abc[D]
+cde[F]
+
+[A][E][B]

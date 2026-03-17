@@ -103,8 +103,6 @@ stringVal() -> return the value of the token stringConstant
 
 */
 
-/* DATA STRUCTURES LEXER
-*/
 
 #include <assert.h>
 #include <ctype.h>
@@ -114,7 +112,9 @@ stringVal() -> return the value of the token stringConstant
 #include <string.h>
 #include <unistd.h>
 
-typedef enum { SYMBOL = 0, STR} TokenType;
+/* DATA STRUCTURES LEXER */
+
+typedef enum {STR = 0, OPENPAREN, CLOSEPAREN, ENDOFLINE } TokenType;
 
 typedef struct Token {
     int refcount;
@@ -125,10 +125,6 @@ typedef struct Token {
           char *ptr;
           size_t len;
        } str;
-    //    struct Token {
-    //       Token **ele;
-    //       size_t len;
-    //    } list;
     };
 } Token;
 
@@ -149,27 +145,42 @@ void *xmalloc(size_t size) {
   }
   return ptr;
 }
+/* ref counting */
+void retainToken(Token *t){
+    // assert(t->refcount > 0);
+    t->refcount++;
+}
+void releaseToken(Token *t){
+    assert(t->refcount > 0);
+    t->refcount--;
+    if(t->refcount == 0){
+        switch(t->type){
+            case STR:
+              free(t->str.ptr);
+              break;
+            default:
+              break;
+        }
+        free(t);
+    }
+}
 
 /* Return true if the character 'c' is one of the characters acceptable for our
- * lyrics. */
-int isLyric(Lexer *l){
+ * stringConstant token. */
+int isStringConstant(Lexer *l){
+    char c = l->p[0];
     char symbols_char[] = "[]\n\r";
-    return isascii(l->p[0]) && strchr(symbols_char, l->p[0]) == NULL;
+    return isascii(c) && strchr(symbols_char, c) == NULL;
 }
 
 
-void readLyric(Lexer *l){
+void readStringConstant(Lexer *l){
     char *start = l->p;
-
-        printf("start: %c\n", l->p[0]);
-    while(isLyric(l)){
+    while(isStringConstant(l)){
         l->p++;
     }
     char *end = l->p;
     size_t len = end - start;
-
-        printf("end: %c\n", l->p[0]);
-        printf("len: %ld\n", len);
 
     Token *t = xmalloc(sizeof(Token));
     char *str = xmalloc(len + 1);
@@ -182,9 +193,51 @@ void readLyric(Lexer *l){
     l->curToken = t;
 }
 
+void readOpenParen(Lexer *l){
+    Token *t = xmalloc(sizeof(Token));
+    t->refcount = 1;
+    t->type = OPENPAREN;
+    t->symbol = '[';
+    l->curToken = t;
+    l->p++;
+
+}
+
+void readCloseParen(Lexer *l){
+    Token *t = xmalloc(sizeof(Token));
+    t->refcount = 1;
+    t->type = CLOSEPAREN;
+    t->symbol = ']';
+    l->curToken = t;
+    l->p++;
+}
+
+void readEndOfLine(Lexer *l){
+    Token *t = xmalloc(sizeof(Token));
+    t->refcount = 1;
+    t->type = ENDOFLINE;
+    t->symbol = '\n';
+    l->curToken = t;
+    l->p++;
+}
+
+
 void advanceLexer(Lexer *l){
+    if(l->curToken != NULL){
+      releaseToken(l->curToken);
+
+    }
       if(isalnum(l->p[0])){
-        readLyric(l);
+        readStringConstant(l);
+      } else if(l->p[0] == '['){
+        readOpenParen(l);
+      } else if(l->p[0] == ']'){
+        readCloseParen(l);
+      } else if(l->p[0] == '\n'){
+        readEndOfLine(l);
+      }
+      else {
+        l->curToken = NULL;
       }
 }
 
@@ -193,6 +246,14 @@ void printToken(Token *t){
         case STR:
            printf("Current token is: %s\n", t->str.ptr);
            break;
+        case OPENPAREN:
+        case CLOSEPAREN:
+           printf("Current token is: %c\n", t->symbol);
+           break;
+        case ENDOFLINE:
+           printf("Current token is: 'newLine'\n");
+           break;
+
         default:
         break;
     }
@@ -224,6 +285,9 @@ int main(int argc, char **argv){
     l.p = buf;
     l.curToken = NULL;
     advanceLexer(&l);
-    printToken(l.curToken);
+    while(l.curToken){
+        printToken(l.curToken);
+        advanceLexer(&l);
+    }
     return 0;
 }
