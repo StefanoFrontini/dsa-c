@@ -112,6 +112,26 @@ stringVal() -> return the value of the token stringConstant
 #include <string.h>
 #include <unistd.h>
 
+/* DATA STRUCTURES OBJECT */
+
+typedef enum {SONG = 0, LINE, WORD, CHORD, LYRIC} CsObjType;
+
+typedef struct CsObj{
+    int refcount;
+    CsObjType type;
+    union {
+        struct {
+            struct CsObj **ele;
+            size_t len;
+        } list;
+        struct {
+            char *ptr;
+            size_t len;
+
+        } str;
+    };
+} CsObj;
+
 /* DATA STRUCTURES LEXER */
 
 typedef enum {STR = 0, OPENPAREN, CLOSEPAREN, ENDOFLINE } TokenType;
