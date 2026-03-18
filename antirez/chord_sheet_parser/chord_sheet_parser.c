@@ -132,6 +132,53 @@ typedef struct CsObj{
     };
 } CsObj;
 
+/* Object related functions */
+
+CsObj *createObject(CsObjType type){
+    CsObj *o = xmalloc(sizeof(CsObj));
+    o->refcount = 1;
+    o->type = type;
+    return o;
+}
+
+CsObj *createSongObject(void){
+    CsObj *o = createObject(SONG);
+    o->list.ele = NULL;
+    o->list.len = 0;
+    return o;
+}
+
+CsObj *createLineObject(void){
+    CsObj *o = createObject(LINE);
+    o->list.ele = NULL;
+    o->list.len = 0;
+    return o;
+}
+
+CsObj *createWordObject(void){
+    CsObj *o = createObject(WORD);
+    o->list.ele = NULL;
+    o->list.len = 0;
+    return o;
+}
+
+CsObj *createChordObject(char *str, size_t len){
+    CsObj *o = createObject(CHORD);
+    o->str.ptr = xmalloc(len + 1);
+    o->str.len = len;
+    memcpy(o->str.ptr, str, len);
+    o->str.ptr[len] = 0;
+    return o;
+}
+
+CsObj *createLyricObject(char *str, size_t len){
+    CsObj *o = createObject(LYRIC);
+    o->str.ptr = xmalloc(len + 1);
+    o->str.len = len;
+    memcpy(o->str.ptr, str, len);
+    o->str.ptr[len] = 0;
+    return o;
+}
 /* DATA STRUCTURES LEXER */
 
 typedef enum {STR = 0, OPENPAREN, CLOSEPAREN, ENDOFLINE } TokenType;
@@ -245,7 +292,6 @@ void readEndOfLine(Lexer *l){
 void advanceLexer(Lexer *l){
     if(l->curToken != NULL){
       releaseToken(l->curToken);
-
     }
       if(isalnum(l->p[0])){
         readStringConstant(l);
@@ -253,7 +299,7 @@ void advanceLexer(Lexer *l){
         readOpenParen(l);
       } else if(l->p[0] == ']'){
         readCloseParen(l);
-      } else if(l->p[0] == '\n'){
+      } else if(l->p[0] == '\n' || l->p[0] == '\r'){
         readEndOfLine(l);
       }
       else {
@@ -277,6 +323,41 @@ void printToken(Token *t){
         default:
         break;
     }
+}
+void parseLyric(Lexer *l){
+
+}
+void parseChord(Lexer *l){
+
+}
+void parseWord(Lexer *l){
+    switch(l->curToken->type){
+        case CHORD:
+            parseChord(l);
+            break;
+
+        case STR:
+            parseLyric(l);
+            break;
+
+        default:
+            break;
+    }
+}
+void parseLine(Lexer *l){
+    parseWord(l);
+}
+void parseSong(Lexer *l){
+    parseLine(l);
+}
+
+CsObj *parse(Lexer *l){
+    // CsObj *o = createSongObject();
+    parseSong(l);
+
+    // if(l->curToken->type == SONG){
+
+    // }
 }
 
 int main(int argc, char **argv){
@@ -306,8 +387,9 @@ int main(int argc, char **argv){
     l.curToken = NULL;
     advanceLexer(&l);
     while(l.curToken){
-        printToken(l.curToken);
-        advanceLexer(&l);
+        // printToken(l.curToken);
+        // advanceLexer(&l);
+        CsObj *parsed = parse(&l);
     }
     return 0;
 }
