@@ -53,6 +53,8 @@ x?    : indicates that x appears 0 or 1 times;
 
 x*    : indicates that x appears 0 or more times;
 
+x+    : indicates that x appears 1 or more times;
+
 */
 
 
@@ -68,11 +70,11 @@ x*    : indicates that x appears 0 or more times;
 
 - Syntax (non terminal elements):
 
-    song: line*
+    song: line+
 
-    line: word* (endOfLine | endOfFile)
+    line: word+ (endOfLine | endOfFile)
 
-    word: (chord)? (lyric)?
+    word: chord lyric
 
     chord: '[' stringConstant ']'
 
@@ -131,6 +133,27 @@ typedef struct CsObj{
         } str;
     };
 } CsObj;
+
+/* ------------------------ Allocation wrappers ----------------------------*/
+
+void *xmalloc(size_t size) {
+  void *ptr = malloc(size);
+  if (ptr == NULL) {
+    fprintf(stderr, "Out of memory allocation %zu bytes\n", size);
+    exit(1);
+  }
+  return ptr;
+}
+
+void *xrealloc(void *old_ptr, size_t size) {
+  void *ptr = realloc(old_ptr, size);
+  if (ptr == NULL) {
+    fprintf(stderr, "Out of memory allocation %zu bytes\n", size);
+    exit(1);
+  }
+  return ptr;
+}
+
 
 /* Object related functions */
 
@@ -210,16 +233,6 @@ typedef struct Lexer {
 
 } Lexer;
 
-/*  Allocation wrappers */
-
-void *xmalloc(size_t size) {
-  void *ptr = malloc(size);
-  if (ptr == NULL) {
-    fprintf(stderr, "Out of memory allocation %zu bytes\n", size);
-    exit(1);
-  }
-  return ptr;
-}
 /* ref counting */
 void retainToken(Token *t){
     // assert(t->refcount > 0);
@@ -332,22 +345,54 @@ void printToken(Token *t){
         break;
     }
 }
+void printCsObj(CsObj *o){
+    switch(o->type){
+        case SONG:
+        case LINE:
+        case WORD:
+          for(size_t i = 0; i < o->list.len; i++){
+            if(o->list.len == 0){
+                printf("");
+            } else {
+                printCsObj(o->list.ele[i]);
+            }
+          }
+          break;
+        case CHORD:
+           if(o->str.len == 0){
+            printf("");
+           } else {
+            printf("[%s]", o->str.ptr);
+           }
+           break;
+        case LYRIC:
+           if(o->str.len == 0){
+            printf("");
+           } else {
+           printf("%s", o->str.ptr);
+           }
+           break;
+        default:
+           break;
+    }
+
+}
 CsObj *parseChord(Lexer *l){
   advanceLexer(l);
 
   if (l->curToken == NULL || l->curToken->type == ENDOFLINE || l->curToken->type == OPENPAREN) {
     fprintf(stderr, "Error parsing chord symbol\n");
-    return 1;
+    exit(1);
   } else if (l->curToken->type == CLOSEPAREN){
     fprintf(stderr, "Error: chord symbol cannot be empty\n");
-    return 1;
+    exit(1);
   } else {
     CsObj *o = createChordObject(l->curToken->str.ptr, l->curToken->str.len);
     advanceLexer(l);
-    if(l->curToken != CLOSEPAREN){
+    if(l->curToken->type != CLOSEPAREN){
         fprintf(stderr, "Error parsing chord symbol: unmatched closing bracket\n");
         // TO DO RELEASE
-        return 1;
+        exit(1);
     }
     advanceLexer(l);
     return o;
@@ -361,67 +406,52 @@ CsObj *parseLyric(Lexer *l){
     return o;
 }
 void listPush(CsObj *l, CsObj *ele){
-   l->list.ele = realloc(l->list.ele, sizeof(CsObj *) * (l->list.len + 1));
+   l->list.ele = xrealloc(l->list.ele, sizeof(CsObj *) * (l->list.len + 1));
    l->list.ele[l->list.len] = ele;
    l->list.len++;
 
 }
 
-void parseWord(Lexer *l){
-    if(l->curToken->type == NULL){
-        return;
-    }
+CsObj *parseWord(Lexer *l){
     CsObj *o = createWordObject();
     if(l->curToken->type == OPENPAREN){
         CsObj *parsedChord = parseChord(l);
-        listPush(o->list.ele, parsedChord);
+        listPush(o, parsedChord);
         CsObj *parsedLyric = NULL;
         if(l->curToken->type == STR){
             parsedLyric = parseLyric(l);
         } else {
             parsedLyric = createLyricObject(NULL, 0);
         }
-        listPush(o->list.ele, parsedLyric);
+        listPush(o, parsedLyric);
 
     } else if(l->curToken->type == STR) {
-        listPush(o->list.ele, createChordObject(NULL, 0));
-        // advanceLexer(l);
-        listPush(o->list.ele, parseLyric(l));
-        // if(l->curToken->type == STR){
-        //     parseLyric(l);
-        // } else {
-        //     createLyricObject(NULL, 0);
-        // }
+        listPush(o, createChordObject(NULL, 0));
+        listPush(o, parseLyric(l));
+    } else {
+        listPush(o, createChordObject(NULL, 0));
+        listPush(o, createLyricObject(NULL, 0));
     }
-    // CsObj *o = createWordObject();
-    // switch(l->curToken->type){
-    //     case OPENPAREN:
-    //         parseChord(l);
-    //         break;
-
-    //     case STR:
-    //         parseLyric(l);
-    //         break;
-
-    //     default:
-    //         break;
-    // }
+    // advanceLexer(l);
+    return o;
 }
-void parseLine(Lexer *l){
-    parseWord(l);
+CsObj *parseLine(Lexer *l){
+    CsObj *o = createLineObject();
+    while(l->curToken && l->curToken->type != ENDOFLINE){
+        listPush(o, parseWord(l));
+        // advanceLexer(l);
+    }
+    return o;
 }
-void parseSong(Lexer *l){
-    parseLine(l);
+CsObj *parseSong(Lexer *l){
+    CsObj *o = createSongObject();
+    while(l->curToken){
+        listPush(o, parseLine(l));
+        // advanceLexer(l);
+    }
+    return o;
 }
 
-CsObj *parse(Lexer *l){
-    // CsObj *o = createSongObject();
-    parseSong(l);
-
-    // if(l->curToken->type == SONG){
-
-    // }
-}
 
 int main(int argc, char **argv){
     if(argc !=2){
@@ -449,10 +479,7 @@ int main(int argc, char **argv){
     l.p = buf;
     l.curToken = NULL;
     advanceLexer(&l);
-    while(l.curToken){
-        // printToken(l.curToken);
-        // advanceLexer(&l);
-        CsObj *parsed = parse(&l);
-    }
+    CsObj *parsed = parseSong(&l);
+    printCsObj(parsed);
     return 0;
 }
