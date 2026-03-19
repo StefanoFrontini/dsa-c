@@ -164,19 +164,27 @@ CsObj *createWordObject(void){
 
 CsObj *createChordObject(char *str, size_t len){
     CsObj *o = createObject(CHORD);
-    o->str.ptr = xmalloc(len + 1);
-    o->str.len = len;
-    memcpy(o->str.ptr, str, len);
-    o->str.ptr[len] = 0;
+    if(len > 0){
+        o->str.ptr = xmalloc(len + 1);
+        memcpy(o->str.ptr, str, len);
+        o->str.ptr[len] = 0;
+    } else {
+        o->str.ptr = str;
+    }
+        o->str.len = len;
     return o;
 }
 
 CsObj *createLyricObject(char *str, size_t len){
     CsObj *o = createObject(LYRIC);
-    o->str.ptr = xmalloc(len + 1);
+    if(len > 0){
+        o->str.ptr = xmalloc(len + 1);
+        memcpy(o->str.ptr, str, len);
+        o->str.ptr[len] = 0;
+    } else {
+        o->str.ptr = str;
+    }
     o->str.len = len;
-    memcpy(o->str.ptr, str, len);
-    o->str.ptr[len] = 0;
     return o;
 }
 /* DATA STRUCTURES LEXER */
@@ -279,11 +287,11 @@ void readCloseParen(Lexer *l){
     l->p++;
 }
 
-void readEndOfLine(Lexer *l){
+void readEndOfLine(Lexer *l, char s){
     Token *t = xmalloc(sizeof(Token));
     t->refcount = 1;
     t->type = ENDOFLINE;
-    t->symbol = '\n';
+    t->symbol = s;
     l->curToken = t;
     l->p++;
 }
@@ -300,7 +308,7 @@ void advanceLexer(Lexer *l){
       } else if(l->p[0] == ']'){
         readCloseParen(l);
       } else if(l->p[0] == '\n' || l->p[0] == '\r'){
-        readEndOfLine(l);
+        readEndOfLine(l, l->p[0]);
       }
       else {
         l->curToken = NULL;
@@ -324,25 +332,80 @@ void printToken(Token *t){
         break;
     }
 }
-void parseLyric(Lexer *l){
+CsObj *parseChord(Lexer *l){
+  advanceLexer(l);
 
-}
-void parseChord(Lexer *l){
-
-}
-void parseWord(Lexer *l){
-    switch(l->curToken->type){
-        case CHORD:
-            parseChord(l);
-            break;
-
-        case STR:
-            parseLyric(l);
-            break;
-
-        default:
-            break;
+  if (l->curToken == NULL || l->curToken->type == ENDOFLINE || l->curToken->type == OPENPAREN) {
+    fprintf(stderr, "Error parsing chord symbol\n");
+    return 1;
+  } else if (l->curToken->type == CLOSEPAREN){
+    fprintf(stderr, "Error: chord symbol cannot be empty\n");
+    return 1;
+  } else {
+    CsObj *o = createChordObject(l->curToken->str.ptr, l->curToken->str.len);
+    advanceLexer(l);
+    if(l->curToken != CLOSEPAREN){
+        fprintf(stderr, "Error parsing chord symbol: unmatched closing bracket\n");
+        // TO DO RELEASE
+        return 1;
     }
+    advanceLexer(l);
+    return o;
+  }
+
+}
+
+CsObj *parseLyric(Lexer *l){
+    CsObj *o = createLyricObject(l->curToken->str.ptr, l->curToken->str.len);
+    advanceLexer(l);
+    return o;
+}
+void listPush(CsObj *l, CsObj *ele){
+   l->list.ele = realloc(l->list.ele, sizeof(CsObj *) * (l->list.len + 1));
+   l->list.ele[l->list.len] = ele;
+   l->list.len++;
+
+}
+
+void parseWord(Lexer *l){
+    if(l->curToken->type == NULL){
+        return;
+    }
+    CsObj *o = createWordObject();
+    if(l->curToken->type == OPENPAREN){
+        CsObj *parsedChord = parseChord(l);
+        listPush(o->list.ele, parsedChord);
+        CsObj *parsedLyric = NULL;
+        if(l->curToken->type == STR){
+            parsedLyric = parseLyric(l);
+        } else {
+            parsedLyric = createLyricObject(NULL, 0);
+        }
+        listPush(o->list.ele, parsedLyric);
+
+    } else if(l->curToken->type == STR) {
+        listPush(o->list.ele, createChordObject(NULL, 0));
+        // advanceLexer(l);
+        listPush(o->list.ele, parseLyric(l));
+        // if(l->curToken->type == STR){
+        //     parseLyric(l);
+        // } else {
+        //     createLyricObject(NULL, 0);
+        // }
+    }
+    // CsObj *o = createWordObject();
+    // switch(l->curToken->type){
+    //     case OPENPAREN:
+    //         parseChord(l);
+    //         break;
+
+    //     case STR:
+    //         parseLyric(l);
+    //         break;
+
+    //     default:
+    //         break;
+    // }
 }
 void parseLine(Lexer *l){
     parseWord(l);
