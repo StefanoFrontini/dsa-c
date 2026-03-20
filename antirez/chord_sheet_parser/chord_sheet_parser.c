@@ -92,11 +92,7 @@ x+    : indicates that x appears 1 or more times;
 Advancing the input, one token at a time
 Getting the value and type of the current token
 
-hasMoreTokens() -> true or false
-advance() -> gets the next token from the input and makes it the current token.
-tokenType() -> returns: symbol or stringConstant
-symbol() -> returns the value of the token symbol
-stringVal() -> return the value of the token stringConstant
+advanceLexer() -> reads the next token from the input and makes it the current token.
 
 */
 
@@ -253,7 +249,7 @@ void releaseToken(Token *t){
     }
 }
 
-/* Return true if the character 'c' is one of the characters acceptable for our
+/* Return true if the character 'c' is one of the characters acceptable for the
  * stringConstant token. */
 int isStringConstant(Lexer *l){
     char c = l->p[0];
@@ -377,8 +373,22 @@ void printCsObj(CsObj *o){
     }
 
 }
+
+void eatToken(Lexer *l, TokenType t){
+    if(l->curToken == NULL || l->curToken->type != t){
+        fprintf(stderr, "Error cannot eat token: %d\n", t);
+        if(l->curToken == NULL){
+            fprintf(stderr, "curToken was NULL\n");
+        } else {
+            fprintf(stderr, "curToken was %d\n", l->curToken->type);
+        }
+        exit(1);
+    }
+    advanceLexer(l);
+
+}
 CsObj *parseChord(Lexer *l){
-  advanceLexer(l);
+   eatToken(l, OPENPAREN);
 
   if (l->curToken == NULL || l->curToken->type == ENDOFLINE || l->curToken->type == OPENPAREN) {
     fprintf(stderr, "Error parsing chord symbol\n");
@@ -387,14 +397,16 @@ CsObj *parseChord(Lexer *l){
     fprintf(stderr, "Error: chord symbol cannot be empty\n");
     exit(1);
   } else {
+    // printf("%s, %zu", l->curToken->str.ptr, l->curToken->str.len);
     CsObj *o = createChordObject(l->curToken->str.ptr, l->curToken->str.len);
-    advanceLexer(l);
+
+    eatToken(l, STR);
     if(l->curToken->type != CLOSEPAREN){
         fprintf(stderr, "Error parsing chord symbol: unmatched closing bracket\n");
         // TO DO RELEASE
         exit(1);
     }
-    advanceLexer(l);
+    eatToken(l, CLOSEPAREN);
     return o;
   }
 
@@ -402,7 +414,7 @@ CsObj *parseChord(Lexer *l){
 
 CsObj *parseLyric(Lexer *l){
     CsObj *o = createLyricObject(l->curToken->str.ptr, l->curToken->str.len);
-    advanceLexer(l);
+    eatToken(l, STR);
     return o;
 }
 void listPush(CsObj *l, CsObj *ele){
@@ -415,15 +427,15 @@ void listPush(CsObj *l, CsObj *ele){
 CsObj *parseWord(Lexer *l){
     CsObj *o = createWordObject();
     if(l->curToken->type == OPENPAREN){
-        CsObj *parsedChord = parseChord(l);
-        listPush(o, parsedChord);
-        CsObj *parsedLyric = NULL;
-        if(l->curToken->type == STR){
-            parsedLyric = parseLyric(l);
-        } else {
-            parsedLyric = createLyricObject(NULL, 0);
+        listPush(o, parseChord(l));
+
+        if(l->curToken == NULL || l->curToken->type == ENDOFLINE || l->curToken->type == OPENPAREN || l->curToken->type == CLOSEPAREN ){
+            listPush(o, createLyricObject(NULL, 0));
         }
-        listPush(o, parsedLyric);
+
+        else if(l->curToken->type == STR){
+            listPush(o, parseLyric(l));
+        }
 
     } else if(l->curToken->type == STR) {
         listPush(o, createChordObject(NULL, 0));
@@ -432,14 +444,12 @@ CsObj *parseWord(Lexer *l){
         listPush(o, createChordObject(NULL, 0));
         listPush(o, createLyricObject(NULL, 0));
     }
-    // advanceLexer(l);
     return o;
 }
 CsObj *parseLine(Lexer *l){
     CsObj *o = createLineObject();
     while(l->curToken && l->curToken->type != ENDOFLINE){
         listPush(o, parseWord(l));
-        // advanceLexer(l);
     }
     return o;
 }
@@ -447,7 +457,6 @@ CsObj *parseSong(Lexer *l){
     CsObj *o = createSongObject();
     while(l->curToken){
         listPush(o, parseLine(l));
-        // advanceLexer(l);
     }
     return o;
 }
