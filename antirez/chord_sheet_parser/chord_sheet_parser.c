@@ -72,17 +72,13 @@ x+    : indicates that x appears 1 or more times;
 
     song: line+
 
-    line: word+ (endOfLine | endOfFile)
+    line: word+ ('\n' | '\r' | '\0')
 
     word: chord lyric
 
     chord: '[' stringConstant ']'
 
     lyric: stringConstant
-
-    endOfLine: '\n'
-
-    endOfFile: '\0'
 
 
 */
@@ -96,8 +92,11 @@ advanceLexer() -> reads the next token from the input and makes it the current t
 
 */
 
-/* Parser
+/* Parsing functions
 
+The parsing function reads the tokens in order to build the object specified by the grammar rule.
+
+One parsing function for each grammar rule.
 
 */
 
@@ -208,7 +207,7 @@ CsObj *createLyricObject(char *str, size_t len){
 }
 /* DATA STRUCTURES LEXER */
 
-typedef enum {STR = 0, OPENPAREN, CLOSEPAREN, ENDOFLINE } TokenType;
+typedef enum {STR = 0, OPENPAREN, CLOSEPAREN, ENDOFLINE, ENDOFFILE } TokenType;
 
 typedef struct Token {
     int refcount;
@@ -305,6 +304,14 @@ void readEndOfLine(Lexer *l, char s){
     l->p++;
 }
 
+void readEndOfFile(Lexer *l){
+    Token *t = xmalloc(sizeof(Token));
+    t->refcount = 1;
+    t->type = ENDOFFILE;
+    t->symbol = 0;
+    l->curToken = t;
+}
+
 
 void advanceLexer(Lexer *l){
     if(l->curToken != NULL){
@@ -320,7 +327,7 @@ void advanceLexer(Lexer *l){
         readEndOfLine(l, l->p[0]);
       }
       else {
-        l->curToken = NULL;
+        readEndOfFile(l);
       }
 }
 
@@ -353,6 +360,9 @@ void printCsObj(CsObj *o){
                 printCsObj(o->list.ele[i]);
             }
           }
+          if(o->type == LINE){
+            printf("\n");
+          }
           break;
         case CHORD:
            if(o->str.len == 0){
@@ -375,7 +385,7 @@ void printCsObj(CsObj *o){
 }
 
 void eatToken(Lexer *l, TokenType t){
-    if(l->curToken == NULL || l->curToken->type != t){
+    if(l->curToken->type == ENDOFFILE || l->curToken->type != t){
         fprintf(stderr, "Error cannot eat token: %d\n", t);
         if(l->curToken == NULL){
             fprintf(stderr, "curToken was NULL\n");
@@ -390,7 +400,7 @@ void eatToken(Lexer *l, TokenType t){
 CsObj *parseChord(Lexer *l){
    eatToken(l, OPENPAREN);
 
-  if (l->curToken == NULL || l->curToken->type == ENDOFLINE || l->curToken->type == OPENPAREN) {
+  if (l->curToken->type == ENDOFFILE || l->curToken->type == ENDOFLINE || l->curToken->type == OPENPAREN) {
     fprintf(stderr, "Error parsing chord symbol\n");
     exit(1);
   } else if (l->curToken->type == CLOSEPAREN){
@@ -429,7 +439,7 @@ CsObj *parseWord(Lexer *l){
     if(l->curToken->type == OPENPAREN){
         listPush(o, parseChord(l));
 
-        if(l->curToken == NULL || l->curToken->type == ENDOFLINE || l->curToken->type == OPENPAREN || l->curToken->type == CLOSEPAREN ){
+        if(l->curToken->type == ENDOFFILE || l->curToken->type == ENDOFLINE || l->curToken->type == OPENPAREN || l->curToken->type == CLOSEPAREN ){
             listPush(o, createLyricObject(NULL, 0));
         }
 
@@ -448,14 +458,17 @@ CsObj *parseWord(Lexer *l){
 }
 CsObj *parseLine(Lexer *l){
     CsObj *o = createLineObject();
-    while(l->curToken && l->curToken->type != ENDOFLINE){
+    while(l->curToken->type != ENDOFFILE && l->curToken->type != ENDOFLINE){
         listPush(o, parseWord(l));
+    }
+    if(l->curToken->type == ENDOFLINE){
+        eatToken(l, ENDOFLINE);
     }
     return o;
 }
 CsObj *parseSong(Lexer *l){
     CsObj *o = createSongObject();
-    while(l->curToken){
+    while(l->curToken->type != ENDOFFILE){
         listPush(o, parseLine(l));
     }
     return o;
