@@ -1,39 +1,73 @@
 /*
 
-Now I've [C]heard there was a [Am]
+A chord sheet is a text where chords a written with this notation: [C]
+
+Example:
+
+Now I've [C]heard there was a
+secret
 
 ....
 
-
+The frontend requires a typescript object of this type:
 {
   type: "song";
-  value:  [{
-            type: "line";
-            value: [{
-                    type: "word";
-                    value: [{
-                            type: "Chord";
-                            value: ""
-                            }, {
-                            type: "Lyric";
-                            value: "Now I've "
-                            }]
-                    }, {
-                    type: "word";
-                    value: [{
-                                type: "Chord";
-                                value: "C";
-                                },
-                                {
-                                type: "Lyric";
-                                value:"heard there was a"
-                            }
-                          ]
-            }]
-
+  value: [
+    {
+      type: "line",
+      value: [
+        {
+          type: "word",
+          value: [
+            {
+              type: "chord",
+              value: "",
+            },
+            {
+              type: "lyric",
+              value: "Now I've ",
+            },
+          ],
+        },
+        {
+          type: "word",
+          value: [
+            {
+              type: "chord",
+              value: "C",
+            },
+            {
+              type: "lyric",
+              value: "heard there was a",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      type: "line",
+      value: [
+        {
+          type: "word",
+          value: [
+            {
+              type: "chord",
+              value: "",
+            },
+            {
+              type: "lyric",
+              value: "secret",
+            },
+          ],
+        },
+      ],
+    },
+  ];
 }
 
 */
+
+
 
 /*
 
@@ -109,26 +143,6 @@ One parsing function for each grammar rule.
 #include <string.h>
 #include <unistd.h>
 
-/* DATA STRUCTURES OBJECT */
-
-typedef enum {SONG = 0, LINE, WORD, CHORD, LYRIC} CsObjType;
-
-typedef struct CsObj{
-    int refcount;
-    CsObjType type;
-    union {
-        struct {
-            struct CsObj **ele;
-            size_t len;
-        } list;
-        struct {
-            char *ptr;
-            size_t len;
-
-        } str;
-    };
-} CsObj;
-
 /* ------------------------ Allocation wrappers ----------------------------*/
 
 void *xmalloc(size_t size) {
@@ -150,7 +164,29 @@ void *xrealloc(void *old_ptr, size_t size) {
 }
 
 
-/* Object related functions */
+/* --------------   Data structures: Chord Sheet Object ------------------- */
+
+typedef enum {SONG = 0, LINE, WORD, CHORD, LYRIC} CsObjType;
+
+typedef struct CsObj{
+    int refcount;
+    CsObjType type;
+    union {
+        struct {
+            struct CsObj **ele;
+            size_t len;
+        } list;
+        struct {
+            char *ptr;
+            size_t len;
+
+        } str;
+    };
+} CsObj;
+
+
+
+/* -----------   CsObj related functions ------------ */
 
 CsObj *createObject(CsObjType type){
     CsObj *o = xmalloc(sizeof(CsObj));
@@ -205,52 +241,18 @@ CsObj *createLyricObject(char *str, size_t len){
     o->str.len = len;
     return o;
 }
-/* DATA STRUCTURES LEXER */
 
-typedef enum {STR = 0, OPENPAREN, CLOSEPAREN, ENDOFLINE, ENDOFFILE } TokenType;
 
-typedef struct Token {
-    int refcount;
-    TokenType type;
-    union {
-       char symbol;
-       struct {
-          char *ptr;
-          size_t len;
-       } str;
-    };
-} Token;
+void listPush(CsObj *l, CsObj *ele){
+   l->list.ele = xrealloc(l->list.ele, sizeof(CsObj *) * (l->list.len + 1));
+   l->list.ele[l->list.len] = ele;
+   l->list.len++;
 
-typedef struct Lexer {
-    char *prg; // Program to parse
-    char *p; // Next token to parse
-    Token *curToken;
-
-} Lexer;
-
-/* ref counting */
-void retainToken(Token *t){
-    t->refcount++;
-}
-void releaseToken(Token *t){
-    assert(t->refcount > 0);
-    t->refcount--;
-    if(t->refcount == 0){
-        switch(t->type){
-            case STR:
-              free(t->str.ptr);
-              break;
-            default:
-              break;
-        }
-        free(t);
-    }
 }
 
 void retainCsObj(CsObj *o){
     o->refcount++;
 }
-
 
 void releaseCsObj(CsObj *o){
     assert(o->refcount > 0);
@@ -274,6 +276,86 @@ void releaseCsObj(CsObj *o){
         free(o);
     }
 }
+
+void printCsObj(CsObj *o){
+    switch(o->type){
+        case SONG:
+        case LINE:
+        case WORD:
+          for(size_t i = 0; i < o->list.len; i++){
+            if(o->list.len == 0){
+                printf("");
+            } else {
+                printCsObj(o->list.ele[i]);
+            }
+          }
+          if(o->type == LINE){
+            printf("\n");
+          }
+          break;
+        case CHORD:
+           if(o->str.len == 0){
+            printf("");
+           } else {
+            printf("[%s]", o->str.ptr);
+           }
+           break;
+        case LYRIC:
+           if(o->str.len == 0){
+            printf("");
+           } else {
+           printf("%s", o->str.ptr);
+           }
+           break;
+        default:
+           break;
+    }
+
+}
+
+/* ----------------   Data structures: Lexer ------------------ */
+
+typedef enum {STR = 0, OPENPAREN, CLOSEPAREN, ENDOFLINE, ENDOFFILE } TokenType;
+
+typedef struct Token {
+    int refcount;
+    TokenType type;
+    union {
+       char symbol;
+       struct {
+          char *ptr;
+          size_t len;
+       } str;
+    };
+} Token;
+
+typedef struct Lexer {
+    char *prg; // Program to parse
+    char *p; // Next token to parse
+    Token *curToken;
+
+} Lexer;
+
+/* ------------------  Token related functions ----------------  */
+
+void retainToken(Token *t){
+    t->refcount++;
+}
+void releaseToken(Token *t){
+    assert(t->refcount > 0);
+    t->refcount--;
+    if(t->refcount == 0){
+        switch(t->type){
+            case STR:
+              free(t->str.ptr);
+              break;
+            default:
+              break;
+        }
+        free(t);
+    }
+}
+
 
 /* Return true if the character 'c' is one of the characters acceptable for the
  * stringConstant token. */
@@ -373,42 +455,6 @@ void printToken(Token *t){
         break;
     }
 }
-void printCsObj(CsObj *o){
-    switch(o->type){
-        case SONG:
-        case LINE:
-        case WORD:
-          for(size_t i = 0; i < o->list.len; i++){
-            if(o->list.len == 0){
-                printf("");
-            } else {
-                printCsObj(o->list.ele[i]);
-            }
-          }
-          if(o->type == LINE){
-            printf("\n");
-          }
-          break;
-        case CHORD:
-           if(o->str.len == 0){
-            printf("");
-           } else {
-            printf("[%s]", o->str.ptr);
-           }
-           break;
-        case LYRIC:
-           if(o->str.len == 0){
-            printf("");
-           } else {
-           printf("%s", o->str.ptr);
-           }
-           break;
-        default:
-           break;
-    }
-
-}
-
 void eatToken(Lexer *l, TokenType t){
     if(l->curToken->type == ENDOFFILE || l->curToken->type != t){
         fprintf(stderr, "Error cannot eat token: %d\n", t);
@@ -418,6 +464,9 @@ void eatToken(Lexer *l, TokenType t){
     advanceLexer(l);
 
 }
+
+/* --------------- Parsing functions --------------*/
+
 CsObj *parseChord(Lexer *l){
    eatToken(l, OPENPAREN);
    char *str_ptr = l->curToken->str.ptr;
@@ -433,12 +482,6 @@ CsObj *parseLyric(Lexer *l){
     CsObj *o = createLyricObject(l->curToken->str.ptr, l->curToken->str.len);
     eatToken(l, STR);
     return o;
-}
-void listPush(CsObj *l, CsObj *ele){
-   l->list.ele = xrealloc(l->list.ele, sizeof(CsObj *) * (l->list.len + 1));
-   l->list.ele[l->list.len] = ele;
-   l->list.len++;
-
 }
 
 CsObj *parseWord(Lexer *l){
@@ -482,6 +525,7 @@ CsObj *parseSong(Lexer *l){
     return o;
 }
 
+/* -------------------------  Main ----------------------------- */
 
 int main(int argc, char **argv){
     if(argc !=2){
@@ -511,5 +555,6 @@ int main(int argc, char **argv){
     advanceLexer(&l);
     CsObj *parsed = parseSong(&l);
     printCsObj(parsed);
+    releaseCsObj(parsed);
     return 0;
 }
