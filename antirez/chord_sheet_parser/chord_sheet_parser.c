@@ -230,7 +230,6 @@ typedef struct Lexer {
 
 /* ref counting */
 void retainToken(Token *t){
-    // assert(t->refcount > 0);
     t->refcount++;
 }
 void releaseToken(Token *t){
@@ -245,6 +244,34 @@ void releaseToken(Token *t){
               break;
         }
         free(t);
+    }
+}
+
+void retainCsObj(CsObj *o){
+    o->refcount++;
+}
+
+
+void releaseCsObj(CsObj *o){
+    assert(o->refcount > 0);
+    o->refcount--;
+    if(o->refcount == 0){
+        switch(o->type){
+            case SONG:
+            case LINE:
+            case WORD:
+               for(size_t i = 0; i < o->list.len; i++){
+                  releaseCsObj(o->list.ele[i]);
+               }
+               break;
+            case CHORD:
+            case LYRIC:
+              free(o->str.ptr);
+              break;
+            default:
+              break;
+        }
+        free(o);
     }
 }
 
@@ -314,9 +341,7 @@ void readEndOfFile(Lexer *l){
 
 
 void advanceLexer(Lexer *l){
-    if(l->curToken != NULL){
       releaseToken(l->curToken);
-    }
       if(isalnum(l->p[0])){
         readStringConstant(l);
       } else if(l->p[0] == '['){
@@ -387,11 +412,7 @@ void printCsObj(CsObj *o){
 void eatToken(Lexer *l, TokenType t){
     if(l->curToken->type == ENDOFFILE || l->curToken->type != t){
         fprintf(stderr, "Error cannot eat token: %d\n", t);
-        if(l->curToken == NULL){
-            fprintf(stderr, "curToken was NULL\n");
-        } else {
-            fprintf(stderr, "curToken was %d\n", l->curToken->type);
-        }
+        fprintf(stderr, "curToken was %d\n", l->curToken->type);
         exit(1);
     }
     advanceLexer(l);
@@ -399,28 +420,14 @@ void eatToken(Lexer *l, TokenType t){
 }
 CsObj *parseChord(Lexer *l){
    eatToken(l, OPENPAREN);
-
-  if (l->curToken->type == ENDOFFILE || l->curToken->type == ENDOFLINE || l->curToken->type == OPENPAREN) {
-    fprintf(stderr, "Error parsing chord symbol\n");
-    exit(1);
-  } else if (l->curToken->type == CLOSEPAREN){
-    fprintf(stderr, "Error: chord symbol cannot be empty\n");
-    exit(1);
-  } else {
-    // printf("%s, %zu", l->curToken->str.ptr, l->curToken->str.len);
-    CsObj *o = createChordObject(l->curToken->str.ptr, l->curToken->str.len);
-
-    eatToken(l, STR);
-    if(l->curToken->type != CLOSEPAREN){
-        fprintf(stderr, "Error parsing chord symbol: unmatched closing bracket\n");
-        // TO DO RELEASE
-        exit(1);
-    }
-    eatToken(l, CLOSEPAREN);
-    return o;
+   char *str_ptr = l->curToken->str.ptr;
+   size_t len = l->curToken->str.len;
+   eatToken(l, STR);
+   eatToken(l, CLOSEPAREN);
+   CsObj *o = createChordObject(str_ptr, len);
+   return o;
   }
 
-}
 
 CsObj *parseLyric(Lexer *l){
     CsObj *o = createLyricObject(l->curToken->str.ptr, l->curToken->str.len);
@@ -471,6 +478,7 @@ CsObj *parseSong(Lexer *l){
     while(l->curToken->type != ENDOFFILE){
         listPush(o, parseLine(l));
     }
+    releaseToken(l->curToken);
     return o;
 }
 
@@ -499,7 +507,7 @@ int main(int argc, char **argv){
     Lexer l;
     l.prg = buf;
     l.p = buf;
-    l.curToken = NULL;
+    readEndOfFile(&l);
     advanceLexer(&l);
     CsObj *parsed = parseSong(&l);
     printCsObj(parsed);
