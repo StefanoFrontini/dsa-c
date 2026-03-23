@@ -163,10 +163,9 @@ void *xrealloc(void *old_ptr, size_t size) {
   return ptr;
 }
 
-
 /* --------------   Data structures: Chord Sheet Object ------------------- */
 
-typedef enum {SONG = 0, LINE, WORD, CHORD, LYRIC} CsObjType;
+typedef enum {SONG = 0, LINE, WORD, CHORD, LYRIC, ERROR} CsObjType;
 
 typedef struct CsObj{
     int refcount;
@@ -242,6 +241,27 @@ CsObj *createLyricObject(char *str, size_t len){
     return o;
 }
 
+CsObj *createErrorObject(int expected, int actual, CsObjType otype){
+    CsObj *o = createObject(ERROR);
+    char *s1 = "Error parsing object: ";
+    char *s2 = ". Expected token: ";
+    char *s3 = " Got: ";
+    o->str.ptr = xmalloc(strlen(s1) + 1 + strlen(s2) + 1 + strlen(s3) + 1 + 1 + 1);
+    char *ptr = o->str.ptr;
+    memcpy(ptr, s1, strlen(s1));
+    ptr[strlen(s1)] = otype + 48;
+    ptr = ptr + strlen(s1) + 1;
+    memcpy(ptr, s2, strlen(s2));
+    ptr[strlen(s2)] = expected + 48;
+    ptr = ptr + strlen(s2) + 1;
+    memcpy(ptr, s3, strlen(s3));
+    ptr[strlen(s3)] = actual + 48;
+    ptr[strlen(s3) + 1] = '\n';
+    ptr[strlen(s3) + 2] = 0;
+    o->str.len = strlen(s1) + 1 + strlen(s2) + 1 + strlen(s3) + 1;
+    return o;
+}
+
 
 void listPush(CsObj *l, CsObj *ele){
    l->list.ele = xrealloc(l->list.ele, sizeof(CsObj *) * (l->list.len + 1));
@@ -268,6 +288,7 @@ void releaseCsObj(CsObj *o){
                break;
             case CHORD:
             case LYRIC:
+            case ERROR:
               free(o->str.ptr);
               break;
             default:
@@ -297,14 +318,15 @@ void printCsObj(CsObj *o){
            if(o->str.len == 0){
             printf("");
            } else {
-            printf("[%s]", o->str.ptr);
+            printf("[%s](type: %d)", o->str.ptr, o->type);
            }
            break;
         case LYRIC:
+        case ERROR:
            if(o->str.len == 0){
             printf("");
            } else {
-           printf("%s", o->str.ptr);
+           printf("%s(type: %d)", o->str.ptr, o->type);
            }
            break;
         default:
@@ -455,32 +477,51 @@ void printToken(Token *t){
         break;
     }
 }
-void eatToken(Lexer *l, TokenType t){
+
+
+CsObj *eatToken(Lexer *l, TokenType t, int otype){
     if(l->curToken->type == ENDOFFILE || l->curToken->type != t){
-        fprintf(stderr, "Error cannot eat token: %d\n", t);
-        fprintf(stderr, "curToken was %d\n", l->curToken->type);
-        exit(1);
+        advanceLexer(l);
+        return createErrorObject(t, l->curToken->type, otype);
     }
     advanceLexer(l);
+    return NULL;
 
 }
+
+
 
 /* --------------- Parsing functions --------------*/
 
 CsObj *parseChord(Lexer *l){
-   eatToken(l, OPENPAREN);
-   char *str_ptr = l->curToken->str.ptr;
-   size_t len = l->curToken->str.len;
-   eatToken(l, STR);
-   eatToken(l, CLOSEPAREN);
+   CsObj *error;
+   error = eatToken(l, OPENPAREN, CHORD);
+   if(error != NULL) return error;
+   Token *t = l->curToken;
+   retainToken(t);
+   char *str_ptr = t->str.ptr;
+   size_t len = t->str.len;
+   error = eatToken(l, STR, CHORD);
+   if(error != NULL) return error;
+   error = eatToken(l, CLOSEPAREN, CHORD);
+   if(error != NULL) return error;
    CsObj *o = createChordObject(str_ptr, len);
+   releaseToken(t);
    return o;
   }
 
 
 CsObj *parseLyric(Lexer *l){
-    CsObj *o = createLyricObject(l->curToken->str.ptr, l->curToken->str.len);
-    eatToken(l, STR);
+   CsObj *error;
+   Token *t = l->curToken;
+   retainToken(t);
+   char *ptr = t->str.ptr;
+   size_t len = t->str.len;
+
+   error = eatToken(l, STR, LYRIC);
+   if(error != NULL) return error;
+    CsObj *o = createLyricObject(ptr, len);
+    releaseToken(t);
     return o;
 }
 
@@ -500,9 +541,17 @@ CsObj *parseWord(Lexer *l){
     } else if(l->curToken->type == STR) {
         listPush(o, createChordObject(NULL, 0));
         listPush(o, parseLyric(l));
+
     } else {
-        listPush(o, createChordObject(NULL, 0));
-        listPush(o, createLyricObject(NULL, 0));
+        if(l->curToken->type != ENDOFFILE){
+            CsObj *error = createErrorObject(ENDOFFILE, l->curToken->type, WORD);
+            advanceLexer(l);
+            return error;
+        } else {
+            listPush(o, createChordObject(NULL, 0));
+            listPush(o, createLyricObject(NULL, 0));
+
+        }
     }
     return o;
 }
@@ -512,7 +561,8 @@ CsObj *parseLine(Lexer *l){
         listPush(o, parseWord(l));
     }
     if(l->curToken->type == ENDOFLINE){
-        eatToken(l, ENDOFLINE);
+        CsObj *error = eatToken(l, ENDOFLINE, LINE);
+        if(error != NULL) return error;
     }
     return o;
 }
