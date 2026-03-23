@@ -187,6 +187,8 @@ typedef struct CsObj{
 
 /* -----------   CsObj related functions ------------ */
 
+/* Allocate and initialize e new Chord Sheet Object */
+
 CsObj *createObject(CsObjType type){
     CsObj *o = xmalloc(sizeof(CsObj));
     o->refcount = 1;
@@ -263,6 +265,8 @@ CsObj *createErrorObject(int expected, int actual, CsObjType otype){
 }
 
 
+/* Add the new element at the end of the list. It is up to the caller to
+ * increment the reference count to the list. */
 void listPush(CsObj *l, CsObj *ele){
    l->list.ele = xrealloc(l->list.ele, sizeof(CsObj *) * (l->list.len + 1));
    l->list.ele[l->list.len] = ele;
@@ -337,7 +341,7 @@ void printCsObj(CsObj *o){
 
 /* ----------------   Data structures: Lexer ------------------ */
 
-typedef enum {STR = 0, OPENPAREN, CLOSEPAREN, ENDOFLINE, ENDOFFILE } TokenType;
+typedef enum {STR = 0, OPENPAREN, CLOSEPAREN, ENDOFLINE, ENDOFFILE, ILLEGAL } TokenType;
 
 typedef struct Token {
     int refcount;
@@ -434,6 +438,14 @@ void readEndOfLine(Lexer *l, char s){
     l->curToken = t;
     l->p++;
 }
+void readIllegalChar(Lexer *l, char s){
+    Token *t = xmalloc(sizeof(Token));
+    t->refcount = 1;
+    t->type = ILLEGAL;
+    t->symbol = s;
+    l->curToken = t;
+    l->p++;
+}
 
 void readEndOfFile(Lexer *l){
     Token *t = xmalloc(sizeof(Token));
@@ -455,8 +467,10 @@ void advanceLexer(Lexer *l){
       } else if(l->p[0] == '\n' || l->p[0] == '\r'){
         readEndOfLine(l, l->p[0]);
       }
-      else {
+      else if(l->p[0] == 0) {
         readEndOfFile(l);
+      } else {
+        readIllegalChar(l, l->p[0]);
       }
 }
 
@@ -467,6 +481,7 @@ void printToken(Token *t){
            break;
         case OPENPAREN:
         case CLOSEPAREN:
+        case ILLEGAL:
            printf("Current token is: %c\n", t->symbol);
            break;
         case ENDOFLINE:
