@@ -289,6 +289,7 @@ void releaseCsObj(CsObj *o){
                for(size_t i = 0; i < o->list.len; i++){
                   releaseCsObj(o->list.ele[i]);
                }
+               free(o->list.ele);
                break;
             case CHORD:
             case LYRIC:
@@ -458,7 +459,7 @@ void readEndOfFile(Lexer *l){
 
 void advanceLexer(Lexer *l){
       releaseToken(l->curToken);
-      if(isalnum(l->p[0])){
+      if(isStringConstant(l->p[0])){
         readStringConstant(l);
       } else if(l->p[0] == '['){
         readOpenParen(l);
@@ -496,8 +497,9 @@ void printToken(Token *t){
 
 CsObj *eatToken(Lexer *l, TokenType t, int otype){
     if(l->curToken->type == ENDOFFILE || l->curToken->type != t){
+        TokenType actual = l->curToken->type;
         advanceLexer(l);
-        return createErrorObject(t, l->curToken->type, otype);
+        return createErrorObject(t, actual, otype);
     }
     advanceLexer(l);
     return NULL;
@@ -517,9 +519,15 @@ CsObj *parseChord(Lexer *l){
    char *str_ptr = t->str.ptr;
    size_t len = t->str.len;
    error = eatToken(l, STR, CHORD);
-   if(error != NULL) return error;
+   if(error != NULL) {
+    releaseToken(t);
+    return error;
+   }
    error = eatToken(l, CLOSEPAREN, CHORD);
-   if(error != NULL) return error;
+   if(error != NULL){
+    releaseToken(t);
+    return error;
+   }
    CsObj *o = createChordObject(str_ptr, len);
    releaseToken(t);
    return o;
@@ -534,7 +542,10 @@ CsObj *parseLyric(Lexer *l){
    size_t len = t->str.len;
 
    error = eatToken(l, STR, LYRIC);
-   if(error != NULL) return error;
+   if(error != NULL){
+    releaseToken(t);
+    return error;
+   };
     CsObj *o = createLyricObject(ptr, len);
     releaseToken(t);
     return o;
@@ -621,5 +632,6 @@ int main(int argc, char **argv){
     CsObj *parsed = parseSong(&l);
     printCsObj(parsed);
     releaseCsObj(parsed);
+    free(buf);
     return 0;
 }
