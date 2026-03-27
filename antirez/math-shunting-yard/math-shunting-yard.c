@@ -6,7 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define LIST_CAPACITY 64
+#define LIST_CAPACITY 1
 
 /* ------------------------ Allocation wrappers ----------------------------*/
 
@@ -118,4 +118,50 @@ SyObj *listPop(SyObj *l){
         return o;
     }
 
+}
+
+typedef struct SyParser {
+  char *prg;
+  char *p;
+} SyParser;
+
+typedef struct SyCtx {
+  SyObj *stack;
+  SyObj *queue;
+
+} SyCtx;
+
+/* -------------------------  Main ----------------------------- */
+
+int main(int argc, char **argv){
+    if(argc !=2){
+        fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
+        return 1;
+    }
+
+    FILE *fp = fopen(argv[1], "r");
+
+  if (fp == NULL) {
+    fprintf(stderr, "Unable to open the file\n");
+    return 1;
+  }
+
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    char *buf = xmalloc(file_size + 1);
+    fread(buf, file_size, 1, fp);
+    buf[file_size] = 0;
+    printf("text is: %s\n", buf);
+    fclose(fp);
+    SyParser p;
+    p.prg = buf;
+    p.p = buf;
+    // readEndOfFile(&l);
+    // advanceLexer(&l);
+    // CsObj *parsed = parseSong(&l);
+    // printCsObj(parsed);
+    // releaseCsObj(parsed);
+    free(buf);
+    return 0;
 }
