@@ -10,7 +10,6 @@
 #define SY_OK 0
 #define SY_ERR 1
 
-
 /* ------------------------ Allocation wrappers ----------------------------*/
 
 void *xmalloc(size_t size) {
@@ -111,7 +110,6 @@ void release(SyObj *o) {
   if (o->refcount == 0) freeObject(o);
 }
 
-
 void printSyObj(SyObj *o) {
   switch (o->type) {
     case NUMBER:
@@ -132,9 +130,12 @@ void printSyObj(SyObj *o) {
   }
 }
 
+/* Add the new element at the end of the list. It is up to the caller to
+ * increment the reference count to the list. */
 void listPush(SyObj *l, SyObj *o) {
   if (l->list.len >= l->list.capacity) {
-    size_t newCap = l->list.capacity * 2;
+    size_t newCap =
+        l->list.capacity <= 0 ? l->list.capacity = 1 : l->list.capacity * 2;
     l->list.ele = xrealloc(l->list.ele, newCap * sizeof(SyObj *));
     l->list.capacity = newCap;
   }
@@ -157,10 +158,19 @@ typedef struct SyParser {
   char *p;
 } SyParser;
 
+typedef struct precedenceTableEntry {
+  char s;
+  int i;
+} pTableEntry;
+
+typedef struct precedenceTable {
+  pTableEntry precedenceTableEntry[2];
+} pTable;
+
 typedef struct SyCtx {
   SyObj *stack;
   SyObj *queue;
-
+  pTable precedenceTable;
 } SyCtx;
 
 /* ----------- Turn program into shunting yard list ---------- */
@@ -177,7 +187,7 @@ SyObj *parseNumber(SyParser *parser) {
   end = parser->p;
   size_t len = end - start;
 
-if (len >= sizeof(buf)) {
+  if (len >= sizeof(buf)) {
     fprintf(stderr, "Number literal too long\n");
     return NULL;
   }
@@ -233,6 +243,90 @@ SyObj *parse(char *prg) {
   return parsed;
 }
 
+// void printSyObj(SyObj *o) {
+//   switch (o->type) {
+//     case NUMBER:
+//       printf("%d ", o->num);
+//       break;
+//     case SYMBOL:
+//       printf("%c ", o->symbol);
+//       break;
+//     case LIST:
+//       for (size_t i = 0; i < o->list.len; i++) {
+//         printSyObj(o->list.ele[i]);
+//       }
+//       break;
+
+//     default:
+//       printf("?\n");
+//       break;
+//   }
+// }
+int getPrecedence(SyCtx *ctx, SyObj *o){
+  char s = o->symbol;
+  for(int i = 0; i < 2; i++){
+    if(ctx->precedenceTable.precedenceTableEntry->s == s){
+      return ctx->precedenceTable.precedenceTableEntry->i;
+    }
+  }
+  return SY_ERR;
+}
+
+void ctxEnqueue(SyCtx *ctx, SyObj *obj);
+
+/* Push the object on the interpreter main stack. */
+void ctxStackPush(SyCtx *ctx, SyObj *o) {
+  if (ctx->stack->list.len == 0) {
+    listPush(ctx->stack, o);
+    return;
+  }
+  SyObj *peek = ctx->stack->list.ele[ctx->stack->list.len - 1];
+  int precPeek = getPrecedence(ctx, peek);
+  int precCurrent = getPrecedence(ctx, o);
+  if(precPeek > precCurrent){
+    SyObj *popped = listPop(ctx->stack);
+    ctxEnqueue(ctx, popped);
+    listPush(ctx->stack, o);
+  } else {
+    listPush(ctx->stack, o);
+  }
+};
+
+/* Enqueue the object on the interpreter main queue. */
+void ctxEnqueue(SyCtx *ctx, SyObj *obj) {
+  listPush(ctx->queue, obj);
+};
+
+void eval(SyCtx *ctx, SyObj *o) {
+  switch (o->type) {
+    case NUMBER:
+      ctxEnqueue(ctx, o);
+      break;
+    case SYMBOL:
+      ctxStackPush(ctx, o);
+      break;
+    case LIST:
+      for (size_t i = 0; i < o->list.len; i++) {
+        eval(ctx, o->list.ele[i]);
+      }
+      break;
+
+    default:
+      printf("?\n");
+      break;
+  }
+}
+SyCtx *createContext(void) {
+  SyCtx *ctx = xmalloc(sizeof(SyCtx));
+  ctx->stack = createListObject();
+  ctx->queue = createListObject();
+  ctx->precedenceTable.precedenceTableEntry->s = '+';
+  ctx->precedenceTable.precedenceTableEntry->i = 0;
+  ctx->precedenceTable.precedenceTableEntry->s = '*';
+  ctx->precedenceTable.precedenceTableEntry->i = 1;
+  return ctx;
+}
+
 /* -------------------------  Main ----------------------------- */
 
 int main(int argc, char **argv) {
@@ -257,7 +351,16 @@ int main(int argc, char **argv) {
   printf("text is: %s\n", buf);
   fclose(fp);
   SyObj *parsed = parse(buf);
+  printf("\nparsed: \n");
   printSyObj(parsed);
+  SyCtx *ctx = createContext();
+  eval(ctx, parsed);
+  while(ctx->stack->list.len > 0){
+    SyObj *popped = listPop(ctx->stack);
+    ctxEnqueue(ctx, popped);
+  }
+  printf("queue: \n");
+  printSyObj(ctx->queue);
   release(parsed);
   free(buf);
   return 0;
