@@ -135,7 +135,7 @@ void printSyObj(SyObj *o) {
 void listPush(SyObj *l, SyObj *o) {
   if (l->list.len >= l->list.capacity) {
     size_t newCap =
-        l->list.capacity <= 0 ? l->list.capacity = 1 : l->list.capacity * 2;
+        l->list.capacity <= 0 ? 1 : l->list.capacity * 2;
     l->list.ele = xrealloc(l->list.ele, newCap * sizeof(SyObj *));
     l->list.capacity = newCap;
   }
@@ -257,7 +257,7 @@ int getPrecedence(SyCtx *ctx, SyObj *o) {
 
 void ctxEnqueue(SyCtx *ctx, SyObj *obj);
 
-/* Push the object on the context stack. */
+/* Push the symbol object on the context stack. */
 void ctxStackPush(SyCtx *ctx, SyObj *o) {
   if (ctx->stack->list.len == 0) {
     listPush(ctx->stack, o);
@@ -309,6 +309,25 @@ void addSymbol(SyCtx *ctx, char s, int i) {
   ctx->precedenceTable.pTable[ctx->precedenceTable.count] = entry;
   ctx->precedenceTable.count++;
 }
+
+void freeContext(SyCtx *ctx) {
+  if (ctx->stack) {
+    free(ctx->stack->list.ele);
+    free(ctx->stack);
+  }
+  if (ctx->queue) {
+    free(ctx->queue->list.ele);
+    free(ctx->queue);
+  }
+  if (ctx->precedenceTable.pTable) {
+    for (int i = 0; i < ctx->precedenceTable.count; i++) {
+      free(ctx->precedenceTable.pTable[i]);
+    }
+    free(ctx->precedenceTable.pTable);
+  }
+  free(ctx);
+}
+
 SyCtx *createContext(void) {
   SyCtx *ctx = xmalloc(sizeof(SyCtx));
   ctx->stack = createListObject();
@@ -318,12 +337,6 @@ SyCtx *createContext(void) {
   addSymbol(ctx, '+', 0);
   addSymbol(ctx, '*', 1);
   addSymbol(ctx, '-', 0);
-  // ctx->precedenceTable.precedenceTableEntry[0].s = '+';
-  // ctx->precedenceTable.precedenceTableEntry[0].i = 0;
-  // ctx->precedenceTable.precedenceTableEntry[1].s = '*';
-  // ctx->precedenceTable.precedenceTableEntry[1].i = 1;
-  // ctx->precedenceTable.precedenceTableEntry[2].s = '-';
-  // ctx->precedenceTable.precedenceTableEntry[2].i = 0;
   return ctx;
 }
 
@@ -351,7 +364,7 @@ int main(int argc, char **argv) {
   printf("text is: %s\n", buf);
   fclose(fp);
   SyObj *parsed = parse(buf);
-  printf("\nparsed: \n");
+  // printf("\nparsed: \n");
   printSyObj(parsed);
   SyCtx *ctx = createContext();
   eval(ctx, parsed);
@@ -359,9 +372,10 @@ int main(int argc, char **argv) {
     SyObj *popped = listPop(ctx->stack);
     ctxEnqueue(ctx, popped);
   }
-  printf("queue: \n");
+  // printf("queue: \n");
   printSyObj(ctx->queue);
   release(parsed);
+  freeContext(ctx);
   free(buf);
   return 0;
 }
