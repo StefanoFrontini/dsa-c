@@ -164,7 +164,8 @@ typedef struct precedenceTableEntry {
 } pTableEntry;
 
 typedef struct precedenceTable {
-  pTableEntry precedenceTableEntry[3];
+  pTableEntry **pTable;
+  int count;
 } pTable;
 
 typedef struct SyCtx {
@@ -243,11 +244,11 @@ SyObj *parse(char *prg) {
   return parsed;
 }
 
-int getPrecedence(SyCtx *ctx, SyObj *o){
+int getPrecedence(SyCtx *ctx, SyObj *o) {
   char s = o->symbol;
-  for(int i = 0; i < 3; i++){
-    if(ctx->precedenceTable.precedenceTableEntry[i].s == s){
-      return ctx->precedenceTable.precedenceTableEntry[i].i;
+  for (int i = 0; i < ctx->precedenceTable.count; i++) {
+    if (ctx->precedenceTable.pTable[i]->s == s) {
+      return ctx->precedenceTable.pTable[i]->i;
     }
   }
   printf("Error: %c\n", s);
@@ -265,7 +266,7 @@ void ctxStackPush(SyCtx *ctx, SyObj *o) {
   SyObj *peek = ctx->stack->list.ele[ctx->stack->list.len - 1];
   int precPeek = getPrecedence(ctx, peek);
   int precCurrent = getPrecedence(ctx, o);
-  if(precPeek > precCurrent){
+  if (precPeek > precCurrent) {
     SyObj *popped = listPop(ctx->stack);
     ctxEnqueue(ctx, popped);
     listPush(ctx->stack, o);
@@ -298,16 +299,31 @@ void eval(SyCtx *ctx, SyObj *o) {
       break;
   }
 }
+void addSymbol(SyCtx *ctx, char s, int i) {
+  ctx->precedenceTable.pTable =
+      xrealloc(ctx->precedenceTable.pTable,
+               sizeof(pTableEntry *) * (ctx->precedenceTable.count + 1));
+  pTableEntry *entry = xmalloc(sizeof(pTableEntry));
+  entry->s = s;
+  entry->i = i;
+  ctx->precedenceTable.pTable[ctx->precedenceTable.count] = entry;
+  ctx->precedenceTable.count++;
+}
 SyCtx *createContext(void) {
   SyCtx *ctx = xmalloc(sizeof(SyCtx));
   ctx->stack = createListObject();
   ctx->queue = createListObject();
-  ctx->precedenceTable.precedenceTableEntry[0].s = '+';
-  ctx->precedenceTable.precedenceTableEntry[0].i = 0;
-  ctx->precedenceTable.precedenceTableEntry[1].s = '*';
-  ctx->precedenceTable.precedenceTableEntry[1].i = 1;
-  ctx->precedenceTable.precedenceTableEntry[2].s = '-';
-  ctx->precedenceTable.precedenceTableEntry[2].i = 0;
+  ctx->precedenceTable.pTable = NULL;
+  ctx->precedenceTable.count = 0;
+  addSymbol(ctx, '+', 0);
+  addSymbol(ctx, '*', 1);
+  addSymbol(ctx, '-', 0);
+  // ctx->precedenceTable.precedenceTableEntry[0].s = '+';
+  // ctx->precedenceTable.precedenceTableEntry[0].i = 0;
+  // ctx->precedenceTable.precedenceTableEntry[1].s = '*';
+  // ctx->precedenceTable.precedenceTableEntry[1].i = 1;
+  // ctx->precedenceTable.precedenceTableEntry[2].s = '-';
+  // ctx->precedenceTable.precedenceTableEntry[2].i = 0;
   return ctx;
 }
 
@@ -339,7 +355,7 @@ int main(int argc, char **argv) {
   printSyObj(parsed);
   SyCtx *ctx = createContext();
   eval(ctx, parsed);
-  while(ctx->stack->list.len > 0){
+  while (ctx->stack->list.len > 0) {
     SyObj *popped = listPop(ctx->stack);
     ctxEnqueue(ctx, popped);
   }
