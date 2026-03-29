@@ -164,7 +164,7 @@ typedef struct precedenceTableEntry {
 } pTableEntry;
 
 typedef struct precedenceTable {
-  pTableEntry precedenceTableEntry[2];
+  pTableEntry precedenceTableEntry[3];
 } pTable;
 
 typedef struct SyCtx {
@@ -243,38 +243,20 @@ SyObj *parse(char *prg) {
   return parsed;
 }
 
-// void printSyObj(SyObj *o) {
-//   switch (o->type) {
-//     case NUMBER:
-//       printf("%d ", o->num);
-//       break;
-//     case SYMBOL:
-//       printf("%c ", o->symbol);
-//       break;
-//     case LIST:
-//       for (size_t i = 0; i < o->list.len; i++) {
-//         printSyObj(o->list.ele[i]);
-//       }
-//       break;
-
-//     default:
-//       printf("?\n");
-//       break;
-//   }
-// }
 int getPrecedence(SyCtx *ctx, SyObj *o){
   char s = o->symbol;
-  for(int i = 0; i < 2; i++){
-    if(ctx->precedenceTable.precedenceTableEntry->s == s){
-      return ctx->precedenceTable.precedenceTableEntry->i;
+  for(int i = 0; i < 3; i++){
+    if(ctx->precedenceTable.precedenceTableEntry[i].s == s){
+      return ctx->precedenceTable.precedenceTableEntry[i].i;
     }
   }
+  printf("Error: %c\n", s);
   return SY_ERR;
 }
 
 void ctxEnqueue(SyCtx *ctx, SyObj *obj);
 
-/* Push the object on the interpreter main stack. */
+/* Push the object on the context stack. */
 void ctxStackPush(SyCtx *ctx, SyObj *o) {
   if (ctx->stack->list.len == 0) {
     listPush(ctx->stack, o);
@@ -292,7 +274,7 @@ void ctxStackPush(SyCtx *ctx, SyObj *o) {
   }
 };
 
-/* Enqueue the object on the interpreter main queue. */
+/* Enqueue the object on the context queue. */
 void ctxEnqueue(SyCtx *ctx, SyObj *obj) {
   listPush(ctx->queue, obj);
 };
@@ -320,10 +302,12 @@ SyCtx *createContext(void) {
   SyCtx *ctx = xmalloc(sizeof(SyCtx));
   ctx->stack = createListObject();
   ctx->queue = createListObject();
-  ctx->precedenceTable.precedenceTableEntry->s = '+';
-  ctx->precedenceTable.precedenceTableEntry->i = 0;
-  ctx->precedenceTable.precedenceTableEntry->s = '*';
-  ctx->precedenceTable.precedenceTableEntry->i = 1;
+  ctx->precedenceTable.precedenceTableEntry[0].s = '+';
+  ctx->precedenceTable.precedenceTableEntry[0].i = 0;
+  ctx->precedenceTable.precedenceTableEntry[1].s = '*';
+  ctx->precedenceTable.precedenceTableEntry[1].i = 1;
+  ctx->precedenceTable.precedenceTableEntry[2].s = '-';
+  ctx->precedenceTable.precedenceTableEntry[2].i = 0;
   return ctx;
 }
 
