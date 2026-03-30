@@ -121,6 +121,9 @@ void printSyObj(SyObj *o) {
     case LIST:
       for (size_t i = 0; i < o->list.len; i++) {
         printSyObj(o->list.ele[i]);
+        if (i == o->list.len - 1) {
+          printf("\n");
+        }
       }
       break;
 
@@ -134,8 +137,7 @@ void printSyObj(SyObj *o) {
  * increment the reference count to the list. */
 void listPush(SyObj *l, SyObj *o) {
   if (l->list.len >= l->list.capacity) {
-    size_t newCap =
-        l->list.capacity <= 0 ? 1 : l->list.capacity * 2;
+    size_t newCap = l->list.capacity <= 0 ? 1 : l->list.capacity * 2;
     l->list.ele = xrealloc(l->list.ele, newCap * sizeof(SyObj *));
     l->list.capacity = newCap;
   }
@@ -168,10 +170,24 @@ typedef struct precedenceTable {
   int count;
 } pTable;
 
+// int basicMathFunctions(SyCtx *ctx, char s);
+typedef int (*MathFn)(SyCtx *ctx, char s);
+
+typedef struct symbolTableEntry {
+  char s;
+  MathFn f;
+} sTableEntry;
+
+typedef struct symbolTable {
+  sTableEntry **sTable;
+  int count;
+} sTable;
+
 typedef struct SyCtx {
   SyObj *stack;
   SyObj *queue;
   pTable precedenceTable;
+  sTable symbolTable;
 } SyCtx;
 
 /* ----------- Turn program into shunting yard list ---------- */
@@ -275,12 +291,22 @@ void ctxStackPush(SyCtx *ctx, SyObj *o) {
   }
 };
 
+void ctxPostFixStackPush(SyCtx *ctx, SyObj *o) {
+  listPush(ctx->stack, o);
+}
+
+SyObj *ctxPostFixStackPop(SyCtx *ctx) {
+  return listPop(ctx->stack);
+}
+
 /* Enqueue the object on the context queue. */
 void ctxEnqueue(SyCtx *ctx, SyObj *obj) {
   listPush(ctx->queue, obj);
 };
 
-void eval(SyCtx *ctx, SyObj *o) {
+/* Turn the parsed program into a postfix notation. Output is placed on the
+ * context queue. */
+void evalInfix(SyCtx *ctx, SyObj *o) {
   switch (o->type) {
     case NUMBER:
       ctxEnqueue(ctx, o);
@@ -290,7 +316,7 @@ void eval(SyCtx *ctx, SyObj *o) {
       break;
     case LIST:
       for (size_t i = 0; i < o->list.len; i++) {
-        eval(ctx, o->list.ele[i]);
+        evalInfix(ctx, o->list.ele[i]);
       }
       break;
 
@@ -299,7 +325,7 @@ void eval(SyCtx *ctx, SyObj *o) {
       break;
   }
 }
-void addSymbol(SyCtx *ctx, char s, int i) {
+void addSymbolPrecedence(SyCtx *ctx, char s, int i) {
   ctx->precedenceTable.pTable =
       xrealloc(ctx->precedenceTable.pTable,
                sizeof(pTableEntry *) * (ctx->precedenceTable.count + 1));
@@ -308,6 +334,16 @@ void addSymbol(SyCtx *ctx, char s, int i) {
   entry->i = i;
   ctx->precedenceTable.pTable[ctx->precedenceTable.count] = entry;
   ctx->precedenceTable.count++;
+}
+void addSymbolFn(SyCtx *ctx, char s, MathFn f) {
+  ctx->symbolTable.sTable =
+      xrealloc(ctx->symbolTable.sTable,
+               sizeof(sTableEntry *) * (ctx->symbolTable.count + 1));
+  sTableEntry *entry = xmalloc(sizeof(sTableEntry));
+  entry->s = s;
+  entry->f = f;
+  ctx->symbolTable.sTable[ctx->symbolTable.count] = entry;
+  ctx->symbolTable.count++;
 }
 
 void freeContext(SyCtx *ctx) {
@@ -328,15 +364,47 @@ void freeContext(SyCtx *ctx) {
   free(ctx);
 }
 
+int ctxCheckStackMinLen(SyCtx *ctx, int min) {
+  return (ctx->stack->list.len < min) ? SY_ERR : SY_OK;
+};
+int basicMathFunctions(SyCtx *ctx, char s) {
+  if (ctxCheckStackMinLen(ctx, 2)) return SY_ERR;
+  SyObj *b = ctxPostFixStackPop(ctx);
+  if(b == NULL) return SY_ERR;
+  SyObj *a = ctxPostFixStackPop(ctx);
+  if(a == NULL) {
+    ctxPostFixStackPush(ctx, b);
+    return SY_ERR;
+  };
+  int result;
+  switch(s){
+    case '+': a->num + b->num; break;
+    case '-': a->num - b->num; break;
+    case '*': a->num * b->num; break;
+    case '/': a->num / b->num; break;
+  }
+  ctxPostFixStackPush(ctx, createNumberObject(result));
+  return SY_OK;
+}
+
 SyCtx *createContext(void) {
   SyCtx *ctx = xmalloc(sizeof(SyCtx));
   ctx->stack = createListObject();
   ctx->queue = createListObject();
   ctx->precedenceTable.pTable = NULL;
   ctx->precedenceTable.count = 0;
-  addSymbol(ctx, '+', 0);
-  addSymbol(ctx, '*', 1);
-  addSymbol(ctx, '-', 0);
+  addSymbolPrecedence(ctx, '+', 0);
+  addSymbolPrecedence(ctx, '*', 1);
+  addSymbolPrecedence(ctx, '-', 0);
+  addSymbolPrecedence(ctx, '/', 1);
+
+  ctx->symbolTable.sTable = NULL;
+  ctx->symbolTable.count = 0;
+  addSymbolFn(ctx, '+', basicMathFunctions);
+  addSymbolFn(ctx, '-', basicMathFunctions);
+  addSymbolFn(ctx, '*', basicMathFunctions);
+  addSymbolFn(ctx, '/', basicMathFunctions);
+
   return ctx;
 }
 
@@ -364,15 +432,15 @@ int main(int argc, char **argv) {
   printf("text is: %s\n", buf);
   fclose(fp);
   SyObj *parsed = parse(buf);
-  // printf("\nparsed: \n");
+  printf("parsed: \n");
   printSyObj(parsed);
   SyCtx *ctx = createContext();
-  eval(ctx, parsed);
+  evalInfix(ctx, parsed);
   while (ctx->stack->list.len > 0) {
     SyObj *popped = listPop(ctx->stack);
     ctxEnqueue(ctx, popped);
   }
-  // printf("queue: \n");
+  printf("queue: \n");
   printSyObj(ctx->queue);
   release(parsed);
   freeContext(ctx);
