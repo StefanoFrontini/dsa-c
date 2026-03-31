@@ -268,28 +268,28 @@ int getPrecedence(SyCtx *ctx, SyObj *o) {
     }
   }
   printf("Error: %c\n", s);
-  return SY_ERR;
+  return -1;
 }
 
 void ctxEnqueue(SyCtx *ctx, SyObj *obj);
 
-/* Push the symbol object on the context stack. */
+/* Push the symbol object on the context stack. It's up the caller to increment the refcount. */
 void ctxStackPush(SyCtx *ctx, SyObj *o) {
-  if (ctx->stack->list.len == 0) {
-    listPush(ctx->stack, o);
-    return;
+  while (ctx->stack->list.len > 0) {
+    SyObj *peek = ctx->stack->list.ele[ctx->stack->list.len - 1];
+    int precPeek = getPrecedence(ctx, peek);
+    int precCurrent = getPrecedence(ctx, o);
+
+    if (precPeek >= precCurrent) {
+      SyObj *popped = listPop(ctx->stack);
+      ctxEnqueue(ctx, popped);
+    } else {
+      break;
+    }
   }
-  SyObj *peek = ctx->stack->list.ele[ctx->stack->list.len - 1];
-  int precPeek = getPrecedence(ctx, peek);
-  int precCurrent = getPrecedence(ctx, o);
-  if (precPeek > precCurrent) {
-    SyObj *popped = listPop(ctx->stack);
-    ctxEnqueue(ctx, popped);
-    listPush(ctx->stack, o);
-  } else {
-    listPush(ctx->stack, o);
-  }
-};
+
+  listPush(ctx->stack, o);
+}
 
 void ctxPostFixStackPush(SyCtx *ctx, SyObj *o) {
   listPush(ctx->stack, o);
@@ -299,7 +299,7 @@ SyObj *ctxPostFixStackPop(SyCtx *ctx) {
   return listPop(ctx->stack);
 }
 
-/* Enqueue the object on the context queue. */
+/* Enqueue the object on the context queue. It's up the caller to increment the refcount. */
 void ctxEnqueue(SyCtx *ctx, SyObj *obj) {
   listPush(ctx->queue, obj);
 };
@@ -309,9 +309,11 @@ void ctxEnqueue(SyCtx *ctx, SyObj *obj) {
 void evalInfix(SyCtx *ctx, SyObj *o) {
   switch (o->type) {
     case NUMBER:
+      retain(o); // queue is co-owner
       ctxEnqueue(ctx, o);
       break;
     case SYMBOL:
+      retain(o); // stack is co-owner
       ctxStackPush(ctx, o);
       break;
     case LIST:
@@ -342,6 +344,7 @@ int evalPostfix(SyCtx *ctx, SyObj *o) {
   switch (o->type) {
     case NUMBER:
       ctxPostFixStackPush(ctx, o);
+      retain(o);
       break;
     case SYMBOL:
       sTableEntry *entry = getFunctionByName(ctx, o->symbol);
@@ -384,18 +387,22 @@ void addSymbolFn(SyCtx *ctx, char s, MathFn f) {
 
 void freeContext(SyCtx *ctx) {
   if (ctx->stack) {
-    free(ctx->stack->list.ele);
-    free(ctx->stack);
+    release(ctx->stack);
   }
   if (ctx->queue) {
-    free(ctx->queue->list.ele);
-    free(ctx->queue);
+    release(ctx->queue);
   }
   if (ctx->precedenceTable.pTable) {
     for (int i = 0; i < ctx->precedenceTable.count; i++) {
       free(ctx->precedenceTable.pTable[i]);
     }
     free(ctx->precedenceTable.pTable);
+  }
+  if (ctx->symbolTable.sTable) {
+    for (int i = 0; i < ctx->symbolTable.count; i++) {
+      free(ctx->symbolTable.sTable[i]);
+    }
+    free(ctx->symbolTable.sTable);
   }
   free(ctx);
 }
@@ -405,8 +412,10 @@ int ctxCheckStackMinLen(SyCtx *ctx, size_t min) {
 };
 int basicMathFunctions(SyCtx *ctx, char s) {
   if (ctxCheckStackMinLen(ctx, 2)) return SY_ERR;
+
   SyObj *b = ctxPostFixStackPop(ctx);
   if(b == NULL) return SY_ERR;
+
   SyObj *a = ctxPostFixStackPop(ctx);
   if(a == NULL) {
     ctxPostFixStackPush(ctx, b);
@@ -419,7 +428,11 @@ int basicMathFunctions(SyCtx *ctx, char s) {
     case '*': result = a->num * b->num; break;
     case '/': result = a->num / b->num; break;
   }
-  ctxPostFixStackPush(ctx, createNumberObject(result));
+  release(a);
+  release(b);
+
+  SyObj *resObj = createNumberObject(result);
+  ctxPostFixStackPush(ctx, resObj);
   return SY_OK;
 }
 
@@ -468,12 +481,17 @@ int main(int argc, char **argv) {
   printf("text is: %s\n", buf);
   fclose(fp);
   SyObj *parsed = parse(buf);
+  if(parsed == NULL){
+    free(buf);
+    return 1;
+  }
   // printf("parsed: \n");
   // printSyObj(parsed);
   SyCtx *ctx = createContext();
   evalInfix(ctx, parsed);
   while (ctx->stack->list.len > 0) {
     SyObj *popped = listPop(ctx->stack);
+    // The ownership goes from the stack directly to the queue -> no retain/release.
     ctxEnqueue(ctx, popped);
   }
   // printf("queue: \n");
