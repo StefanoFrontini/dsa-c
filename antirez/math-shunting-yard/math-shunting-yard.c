@@ -215,7 +215,7 @@ SyObj *parseNumber(SyParser *parser) {
 /* Return true if the character 'c' is one of the characters acceptable for our
  * symbols. */
 int isSymbolChar(int c) {
-  char symchars[] = "+-*/%";
+  char symchars[] = "()+-*/%";
   return isalpha(c) || strchr(symchars, c) != NULL;
 }
 
@@ -273,10 +273,38 @@ int getPrecedence(SyCtx *ctx, SyObj *o) {
 
 void ctxEnqueue(SyCtx *ctx, SyObj *obj);
 
-/* Push the symbol object on the context stack. It's up the caller to increment the refcount. */
+/* Push the symbol object on the context stack. It's up the caller to increment
+ * the refcount. */
 void ctxStackPush(SyCtx *ctx, SyObj *o) {
+
+  if (o->symbol == '(') {
+    listPush(ctx->stack, o);
+    return;
+  }
+
+  if (o->symbol == ')') {
+    while (ctx->stack->list.len > 0) {
+      SyObj *popped = listPop(ctx->stack);
+
+      if (popped->symbol == '(') {
+        release(popped);
+        break;
+      }
+
+      ctxEnqueue(ctx, popped);
+    }
+
+    release(o);
+    return;
+  }
+
   while (ctx->stack->list.len > 0) {
     SyObj *peek = ctx->stack->list.ele[ctx->stack->list.len - 1];
+
+    if (peek->symbol == '(') {
+      break;
+    }
+
     int precPeek = getPrecedence(ctx, peek);
     int precCurrent = getPrecedence(ctx, o);
 
@@ -299,7 +327,8 @@ SyObj *ctxPostFixStackPop(SyCtx *ctx) {
   return listPop(ctx->stack);
 }
 
-/* Enqueue the object on the context queue. It's up the caller to increment the refcount. */
+/* Enqueue the object on the context queue. It's up the caller to increment the
+ * refcount. */
 void ctxEnqueue(SyCtx *ctx, SyObj *obj) {
   listPush(ctx->queue, obj);
 };
@@ -328,14 +357,13 @@ void evalInfix(SyCtx *ctx, SyObj *o) {
   }
 }
 
-sTableEntry *getFunctionByName(SyCtx *ctx, char s){
-  for(int i = 0; i < ctx->symbolTable.count; i++){
-    if(ctx->symbolTable.sTable[i]->s == s){
+sTableEntry *getFunctionByName(SyCtx *ctx, char s) {
+  for (int i = 0; i < ctx->symbolTable.count; i++) {
+    if (ctx->symbolTable.sTable[i]->s == s) {
       return ctx->symbolTable.sTable[i];
     }
   }
   return NULL;
-
 }
 
 /* Execute the program stored in a postfix notation in the context queue. */
@@ -347,9 +375,10 @@ int evalPostfix(SyCtx *ctx, SyObj *o) {
       retain(o);
       break;
     case SYMBOL:
+      printf("symbol: %c\n", o->symbol);
       sTableEntry *entry = getFunctionByName(ctx, o->symbol);
       int result = entry->f(ctx, o->symbol);
-      if(result) return SY_ERR;
+      if (result) return SY_ERR;
       break;
     case LIST:
       for (size_t i = 0; i < o->list.len; i++) {
@@ -414,19 +443,27 @@ int basicMathFunctions(SyCtx *ctx, char s) {
   if (ctxCheckStackMinLen(ctx, 2)) return SY_ERR;
 
   SyObj *b = ctxPostFixStackPop(ctx);
-  if(b == NULL) return SY_ERR;
+  if (b == NULL) return SY_ERR;
 
   SyObj *a = ctxPostFixStackPop(ctx);
-  if(a == NULL) {
+  if (a == NULL) {
     ctxPostFixStackPush(ctx, b);
     return SY_ERR;
   };
   int result;
-  switch(s){
-    case '+': result = a->num + b->num; break;
-    case '-': result = a->num - b->num; break;
-    case '*': result = a->num * b->num; break;
-    case '/': result = a->num / b->num; break;
+  switch (s) {
+    case '+':
+      result = a->num + b->num;
+      break;
+    case '-':
+      result = a->num - b->num;
+      break;
+    case '*':
+      result = a->num * b->num;
+      break;
+    case '/':
+      result = a->num / b->num;
+      break;
   }
   release(a);
   release(b);
@@ -442,10 +479,12 @@ SyCtx *createContext(void) {
   ctx->queue = createListObject();
   ctx->precedenceTable.pTable = NULL;
   ctx->precedenceTable.count = 0;
-  addSymbolPrecedence(ctx, '+', 0);
-  addSymbolPrecedence(ctx, '*', 1);
-  addSymbolPrecedence(ctx, '-', 0);
-  addSymbolPrecedence(ctx, '/', 1);
+  addSymbolPrecedence(ctx, '+', 1);
+  addSymbolPrecedence(ctx, '*', 2);
+  addSymbolPrecedence(ctx, '-', 1);
+  addSymbolPrecedence(ctx, '/', 2);
+  addSymbolPrecedence(ctx, '(', 0);
+  addSymbolPrecedence(ctx, ')', 0);
 
   ctx->symbolTable.sTable = NULL;
   ctx->symbolTable.count = 0;
@@ -481,7 +520,7 @@ int main(int argc, char **argv) {
   printf("text is: %s\n", buf);
   fclose(fp);
   SyObj *parsed = parse(buf);
-  if(parsed == NULL){
+  if (parsed == NULL) {
     free(buf);
     return 1;
   }
@@ -491,11 +530,16 @@ int main(int argc, char **argv) {
   evalInfix(ctx, parsed);
   while (ctx->stack->list.len > 0) {
     SyObj *popped = listPop(ctx->stack);
-    // The ownership goes from the stack directly to the queue -> no retain/release.
-    ctxEnqueue(ctx, popped);
+
+    if (popped->symbol == '(' || popped->symbol == ')') {
+      fprintf(stderr, "Warning: Mismatched parenthesis found!\n");
+      release(popped);
+    } else {
+      ctxEnqueue(ctx, popped);
+    }
   }
-  // printf("queue: \n");
-  // printSyObj(ctx->queue);
+  printf("queue: \n");
+  printSyObj(ctx->queue);
   evalPostfix(ctx, ctx->queue);
   printSyObj(ctx->stack);
   release(parsed);
