@@ -196,7 +196,6 @@ SyObj *parseNumber(SyParser *parser) {
   char buf[128];
   char *start = parser->p;
   char *end;
-  // if (*parser->p == '-') parser->p++;
 
   while (*parser->p && isdigit(*parser->p))
     parser->p++;
@@ -250,11 +249,9 @@ SyObj *parse(char *prg) {
           (o->type == NUMBER || (o->type == SYMBOL && o->symbol == ')'))) {
         next_o = createSymbolObject('-');
       } else {
-        printf("Else\n");
         next_o = createSymbolObject('~');
       }
-    }
-    if (isdigit(*parser.p)) {
+    } else if (isdigit(*parser.p)) {
       next_o = parseNumber(&parser);
     } else if (isSymbolChar(*parser.p)) {
       next_o = parseSymbol(&parser);
@@ -320,11 +317,12 @@ void ctxStackPush(SyCtx *ctx, SyObj *o) {
     int precPeek = getPrecedence(ctx, peek);
     int precCurrent = getPrecedence(ctx, o);
 
-    // LOGICA DI ASSOCIATIVITÀ:
-    // Se l'operatore corrente è associativo a destra ('~'), usiamo >
-    // Altrimenti (associativo a sinistra), usiamo >=
+    /* ASSOCIATIVITY RULE:
+      If current operator is right associative ('~'), we use >
+      else (left associative), we use >=
+    */
     int shouldPop = 0;
-    if (o->symbol == '~'){
+    if (o->symbol == '~') {
       shouldPop = (precPeek > precCurrent);
     } else {
       shouldPop = (precPeek >= precCurrent);
@@ -577,6 +575,7 @@ int main(int argc, char **argv) {
   printf("queue: \n");
   printSyObj(ctx->queue);
   evalPostfix(ctx, ctx->queue);
+  printf("stack: \n");
   printSyObj(ctx->stack);
   release(parsed);
   freeContext(ctx);
