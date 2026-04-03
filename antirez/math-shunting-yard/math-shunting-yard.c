@@ -196,7 +196,7 @@ SyObj *parseNumber(SyParser *parser) {
   char buf[128];
   char *start = parser->p;
   char *end;
-  if (*parser->p == '-') parser->p++;
+  // if (*parser->p == '-') parser->p++;
 
   while (*parser->p && isdigit(*parser->p))
     parser->p++;
@@ -236,25 +236,37 @@ SyObj *parse(char *prg) {
   parser.prg = prg;
   parser.p = prg;
   SyObj *parsed = createListObject();
-  SyObj *o;
+  SyObj *o = NULL;
+
   while (*parser.p) {
     parseSpaces(&parser);
     if (*parser.p == 0) break;
-    if (isdigit(*parser.p) || (*parser.p == '-' && isdigit(parser.p[1]))) {
-      o = parseNumber(&parser);
+
+    SyObj *next_o = NULL;
+
+    if (*parser.p == '-') {
+      parser.p++;
+      if (o != NULL &&
+          (o->type == NUMBER || (o->type == SYMBOL && o->symbol == ')'))) {
+        next_o = createSymbolObject('-');
+      } else {
+        printf("Else\n");
+        next_o = createSymbolObject('~');
+      }
+    }
+    if (isdigit(*parser.p)) {
+      next_o = parseNumber(&parser);
     } else if (isSymbolChar(*parser.p)) {
-      o = parseSymbol(&parser);
+      next_o = parseSymbol(&parser);
     } else {
-      o = NULL;
+      release(parsed);
+      fprintf(stderr, "Error parsing unknown character: %c\n", *parser.p);
+      return NULL;
     }
 
-    // Check if the current token produced a parsing error.
-    if (o == NULL) {
-      release(parsed);
-      fprintf(stderr, "Error parsing\n");
-      return NULL;
-    } else {
-      listPush(parsed, o);
+    if (next_o != NULL) {
+      listPush(parsed, next_o);
+      o = next_o;
     }
   }
   return parsed;
@@ -308,7 +320,17 @@ void ctxStackPush(SyCtx *ctx, SyObj *o) {
     int precPeek = getPrecedence(ctx, peek);
     int precCurrent = getPrecedence(ctx, o);
 
-    if (precPeek >= precCurrent) {
+    // LOGICA DI ASSOCIATIVITÀ:
+    // Se l'operatore corrente è associativo a destra ('~'), usiamo >
+    // Altrimenti (associativo a sinistra), usiamo >=
+    int shouldPop = 0;
+    if (o->symbol == '~'){
+      shouldPop = (precPeek > precCurrent);
+    } else {
+      shouldPop = (precPeek >= precCurrent);
+    }
+
+    if (shouldPop) {
       SyObj *popped = listPop(ctx->stack);
       ctxEnqueue(ctx, popped);
     } else {
@@ -440,6 +462,18 @@ int ctxCheckStackMinLen(SyCtx *ctx, size_t min) {
   return (ctx->stack->list.len < min) ? SY_ERR : SY_OK;
 };
 int basicMathFunctions(SyCtx *ctx, char s) {
+  if (s == '~') {
+    if (ctxCheckStackMinLen(ctx, 1)) return SY_ERR;
+    SyObj *a = ctxPostFixStackPop(ctx);
+    if (a == NULL) {
+      return SY_ERR;
+    };
+    int result = -(a->num);
+    printf("result: %d\n", result);
+    ctxPostFixStackPush(ctx, createNumberObject(result));
+    release(a);
+    return SY_OK;
+  }
   if (ctxCheckStackMinLen(ctx, 2)) return SY_ERR;
 
   SyObj *b = ctxPostFixStackPop(ctx);
@@ -485,6 +519,7 @@ SyCtx *createContext(void) {
   addSymbolPrecedence(ctx, '/', 2);
   addSymbolPrecedence(ctx, '(', 0);
   addSymbolPrecedence(ctx, ')', 0);
+  addSymbolPrecedence(ctx, '~', 3);
 
   ctx->symbolTable.sTable = NULL;
   ctx->symbolTable.count = 0;
@@ -492,6 +527,7 @@ SyCtx *createContext(void) {
   addSymbolFn(ctx, '-', basicMathFunctions);
   addSymbolFn(ctx, '*', basicMathFunctions);
   addSymbolFn(ctx, '/', basicMathFunctions);
+  addSymbolFn(ctx, '~', basicMathFunctions);
 
   return ctx;
 }
