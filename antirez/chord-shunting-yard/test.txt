@@ -1,2 +1,2 @@
-[A]abc[D]
-cde[F]
+aaa[C]bbb[B]asd[D]
+qqq[A]
