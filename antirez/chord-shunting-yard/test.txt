@@ -1,2 +1,2 @@
-aaa[C]bbb[B]asd[D]
-qqq[A]
+[A]aaa[B]bbb
+[C]ccc[D]ddd

@@ -241,9 +241,9 @@ void printToken(Token *t) {
       for (size_t i = 0; i < t->list.len; i++) {
         Token *el = t->list.ele[i];
         printToken(el);
-        if (i != t->list.len - 1) {
-          printf(" ");
-        }
+        // if (i != t->list.len - 1) {
+        //   printf(" ");
+        // }
       }
       break;
 
@@ -255,7 +255,7 @@ void printToken(Token *t) {
 
 /* --------------   Data structures: Chord Sheet Object ------------------- */
 
-typedef enum { SONG = 0, LINE, WORD, CHORD, LYRIC, LIST } CsObjType;
+typedef enum { SONG = 0, LINE, WORD, CHORD, LYRIC } CsObjType;
 
 typedef struct CsObj {
   int refcount;
@@ -331,12 +331,12 @@ CsObj *createLyricObject(char *str, size_t len) {
   return o;
 }
 
-CsObj *createListObject(void) {
-  CsObj *o = createObject(LIST);
-  o->list.ele = NULL;
-  o->list.len = 0;
-  return o;
-}
+// CsObj *createListObject(void) {
+//   CsObj *o = createObject(LIST);
+//   o->list.ele = NULL;
+//   o->list.len = 0;
+//   return o;
+// }
 
 /* Add the new element at the end of the list. It is up to the caller to
  * increment the reference count to the list. */
@@ -349,6 +349,21 @@ void listPush(Token *l, Token *ele) {
 Token *listPop(Token *l) {
   if (l->list.len > 0) {
     Token *t = l->list.ele[l->list.len - 1];
+    l->list.len--;
+    return t;
+  } else {
+    return NULL;
+  }
+}
+void listPushObj(CsObj *l, CsObj *ele) {
+  l->list.ele = xrealloc(l->list.ele, sizeof(CsObj *) * (l->list.len + 1));
+  l->list.ele[l->list.len] = ele;
+  l->list.len++;
+}
+
+CsObj *listPopObj(CsObj *l) {
+  if (l->list.len > 0) {
+    CsObj *t = l->list.ele[l->list.len - 1];
     l->list.len--;
     return t;
   } else {
@@ -385,6 +400,7 @@ void releaseCsObj(CsObj *o) {
 }
 
 void printCsObj(CsObj *o) {
+  // printf("type: %d\n", o->type);
   switch (o->type) {
     case SONG:
     case LINE:
@@ -415,6 +431,7 @@ void printCsObj(CsObj *o) {
       }
       break;
     default:
+      printf("???\n");
       break;
   }
 }
@@ -429,8 +446,8 @@ typedef struct precedenceTable {
   int count;
 } pTable;
 
-struct SyCtx;
-typedef int (*MathFn)(struct SyCtx *ctx, char s);
+struct CsCtx;
+typedef int (*MathFn)(struct CsCtx *ctx, char s);
 
 typedef struct symbolTableEntry {
   char s;
@@ -442,15 +459,15 @@ typedef struct symbolTable {
   int count;
 } sTable;
 
-typedef struct SyCtx {
+typedef struct CsCtx {
   CsObj *stack;
   Token *opStack;
   Token *queue;
   pTable precedenceTable;
   sTable symbolTable;
-} SyCtx;
+} CsCtx;
 
-void addSymbolPrecedence(SyCtx *ctx, char s, int i) {
+void addSymbolPrecedence(CsCtx *ctx, char s, int i) {
   ctx->precedenceTable.pTable =
       xrealloc(ctx->precedenceTable.pTable,
                sizeof(pTableEntry *) * (ctx->precedenceTable.count + 1));
@@ -461,29 +478,18 @@ void addSymbolPrecedence(SyCtx *ctx, char s, int i) {
   ctx->precedenceTable.count++;
 }
 
-SyCtx *createContext(void) {
-  SyCtx *ctx = xmalloc(sizeof(SyCtx));
-  ctx->stack = createListObject();
-  ctx->opStack = createTokenList();
-  ctx->queue = createTokenList();
-  ctx->precedenceTable.pTable = NULL;
-  ctx->precedenceTable.count = 0;
-  addSymbolPrecedence(ctx, CHORD_TOKEN, 3);
-  addSymbolPrecedence(ctx, WORD_MULT, 2);
-  addSymbolPrecedence(ctx, ENDOFLINE, 1);
-
-  ctx->symbolTable.sTable = NULL;
-  ctx->symbolTable.count = 0;
-  //   addSymbolFn(ctx, '+', basicMathFunctions);
-  //   addSymbolFn(ctx, '-', basicMathFunctions);
-  //   addSymbolFn(ctx, '*', basicMathFunctions);
-  //   addSymbolFn(ctx, '/', basicMathFunctions);
-  //   addSymbolFn(ctx, '~', basicMathFunctions);
-
-  return ctx;
+void addSymbolFn(CsCtx *ctx, char s, MathFn f) {
+  ctx->symbolTable.sTable =
+      xrealloc(ctx->symbolTable.sTable,
+               sizeof(sTableEntry *) * (ctx->symbolTable.count + 1));
+  sTableEntry *entry = xmalloc(sizeof(sTableEntry));
+  entry->s = s;
+  entry->f = f;
+  ctx->symbolTable.sTable[ctx->symbolTable.count] = entry;
+  ctx->symbolTable.count++;
 }
 
-int getPrecedence(SyCtx *ctx, Token *t) {
+int getPrecedence(CsCtx *ctx, Token *t) {
   // printf("Token type, symbol: %d, %c\n", t->type, t->symbol);
   char s = t->type;
   for (int i = 0; i < ctx->precedenceTable.count; i++) {
@@ -495,39 +501,14 @@ int getPrecedence(SyCtx *ctx, Token *t) {
   return -1;
 }
 
-void ctxEnqueue(SyCtx *ctx, Token *t);
+void ctxEnqueue(CsCtx *ctx, Token *t);
 
 /* Push the token on the context operator stack. It's up the caller to increment
  * the refcount. */
-void ctxOpStackPush(SyCtx *ctx, Token *t) {
-
-  //   if (o->symbol == '(') {
-  //     listPush(ctx->stack, o);
-  //     return;
-  //   }
-
-  //   if (o->symbol == ')') {
-  //     while (ctx->stack->list.len > 0) {
-  //       SyObj *popped = listPop(ctx->stack);
-
-  //       if (popped->symbol == '(') {
-  //         release(popped);
-  //         break;
-  //       }
-
-  //       ctxEnqueue(ctx, popped);
-  //     }
-
-  //     release(o);
-  //     return;
-  //   }
+void ctxOpStackPush(CsCtx *ctx, Token *t) {
 
   while (ctx->opStack->list.len > 0) {
     Token *peek = ctx->opStack->list.ele[ctx->opStack->list.len - 1];
-
-    // if (peek->symbol == '(') {
-    //   break;
-    // }
 
     int precPeek = getPrecedence(ctx, peek);
     int precCurrent = getPrecedence(ctx, t);
@@ -556,9 +537,210 @@ void ctxOpStackPush(SyCtx *ctx, Token *t) {
 
 /* Enqueue the token on the context queue. It's up the caller to increment the
  * refcount. */
-void ctxEnqueue(SyCtx *ctx, Token *t) {
+void ctxEnqueue(CsCtx *ctx, Token *t) {
   listPush(ctx->queue, t);
 };
+
+void ctxPostFixStackPush(CsCtx *ctx, CsObj *o) {
+  listPushObj(ctx->stack, o);
+}
+
+CsObj *ctxPostFixStackPop(CsCtx *ctx) {
+  return listPopObj(ctx->stack);
+}
+
+sTableEntry *getFunctionByName(CsCtx *ctx, char s) {
+  for (int i = 0; i < ctx->symbolTable.count; i++) {
+    if (ctx->symbolTable.sTable[i]->s == s) {
+      return ctx->symbolTable.sTable[i];
+    }
+  }
+  return NULL;
+}
+
+int ctxCheckStackMinLen(CsCtx *ctx, size_t min) {
+  return (ctx->stack->list.len < min) ? SY_ERR : SY_OK;
+};
+
+int applyOperator(CsCtx *ctx, char s) {
+  if (s == CHORD_TOKEN) {
+    if (ctxCheckStackMinLen(ctx, 2)) return SY_ERR;
+    CsObj *chord = ctxPostFixStackPop(ctx);
+    if (chord == NULL || chord->type != CHORD) {
+      printf("Expecting chord obj\n");
+      return SY_ERR;
+    };
+    CsObj *lyric = ctxPostFixStackPop(ctx);
+    if (lyric == NULL || lyric->type != LYRIC) {
+      printf("Expecting lyric obj\n");
+      ctxPostFixStackPush(ctx, chord);
+      return SY_ERR;
+    }
+    CsObj *word = createWordObject();
+    listPushObj(word, chord);
+    listPushObj(word, lyric);
+    ctxPostFixStackPush(ctx, word);
+    return SY_OK;
+  } else if (s == WORD_MULT) {
+    if (ctxCheckStackMinLen(ctx, 2)) return SY_ERR;
+    CsObj *word_b = ctxPostFixStackPop(ctx);
+    if (word_b == NULL) {
+      printf("word_b is null\n");
+    }
+    if (!(word_b->type == WORD || word_b->type == LINE)) {
+      printf("Expecting word_b to be a word or line obj, got: %d\n",
+             word_b->type);
+      return SY_ERR;
+    }
+    CsObj *word_a = ctxPostFixStackPop(ctx);
+    if (word_a == NULL) {
+      printf("word_b is null\n");
+    }
+    if (!(word_b->type == WORD || word_b->type == LINE)) {
+      ctxPostFixStackPush(ctx, word_b);
+      printf("Expecting word_a to be a word or line obj, got: %d\n",
+             word_b->type);
+      return SY_ERR;
+    }
+    switch (word_a->type) {
+      case LINE:
+        // printf("line: \n");
+        listPushObj(word_a, word_b);
+        ctxPostFixStackPush(ctx, word_a);
+        break;
+
+      case WORD: {
+        // printf("word: \n");
+        CsObj *line = createLineObject();
+        listPushObj(line, word_a);
+        listPushObj(line, word_b);
+        ctxPostFixStackPush(ctx, line);
+        break;
+      }
+
+      default:
+        printf("?\n");
+        break;
+    }
+    return SY_OK;
+  } else if (s == ENDOFLINE) {
+    CsObj *line_b = ctxPostFixStackPop(ctx);
+    if (line_b == NULL) {
+      printf("line_b is null\n");
+      return SY_ERR;
+    }
+    if (!(line_b->type == SONG || line_b->type == LINE)) {
+      ctxPostFixStackPush(ctx, line_b);
+      printf("Expecting word_b to be a song or line obj, got: %d\n",
+             line_b->type);
+      return SY_ERR;
+    }
+    CsObj *line_a = ctxPostFixStackPop(ctx);
+    if (line_a == NULL) {
+      printf("line_a is null\n");
+      return SY_ERR;
+    }
+    if (!(line_a->type == SONG || line_a->type == LINE)) {
+      ctxPostFixStackPush(ctx, line_b);
+      printf("Expecting word_b to be a song or line obj, got: %d\n",
+             line_b->type);
+      return SY_ERR;
+    }
+    switch (line_a->type) {
+      case SONG:
+        listPushObj(line_a, line_b);
+        ctxPostFixStackPush(ctx, line_a);
+        break;
+      case LINE: {
+        CsObj *song = createSongObject();
+        listPushObj(song, line_a);
+        listPushObj(song, line_b);
+        ctxPostFixStackPush(ctx, song);
+        break;
+      }
+      default:
+        printf("???\n");
+        break;
+    }
+    return SY_OK;
+
+  } else {
+    printf("Operator must be chord, word_mult or endofline: %d\n", s);
+    return SY_ERR;
+  }
+}
+
+CsCtx *createContext(void) {
+  CsCtx *ctx = xmalloc(sizeof(CsCtx));
+  ctx->stack = createSongObject();
+  ctx->opStack = createTokenList();
+  ctx->queue = createTokenList();
+  ctx->precedenceTable.pTable = NULL;
+  ctx->precedenceTable.count = 0;
+  addSymbolPrecedence(ctx, CHORD_TOKEN, 3);
+  addSymbolPrecedence(ctx, WORD_MULT, 2);
+  addSymbolPrecedence(ctx, ENDOFLINE, 1);
+
+  ctx->symbolTable.sTable = NULL;
+  ctx->symbolTable.count = 0;
+  addSymbolFn(ctx, CHORD_TOKEN, applyOperator);
+  addSymbolFn(ctx, WORD_MULT, applyOperator);
+  addSymbolFn(ctx, ENDOFLINE, applyOperator);
+
+  return ctx;
+}
+
+/* Execute the program stored in a postfix notation in the context queue. */
+
+int evalPostfix(CsCtx *ctx, Token *t) {
+  // printf("Calling evalPostFix with token type: %d\n", t->type);
+  switch (t->type) {
+    case LYRIC_TOKEN: {
+      CsObj *o = createLyricObject(t->str.ptr, t->str.len);
+      ctxPostFixStackPush(ctx, o);
+      // retain(o);
+      break;
+    }
+    case CHORD_TOKEN: {
+      // printf("Eval chord token\n");
+      CsObj *o = createChordObject(t->str.ptr, t->str.len);
+      ctxPostFixStackPush(ctx, o);
+      // printf("symbol: %c\n", o->symbol);
+      sTableEntry *entry = getFunctionByName(ctx, CHORD_TOKEN);
+      // printf("Calling applyOperator with CHORD_TOKEN: %d\n", CHORD_TOKEN);
+      int result = entry->f(ctx, t->type);
+      if (result) return SY_ERR;
+      break;
+    }
+    case LIST_TOKEN:
+      // printf("LIST_TOKEN\n");
+      // printf("token list size: %d\n", t->list.len);
+      for (size_t i = 0; i < t->list.len; i++) {
+        // printf("i: %d\n", i);
+        evalPostfix(ctx, t->list.ele[i]);
+      }
+      break;
+    case WORD_MULT: {
+      sTableEntry *entry = getFunctionByName(ctx, WORD_MULT);
+      // printf("Calling applyOperator with WORD_MULT: %d\n", WORD_MULT);
+      int result = entry->f(ctx, t->type);
+      if (result) return SY_ERR;
+      break;
+    }
+    case ENDOFLINE: {
+      sTableEntry *entry = getFunctionByName(ctx, ENDOFLINE);
+      // printf("Calling applyOperator with ENDOFLINE: %d\n", ENDOFFILE);
+      int result = entry->f(ctx, t->type);
+      if (result) return SY_ERR;
+      break;
+    }
+
+    default:
+      printf("????? - %d\n", t->type);
+      break;
+  }
+  return SY_OK;
+}
 
 /* -------------------------  Main ----------------------------- */
 
@@ -588,7 +770,7 @@ int main(int argc, char **argv) {
   l.p = buf;
   readEndOfFile(&l);
   advanceLexer(&l);
-  SyCtx *ctx = createContext();
+  CsCtx *ctx = createContext();
 
   while (l.curToken->type != ENDOFFILE) {
     switch (l.curToken->type) {
@@ -598,7 +780,8 @@ int main(int argc, char **argv) {
         ctxOpStackPush(ctx, emptyChord);
         ctxEnqueue(ctx, l.curToken);
         advanceLexer(&l);
-        if(l.curToken->type == CHORD_TOKEN || l.curToken->type == LYRIC_TOKEN){
+        if (l.curToken->type == CHORD_TOKEN ||
+            l.curToken->type == LYRIC_TOKEN) {
           Token *w = createTokenWordMult();
           ctxOpStackPush(ctx, w);
         }
@@ -607,7 +790,7 @@ int main(int argc, char **argv) {
         retainToken(l.curToken); // opStack is co-owner
         ctxOpStackPush(ctx, l.curToken);
         advanceLexer(&l);
-        if(l.curToken->type == LYRIC_TOKEN){
+        if (l.curToken->type == LYRIC_TOKEN) {
           retainToken(l.curToken); // opStack is co-owner
           ctxEnqueue(ctx, l.curToken);
           advanceLexer(&l);
@@ -615,7 +798,8 @@ int main(int argc, char **argv) {
           Token *emptyLyric = createEmptyLyricToken();
           ctxEnqueue(ctx, emptyLyric);
         }
-        if(l.curToken->type == CHORD_TOKEN || l.curToken->type == LYRIC_TOKEN){
+        if (l.curToken->type == CHORD_TOKEN ||
+            l.curToken->type == LYRIC_TOKEN) {
           Token *w = createTokenWordMult();
           ctxOpStackPush(ctx, w);
         }
@@ -627,7 +811,7 @@ int main(int argc, char **argv) {
         break;
 
       default:
-        printf("?\n");
+        printf("???%c\n", l.curToken->type);
         break;
     }
   }
@@ -636,8 +820,11 @@ int main(int argc, char **argv) {
     Token *popped = listPop(ctx->opStack);
     ctxEnqueue(ctx, popped);
   }
-  printf("Queue is: \n");
-  printToken(ctx->queue);
+  // printToken(ctx->queue);
+  evalPostfix(ctx, ctx->queue);
+  printf("Result is: \n");
+  printCsObj(ctx->stack);
+  // printToken(ctx->queue);
   free(buf);
   return 0;
 }
