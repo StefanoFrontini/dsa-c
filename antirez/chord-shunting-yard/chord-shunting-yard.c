@@ -255,7 +255,7 @@ void printToken(Token *t) {
 
 /* --------------   Data structures: Chord Sheet Object ------------------- */
 
-typedef enum { SONG = 0, LINE, WORD, CHORD, LYRIC } CsObjType;
+typedef enum { SONG = 0, LINE, WORD, CHORD, LYRIC, LIST } CsObjType;
 
 typedef struct CsObj {
   int refcount;
@@ -331,12 +331,12 @@ CsObj *createLyricObject(char *str, size_t len) {
   return o;
 }
 
-// CsObj *createListObject(void) {
-//   CsObj *o = createObject(LIST);
-//   o->list.ele = NULL;
-//   o->list.len = 0;
-//   return o;
-// }
+CsObj *createListObject(void) {
+  CsObj *o = createObject(LIST);
+  o->list.ele = NULL;
+  o->list.len = 0;
+  return o;
+}
 
 /* Add the new element at the end of the list. It is up to the caller to
  * increment the reference count to the list. */
@@ -383,6 +383,7 @@ void releaseCsObj(CsObj *o) {
       case SONG:
       case LINE:
       case WORD:
+      case LIST:
         for (size_t i = 0; i < o->list.len; i++) {
           releaseCsObj(o->list.ele[i]);
         }
@@ -405,6 +406,8 @@ void printCsObj(CsObj *o) {
     case SONG:
     case LINE:
     case WORD:
+    case LIST:
+      printf("Printing %d\n", o->type);
       for (size_t i = 0; i < o->list.len; i++) {
         if (o->list.len == 0) {
           printf("");
@@ -417,6 +420,7 @@ void printCsObj(CsObj *o) {
       }
       break;
     case CHORD:
+      printf("Printing %d\n", o->type);
       if (o->str.len == 0) {
         printf("");
       } else {
@@ -424,6 +428,7 @@ void printCsObj(CsObj *o) {
       }
       break;
     case LYRIC:
+      printf("Printing %d\n", o->type);
       if (o->str.len == 0) {
         printf("");
       } else {
@@ -672,7 +677,7 @@ int applyOperator(CsCtx *ctx, char s) {
 
 CsCtx *createContext(void) {
   CsCtx *ctx = xmalloc(sizeof(CsCtx));
-  ctx->stack = createSongObject();
+  ctx->stack = createListObject();
   ctx->opStack = createTokenList();
   ctx->queue = createTokenList();
   ctx->precedenceTable.pTable = NULL;
