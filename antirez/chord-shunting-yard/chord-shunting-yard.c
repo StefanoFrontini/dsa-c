@@ -79,6 +79,12 @@ void releaseToken(Token *t) {
       case CHORD_TOKEN:
         free(t->str.ptr);
         break;
+      case LIST_TOKEN:
+        for (size_t i = 0; i < t->list.len; i++) {
+          releaseToken(t->list.ele[i]);
+        }
+        free(t->list.ele);
+        break;
       default:
         break;
     }
@@ -150,8 +156,9 @@ Token *createEmptyChordToken(void) {
   Token *t = xmalloc(sizeof(Token));
   t->type = CHORD_TOKEN;
   t->refcount = 1;
-  t->str.ptr = "emptyChord";
-  t->str.len = 10;
+  t->str.ptr = xmalloc(1);
+  t->str.ptr[0] = 0;
+  t->str.len = 0;
   return t;
 }
 
@@ -201,8 +208,9 @@ Token *createEmptyLyricToken(void) {
   Token *t = xmalloc(sizeof(Token));
   t->type = LYRIC_TOKEN;
   t->refcount = 1;
-  t->str.ptr = "emptyLyric";
-  t->str.len = 10;
+  t->str.ptr = xmalloc(1);
+  t->str.ptr[0] = 0;
+  t->str.len = 0;
   return t;
 }
 
@@ -312,7 +320,8 @@ CsObj *createChordObject(char *str, size_t len) {
     memcpy(o->str.ptr, str, len);
     o->str.ptr[len] = 0;
   } else {
-    o->str.ptr = str;
+    o->str.ptr = xmalloc(1);
+    o->str.ptr[0] = 0;
   }
   o->str.len = len;
   return o;
@@ -671,10 +680,10 @@ int applyOperator(CsCtx *ctx, char s) {
       }
       case WORD: {
         CsObj *song = createSongObject();
-        CsObj *line = createLineObject();
-        listPushObj(line, line_a);
-        listPushObj(line, line_b);
-        listPushObj(song, line);
+        CsObj *line1 = createLineObject();
+        listPushObj(line1, line_a);
+        listPushObj(song, line1);
+        listPushObj(song, line_b);
         ctxPostFixStackPush(ctx, song);
         break;
       }
