@@ -609,13 +609,11 @@ int applyOperator(CsCtx *ctx, char s) {
     }
     switch (word_a->type) {
       case LINE:
-        // printf("line: \n");
         listPushObj(word_a, word_b);
         ctxPostFixStackPush(ctx, word_a);
         break;
 
       case WORD: {
-        // printf("word: \n");
         CsObj *line = createLineObject();
         listPushObj(line, word_a);
         listPushObj(line, word_b);
@@ -634,9 +632,10 @@ int applyOperator(CsCtx *ctx, char s) {
       printf("line_b is null\n");
       return SY_ERR;
     }
-    if (!(line_b->type == SONG || line_b->type == LINE)) {
+    if (!(line_b->type == SONG || line_b->type == LINE ||
+          line_b->type == WORD)) {
       ctxPostFixStackPush(ctx, line_b);
-      printf("Expecting word_b to be a song or line obj, got: %d\n",
+      printf("Expecting word_b to be a song or line or word obj, got: %d\n",
              line_b->type);
       return SY_ERR;
     }
@@ -645,11 +644,18 @@ int applyOperator(CsCtx *ctx, char s) {
       printf("line_a is null\n");
       return SY_ERR;
     }
-    if (!(line_a->type == SONG || line_a->type == LINE)) {
+    if (!(line_a->type == SONG || line_a->type == LINE ||
+          line_a->type == WORD)) {
       ctxPostFixStackPush(ctx, line_b);
-      printf("Expecting word_b to be a song or line obj, got: %d\n",
+      printf("Expecting word_b to be a song or line or word obj, got: %d\n",
              line_b->type);
       return SY_ERR;
+    }
+
+    if (line_b->type == WORD) {
+      CsObj *line = createLineObject();
+      listPushObj(line, line_b);
+      line_b = line;
     }
     switch (line_a->type) {
       case SONG:
@@ -663,6 +669,16 @@ int applyOperator(CsCtx *ctx, char s) {
         ctxPostFixStackPush(ctx, song);
         break;
       }
+      case WORD: {
+        CsObj *song = createSongObject();
+        CsObj *line = createLineObject();
+        listPushObj(line, line_a);
+        listPushObj(line, line_b);
+        listPushObj(song, line);
+        ctxPostFixStackPush(ctx, song);
+        break;
+      }
+
       default:
         printf("???\n");
         break;
@@ -674,6 +690,32 @@ int applyOperator(CsCtx *ctx, char s) {
     return SY_ERR;
   }
 }
+
+void freeContext(CsCtx *ctx) {
+  if (ctx->stack) {
+    releaseCsObj(ctx->stack);
+  }
+  if (ctx->queue) {
+    releaseToken(ctx->queue);
+  }
+  if (ctx->opStack) {
+    releaseToken(ctx->opStack);
+  }
+  if (ctx->precedenceTable.pTable) {
+    for (int i = 0; i < ctx->precedenceTable.count; i++) {
+      free(ctx->precedenceTable.pTable[i]);
+    }
+    free(ctx->precedenceTable.pTable);
+  }
+  if (ctx->symbolTable.sTable) {
+    for (int i = 0; i < ctx->symbolTable.count; i++) {
+      free(ctx->symbolTable.sTable[i]);
+    }
+    free(ctx->symbolTable.sTable);
+  }
+  free(ctx);
+}
+
 
 CsCtx *createContext(void) {
   CsCtx *ctx = xmalloc(sizeof(CsCtx));
@@ -698,7 +740,6 @@ CsCtx *createContext(void) {
 /* Execute the program stored in a postfix notation in the context queue. */
 
 int evalPostfix(CsCtx *ctx, Token *t) {
-  // printf("Calling evalPostFix with token type: %d\n", t->type);
   switch (t->type) {
     case LYRIC_TOKEN: {
       CsObj *o = createLyricObject(t->str.ptr, t->str.len);
@@ -707,34 +748,26 @@ int evalPostfix(CsCtx *ctx, Token *t) {
       break;
     }
     case CHORD_TOKEN: {
-      // printf("Eval chord token\n");
       CsObj *o = createChordObject(t->str.ptr, t->str.len);
       ctxPostFixStackPush(ctx, o);
-      // printf("symbol: %c\n", o->symbol);
       sTableEntry *entry = getFunctionByName(ctx, CHORD_TOKEN);
-      // printf("Calling applyOperator with CHORD_TOKEN: %d\n", CHORD_TOKEN);
       int result = entry->f(ctx, t->type);
       if (result) return SY_ERR;
       break;
     }
     case LIST_TOKEN:
-      // printf("LIST_TOKEN\n");
-      // printf("token list size: %d\n", t->list.len);
       for (size_t i = 0; i < t->list.len; i++) {
-        // printf("i: %d\n", i);
         evalPostfix(ctx, t->list.ele[i]);
       }
       break;
     case WORD_MULT: {
       sTableEntry *entry = getFunctionByName(ctx, WORD_MULT);
-      // printf("Calling applyOperator with WORD_MULT: %d\n", WORD_MULT);
       int result = entry->f(ctx, t->type);
       if (result) return SY_ERR;
       break;
     }
     case ENDOFLINE: {
       sTableEntry *entry = getFunctionByName(ctx, ENDOFLINE);
-      // printf("Calling applyOperator with ENDOFLINE: %d\n", ENDOFFILE);
       int result = entry->f(ctx, t->type);
       if (result) return SY_ERR;
       break;
@@ -825,11 +858,34 @@ int main(int argc, char **argv) {
     Token *popped = listPop(ctx->opStack);
     ctxEnqueue(ctx, popped);
   }
-  // printToken(ctx->queue);
+  printToken(ctx->queue);
   evalPostfix(ctx, ctx->queue);
+  if(ctx->stack->list.len == 1 && ctx->stack->list.ele[0]->type != SONG){
+    switch(ctx->stack->list.ele[0]->type){
+      case WORD:{
+        CsObj *el = ctxPostFixStackPop(ctx);
+        CsObj *song = createSongObject();
+        CsObj *line = createLineObject();
+        listPushObj(line, el);
+        listPushObj(song, line);
+        ctxPostFixStackPush(ctx, song);
+        break;
+      }
+      case LINE: {
+        CsObj *el = ctxPostFixStackPop(ctx);
+        CsObj *song = createSongObject();
+        listPushObj(song, el);
+        ctxPostFixStackPush(ctx, song);
+        break;
+      }
+      default:
+      printf("??\n");
+      break;
+    }
+  }
   printf("Result is: \n");
   printCsObj(ctx->stack);
-  // printToken(ctx->queue);
+  freeContext(ctx);
   free(buf);
   return 0;
 }
