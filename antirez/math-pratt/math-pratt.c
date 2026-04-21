@@ -207,64 +207,72 @@ void printToken(Token *t) {
   }
 }
 
-typedef struct precedenceTableEntry {
+// typedef struct precedenceTableEntry {
+//   char s;
+//   int i;
+// } pTableEntry;
+
+// typedef struct precedenceTable {
+//   pTableEntry **pTable;
+//   int count;
+// } pTable;
+
+struct pCtx;
+typedef int (*MathFn)(struct pCtx *ctx, char s);
+
+// typedef struct symbolTableEntry {
+//   char s;
+//   MathFn f;
+// } sTableEntry;
+
+typedef struct parsingRulesTableEntry {
+  MathFn prefixFn;
+  MathFn infixFn;
   char s;
   int i;
 } pTableEntry;
 
-typedef struct precedenceTable {
-  pTableEntry **pTable;
+typedef struct parsingRulesTable {
+  pTableEntry **entry;
   int count;
 } pTable;
 
-struct CsCtx;
-typedef int (*MathFn)(struct CsCtx *ctx, char s);
+// typedef struct symbolTable {
+//   sTableEntry **sTable;
+//   int count;
+// } sTable;
 
-typedef struct symbolTableEntry {
-  char s;
-  MathFn f;
-} sTableEntry;
+typedef struct pCtx {
+  pTable table;
+} pCtx;
 
-typedef struct symbolTable {
-  sTableEntry **sTable;
-  int count;
-} sTable;
+// void addSymbolPrecedence(pCtx *ctx, char s, int i) {
+//   ctx->table.entry =
+//       xrealloc(ctx->table.entry,
+//                sizeof(pTableEntry *) * (ctx->table.count + 1));
+//   pTableEntry *entry = xmalloc(sizeof(pTableEntry));
+//   entry->s = s;
+//   entry->i = i;
 
-typedef struct CsCtx {
-  PObj *stack;
-  Token *opStack;
-  Token *queue;
-  pTable precedenceTable;
-  sTable symbolTable;
-} CsCtx;
+//   ctx->table.entry[ctx->table.count] = entry;
+//   ctx->table.count++;
+// }
 
-void addSymbolPrecedence(CsCtx *ctx, char s, int i) {
-  ctx->precedenceTable.pTable =
-      xrealloc(ctx->precedenceTable.pTable,
-               sizeof(pTableEntry *) * (ctx->precedenceTable.count + 1));
-  pTableEntry *entry = xmalloc(sizeof(pTableEntry));
-  entry->s = s;
-  entry->i = i;
-  ctx->precedenceTable.pTable[ctx->precedenceTable.count] = entry;
-  ctx->precedenceTable.count++;
+void addRule(pCtx *ctx, char s, int i, MathFn prefix, MathFn infix) {
+  ctx->table.entry = xrealloc(ctx->table.entry, sizeof(pTableEntry *) * (ctx->table.count + 1));
+  pTableEntry *new_entry = xmalloc(sizeof(pTableEntry));
+  new_entry->i = i;
+  new_entry->s = s;
+  new_entry->infixFn = infix;
+  new_entry->prefixFn = prefix;
+  ctx->table.count++;
 }
 
-void addSymbolFn(CsCtx *ctx, char s, MathFn f) {
-  ctx->symbolTable.sTable =
-      xrealloc(ctx->symbolTable.sTable,
-               sizeof(sTableEntry *) * (ctx->symbolTable.count + 1));
-  sTableEntry *entry = xmalloc(sizeof(sTableEntry));
-  entry->s = s;
-  entry->f = f;
-  ctx->symbolTable.sTable[ctx->symbolTable.count] = entry;
-  ctx->symbolTable.count++;
-}
-
-int getPrecedence(CsCtx *ctx, Token *t) {
+int getPrecedence(pCtx *ctx, Token *t) {
   char s = t->type;
-  for (int i = 0; i < ctx->precedenceTable.count; i++) {
-    if (ctx->precedenceTable.pTable[i]->s == s) {
-      return ctx->precedenceTable.pTable[i]->i;
+  for (int i = 0; i < ctx->table.count; i++) {
+    if (ctx->table.entry[i]->s == s) {
+      return ctx->table.entry[i]->i;
     }
   }
   printf("Error: %c\n", s);
@@ -273,7 +281,7 @@ int getPrecedence(CsCtx *ctx, Token *t) {
 
 /* ------------------    Data structure Pratt object ---------------- */
 
-typedef enum { NUMBER = 0, INFIX } PObjType;
+typedef enum { NUMBER = 0, INFIX, NEGATION } PObjType;
 
 typedef struct PObj {
   int refcount;
@@ -287,6 +295,9 @@ typedef struct PObj {
     struct {
       struct PObj *ele;
     } right;
+    struct {
+      struct PObj *ele;
+    } neg;
   };
 } PObj;
 
@@ -296,7 +307,7 @@ void release(PObj *o);
 
 /*---------------     Object related functions ----------------  */
 
-/* Allocate and initialize e new Shunting Yard Object */
+/* Allocate and initialize e new Pratt Object */
 
 PObj *createObject(PObjType type) {
   PObj *o = xmalloc(sizeof(PObj));
@@ -310,6 +321,7 @@ PObj *createNumberObject(int n) {
   o->i = n;
   return o;
 }
+
 PObj *createInfixObject(PObj *left, char operator, PObj *right ) {
   PObj *o = createObject(INFIX);
   o->left.ele = left;
@@ -318,6 +330,10 @@ PObj *createInfixObject(PObj *left, char operator, PObj *right ) {
   return o;
 }
 
+PObj *createNegationObject(PObj *ele){
+  PObj *o = createObject(NEGATION);
+  o->neg.ele = ele;
+}
 /* Free an object and all the other nested objects. */
 void freeObject(PObj *o) {
   switch (o->type) {
@@ -326,11 +342,13 @@ void freeObject(PObj *o) {
        freeObject(o->right.ele);
        release(o);
        break;
-
     case NUMBER:
        release(o);
        break;
-
+    case NEGATION:
+       freeObject(o->neg.ele);
+       release(o);
+       break;
     default:
       break;
   }
@@ -357,7 +375,9 @@ void printPObj(PObj *o) {
       printf("operator: %c", o->operator);
       printPObj(o->right.ele);
       break;
-
+    case NEGATION:
+      printPObj(o->neg.ele);
+      break;
     default:
       printf("?\n");
       break;
@@ -376,6 +396,77 @@ void printPObj(PObj *o) {
 //   l->list.len++;
 // }
 
+int basicMathFunctions(pCtx *ctx, char s) {
+  // if (s == '~') {
+  //   if (ctxCheckStackMinLen(ctx, 1)) return SY_ERR;
+  //   SyObj *a = ctxPostFixStackPop(ctx);
+  //   if (a == NULL) {
+  //     return SY_ERR;
+  //   };
+  //   int result = -(a->num);
+  //   printf("result: %d\n", result);
+  //   ctxPostFixStackPush(ctx, createNumberObject(result));
+  //   release(a);
+  //   return SY_OK;
+  // }
+  // if (ctxCheckStackMinLen(ctx, 2)) return SY_ERR;
+
+  // SyObj *b = ctxPostFixStackPop(ctx);
+  // if (b == NULL) return SY_ERR;
+
+  // SyObj *a = ctxPostFixStackPop(ctx);
+  // if (a == NULL) {
+  //   ctxPostFixStackPush(ctx, b);
+  //   return SY_ERR;
+  // };
+  // int result;
+  // switch (s) {
+  //   case '+':
+  //     result = a->num + b->num;
+  //     break;
+  //   case '-':
+  //     result = a->num - b->num;
+  //     break;
+  //   case '*':
+  //     result = a->num * b->num;
+  //     break;
+  //   case '/':
+  //     result = a->num / b->num;
+  //     break;
+  // }
+  // release(a);
+  // release(b);
+
+  // SyObj *resObj = createNumberObject(result);
+  // ctxPostFixStackPush(ctx, resObj);
+  // return SY_OK;
+}
+
+
+pCtx *createContext(void) {
+  pCtx *ctx = xmalloc(sizeof(pCtx));
+  ctx->table.entry = NULL;
+  ctx->table.count = 0;
+
+  addRule(ctx, '+', 1, NULL, basicMathFunctions);
+  // addSymbolPrecedence(ctx, '+', 1);
+  // addSymbolPrecedence(ctx, '*', 2);
+  // addSymbolPrecedence(ctx, '-', 1);
+  // addSymbolPrecedence(ctx, '/', 2);
+  // addSymbolPrecedence(ctx, '(', 0);
+  // addSymbolPrecedence(ctx, ')', 0);
+  // addSymbolPrecedence(ctx, '~', 3);
+
+  // ctx->symbolTable.sTable = NULL;
+  // ctx->symbolTable.count = 0;
+  // addSymbolFn(ctx, '+', basicMathFunctions);
+  // addSymbolFn(ctx, '-', basicMathFunctions);
+  // addSymbolFn(ctx, '*', basicMathFunctions);
+  // addSymbolFn(ctx, '/', basicMathFunctions);
+  // addSymbolFn(ctx, '~', basicMathFunctions);
+
+  return ctx;
+}
 
 /* -------------------------  Main ----------------------------- */
 
@@ -405,7 +496,7 @@ int main(int argc, char **argv) {
   readEndOfFile(&l);
   advanceLexer(&l);
 
-  CsCtx *ctx = createContext();
+  pCtx *ctx = createContext();
 
 //   // --- INIEZIONE DELLE SENTINELLE INIZIALI ---
 //   ctxEnqueue(ctx, createEmptySongToken());
