@@ -10,6 +10,7 @@
 #define SY_OK 0
 #define SY_ERR 1
 
+
 /* ------------------------ Allocation wrappers ----------------------------*/
 
 void *xmalloc(size_t size) {
@@ -39,7 +40,6 @@ typedef enum {
   TOKEN_DIV,
   TOKEN_MULT,
   TOKEN_SYMBOL,
-  TOKEN_LIST,
   TOKEN_ILLEGAL,
   TOKEN_ENDOFFILE
 } TokenType;
@@ -66,20 +66,28 @@ typedef struct PObj *(*InfixFn)(struct pCtx *ctx, struct PObj *left);
 typedef struct parsingRulesTableEntry {
   PrefixFn prefixFn;
   InfixFn infixFn;
-  TokenType type;
   int i;
 } pTableEntry;
 
-typedef struct parsingRulesTable {
-  pTableEntry **entry;
-  int count;
-} pTable;
 
 typedef struct pCtx {
-  pTable table;
   Lexer lexer;
   struct PObj *ast;
 } pCtx;
+
+struct PObj;
+struct PObj *parsePrefix(pCtx *ctx);
+struct PObj *parseInfix(pCtx *ctx, struct PObj *left);
+
+static pTableEntry rulesTable[] = {
+    [TOKEN_NUMBER] = {parsePrefix, NULL, 0},
+    [TOKEN_PLUS] = {NULL, parseInfix, 2},
+    [TOKEN_MINUS] = {NULL, parseInfix, 2},
+    [TOKEN_MULT] = {NULL, parseInfix, 3},
+    [TOKEN_DIV] = {NULL, parseInfix, 3},
+    [TOKEN_ENDOFFILE] = {NULL, NULL, 0},
+};
+
 
 /* ------------------  Token related functions ----------------  */
 
@@ -190,29 +198,6 @@ void printToken(Token *t) {
   }
 }
 
-
-void addRule(pCtx *ctx, char type, int i, PrefixFn prefix, InfixFn infix) {
-  ctx->table.entry = xrealloc(ctx->table.entry,
-                              sizeof(pTableEntry *) * (ctx->table.count + 1));
-  pTableEntry *new_entry = xmalloc(sizeof(pTableEntry));
-  new_entry->i = i;
-  new_entry->type = type;
-  new_entry->infixFn = infix;
-  new_entry->prefixFn = prefix;
-  ctx->table.entry[ctx->table.count] = new_entry;
-  ctx->table.count++;
-}
-
-int getPrecedence(pCtx *ctx) {
-  TokenType type = ctx->lexer.curToken.type;
-  for (int i = 0; i < ctx->table.count; i++) {
-    if (ctx->table.entry[i]->type == type) {
-      return ctx->table.entry[i]->i;
-    }
-  }
-  printf("Error: %c\n", type);
-  return -1;
-}
 
 /* ------------------    Data structure Pratt object ---------------- */
 
@@ -330,28 +315,29 @@ PObj *parsePrefix(pCtx *ctx) {
   return NULL;
 }
 
-PrefixFn getPrefixFn(pCtx *ctx) {
-  pTable table = ctx->table;
+int getPrecedence(pCtx *ctx) {
   TokenType type = ctx->lexer.curToken.type;
-  for (int i = 0; i < table.count; i++) {
-    if (table.entry != NULL && table.entry[i]->type == type) {
-      return table.entry[i]->prefixFn;
-    }
+  return rulesTable[type].i;
+}
+
+PrefixFn getPrefixFn(pCtx *ctx) {
+  TokenType type = ctx->lexer.curToken.type;
+  PrefixFn fn = rulesTable[type].prefixFn;
+  if (fn == NULL) {
+    printf("No prefixFn for token type: %c\n", type);
+    return NULL;
   }
-  printf("No prefixFn for token type: %c\n", type);
-  return NULL;
+  return fn;
 }
 
 InfixFn getInfixFn(pCtx *ctx) {
-  pTable table = ctx->table;
   TokenType type = ctx->lexer.curToken.type;
-  for (int i = 0; i < table.count; i++) {
-    if (table.entry != NULL && table.entry[i]->type == type) {
-      return table.entry[i]->infixFn;
-    }
+  InfixFn fn = rulesTable[type].infixFn;
+  if (fn == NULL) {
+    printf("No infixFn for token type: %c\n", type);
+    return NULL;
   }
-  printf("No infixFn for token type: %d\n", type);
-  return NULL;
+  return fn;
 }
 
 PObj *parseExpression(pCtx *ctx, int precedence) {
@@ -371,7 +357,6 @@ PObj *parseExpression(pCtx *ctx, int precedence) {
     }
 
     left = infix(ctx, left);
-
   }
   return left;
 }
@@ -388,14 +373,9 @@ PObj *parseInfix(pCtx *ctx, PObj *left) {
   return createInfixObject(left, operator, right);
 }
 
+
 void freeContext(pCtx *ctx) {
-  if (ctx->table.entry) {
-    for (int i = 0; i < ctx->table.count; i++) {
-      free(ctx->table.entry[i]);
-    }
-    free(ctx->table.entry);
-  }
-  if (ctx->ast){
+  if (ctx->ast) {
     release(ctx->ast);
   }
   free(ctx);
@@ -403,19 +383,15 @@ void freeContext(pCtx *ctx) {
 
 pCtx *createContext(char *buf) {
   pCtx *ctx = xmalloc(sizeof(pCtx));
-  ctx->table.entry = NULL;
-  ctx->table.count = 0;
   ctx->lexer.prg = buf;
   ctx->lexer.p = buf;
-  addRule(ctx, TOKEN_NUMBER, -1, parsePrefix, NULL);
-  addRule(ctx, TOKEN_PLUS, 2, NULL, parseInfix);
-  addRule(ctx, TOKEN_ENDOFFILE, 0, NULL, NULL);
   readEndOfFile(ctx);
   advanceLexer(ctx);
   printToken(&ctx->lexer.curToken);
   ctx->ast = parseExpression(ctx, 0);
   return ctx;
 }
+
 
 /* -------------------------  Main ----------------------------- */
 
