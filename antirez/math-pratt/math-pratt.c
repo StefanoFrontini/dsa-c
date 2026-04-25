@@ -45,22 +45,17 @@ typedef enum {
 } TokenType;
 
 typedef struct Token {
-  int refcount;
   TokenType type;
   union {
     char symbol;
     int i;
-    struct {
-      struct Token **ele;
-      size_t len;
-    } list;
   };
 } Token;
 
 typedef struct Lexer {
   char *prg;
   char *p;
-  Token *curToken;
+  Token curToken;
 } Lexer;
 
 struct pCtx;
@@ -88,28 +83,6 @@ typedef struct pCtx {
 
 /* ------------------  Token related functions ----------------  */
 
-void retainToken(Token *t) {
-  t->refcount++;
-}
-
-void releaseToken(Token *t) {
-  assert(t->refcount > 0);
-  t->refcount--;
-  if (t->refcount == 0) {
-    switch (t->type) {
-      case TOKEN_LIST:
-        for (size_t i = 0; i < t->list.len; i++) {
-          releaseToken(t->list.ele[i]);
-        }
-        free(t->list.ele);
-        break;
-      default:
-        break;
-    }
-    free(t);
-  }
-}
-
 void readNumber(pCtx *ctx) {
   char buf[128];
   char *start = ctx->lexer.p;
@@ -129,11 +102,8 @@ void readNumber(pCtx *ctx) {
   memcpy(buf, start, len);
   buf[len] = 0;
 
-  Token *t = xmalloc(sizeof(Token));
-  t->refcount = 1;
-  t->type = TOKEN_NUMBER;
-  t->i = atoi(buf);
-  ctx->lexer.curToken = t;
+  ctx->lexer.curToken.type = TOKEN_NUMBER;
+  ctx->lexer.curToken.i = atoi(buf);
 }
 
 /* Return true if the character 'c' is one of the characters acceptable for our
@@ -147,46 +117,36 @@ void readSymbol(pCtx *ctx) {
   char s = ctx->lexer.p[0];
   printf("s: %c\n", s);
   ctx->lexer.p++;
-  Token *t = xmalloc(sizeof(Token));
-  t->refcount = 1;
-  t->type = TOKEN_ILLEGAL;
+  ctx->lexer.curToken.type = TOKEN_ILLEGAL;
   switch (s) {
     case '+':
-      t->type = TOKEN_PLUS;
+      ctx->lexer.curToken.type = TOKEN_PLUS;
       break;
     case '-':
-      t->type = TOKEN_MINUS;
+      ctx->lexer.curToken.type = TOKEN_MINUS;
       break;
     case '*':
-      t->type = TOKEN_MULT;
+      ctx->lexer.curToken.type = TOKEN_MULT;
       break;
     case '/':
-      t->type = TOKEN_DIV;
+      ctx->lexer.curToken.type = TOKEN_DIV;
       break;
     default:
       printf("??? - %d\n", s);
       break;
   }
-  t->symbol = s;
-  printf("s type: %d\n", t->type);
-  ctx->lexer.curToken = t;
+  ctx->lexer.curToken.symbol = s;
 }
 
 void readIllegalChar(pCtx *ctx, char s) {
-  Token *t = xmalloc(sizeof(Token));
-  t->refcount = 1;
-  t->type = TOKEN_ILLEGAL;
-  t->symbol = s;
-  ctx->lexer.curToken = t;
+  ctx->lexer.curToken.type = TOKEN_ILLEGAL;
+  ctx->lexer.curToken.symbol = s;
   ctx->lexer.p++;
 }
 
 void readEndOfFile(pCtx *ctx) {
-  Token *t = xmalloc(sizeof(Token));
-  t->refcount = 1;
-  t->type = TOKEN_ENDOFFILE;
-  t->symbol = 0;
-  ctx->lexer.curToken = t;
+  ctx->lexer.curToken.type = TOKEN_ENDOFFILE;
+  ctx->lexer.curToken.symbol = 0;
 }
 
 void skipSpaces(pCtx *ctx) {
@@ -201,16 +161,12 @@ void advanceLexer(pCtx *ctx) {
     skipSpaces(ctx);
     advanceLexer(ctx);
   } else if (isdigit(c)) {
-    releaseToken(ctx->lexer.curToken);
     readNumber(ctx);
   } else if (isSymbolChar(c)) {
-    releaseToken(ctx->lexer.curToken);
     readSymbol(ctx);
   } else if (c == 0) {
-    releaseToken(ctx->lexer.curToken);
     readEndOfFile(ctx);
   } else {
-    releaseToken(ctx->lexer.curToken);
     readIllegalChar(ctx, c);
   }
 }
@@ -226,12 +182,6 @@ void printToken(Token *t) {
     case TOKEN_DIV:
     case TOKEN_ILLEGAL:
       printf("Current token is a symbol: %c\n", t->symbol);
-    case TOKEN_LIST:
-      for (size_t i = 0; i < t->list.len; i++) {
-        Token *el = t->list.ele[i];
-        printToken(el);
-      }
-      break;
     case TOKEN_ENDOFFILE:
       break;
     default:
@@ -254,7 +204,7 @@ void addRule(pCtx *ctx, char type, int i, PrefixFn prefix, InfixFn infix) {
 }
 
 int getPrecedence(pCtx *ctx) {
-  TokenType type = ctx->lexer.curToken->type;
+  TokenType type = ctx->lexer.curToken.type;
   for (int i = 0; i < ctx->table.count; i++) {
     if (ctx->table.entry[i]->type == type) {
       return ctx->table.entry[i]->i;
@@ -328,7 +278,7 @@ void freeObject(PObj *o) {
     case NUMBER:
       break;
     case NEGATION:
-      freeObject(o->neg.ele);
+      release(o->neg.ele);
       break;
     default:
       break;
@@ -368,9 +318,9 @@ void printPObj(PObj *o) {
 }
 
 PObj *parsePrefix(pCtx *ctx) {
-  switch (ctx->lexer.curToken->type) {
+  switch (ctx->lexer.curToken.type) {
     case TOKEN_NUMBER:
-      return createNumberObject(ctx->lexer.curToken->i);
+      return createNumberObject(ctx->lexer.curToken.i);
       break;
 
     default:
@@ -382,7 +332,7 @@ PObj *parsePrefix(pCtx *ctx) {
 
 PrefixFn getPrefixFn(pCtx *ctx) {
   pTable table = ctx->table;
-  TokenType type = ctx->lexer.curToken->type;
+  TokenType type = ctx->lexer.curToken.type;
   for (int i = 0; i < table.count; i++) {
     if (table.entry != NULL && table.entry[i]->type == type) {
       return table.entry[i]->prefixFn;
@@ -394,7 +344,7 @@ PrefixFn getPrefixFn(pCtx *ctx) {
 
 InfixFn getInfixFn(pCtx *ctx) {
   pTable table = ctx->table;
-  TokenType type = ctx->lexer.curToken->type;
+  TokenType type = ctx->lexer.curToken.type;
   for (int i = 0; i < table.count; i++) {
     if (table.entry != NULL && table.entry[i]->type == type) {
       return table.entry[i]->infixFn;
@@ -412,7 +362,7 @@ PObj *parseExpression(pCtx *ctx, int precedence) {
   }
   PObj *left = prefix(ctx);
   advanceLexer(ctx);
-  while (ctx->lexer.curToken->type != TOKEN_ENDOFFILE &&
+  while (ctx->lexer.curToken.type != TOKEN_ENDOFFILE &&
          precedence < getPrecedence(ctx)) {
     InfixFn infix = getInfixFn(ctx);
 
@@ -432,16 +382,13 @@ PObj *parseInfix(pCtx *ctx, PObj *left) {
     printf("Error: precedence cannot be -1 in parseInfix\n");
     exit(1);
   }
-  char operator = ctx->lexer.curToken->symbol;
+  char operator = ctx->lexer.curToken.symbol;
   advanceLexer(ctx);
   PObj *right = parseExpression(ctx, precedence);
   return createInfixObject(left, operator, right);
 }
 
 void freeContext(pCtx *ctx) {
-  if (ctx->lexer.curToken) {
-    releaseToken(ctx->lexer.curToken);
-  }
   if (ctx->table.entry) {
     for (int i = 0; i < ctx->table.count; i++) {
       free(ctx->table.entry[i]);
@@ -465,7 +412,7 @@ pCtx *createContext(char *buf) {
   addRule(ctx, TOKEN_ENDOFFILE, 0, NULL, NULL);
   readEndOfFile(ctx);
   advanceLexer(ctx);
-  printToken(ctx->lexer.curToken);
+  printToken(&ctx->lexer.curToken);
   ctx->ast = parseExpression(ctx, 0);
   return ctx;
 }
