@@ -71,7 +71,7 @@ typedef struct PObj *(*InfixFn)(struct pCtx *ctx, struct PObj *left);
 typedef struct parsingRulesTableEntry {
   PrefixFn prefixFn;
   InfixFn infixFn;
-  char type;
+  TokenType type;
   int i;
 } pTableEntry;
 
@@ -254,7 +254,7 @@ void addRule(pCtx *ctx, char type, int i, PrefixFn prefix, InfixFn infix) {
 }
 
 int getPrecedence(pCtx *ctx) {
-  char type = ctx->lexer.curToken->type;
+  TokenType type = ctx->lexer.curToken->type;
   for (int i = 0; i < ctx->table.count; i++) {
     if (ctx->table.entry[i]->type == type) {
       return ctx->table.entry[i]->i;
@@ -322,20 +322,18 @@ PObj *createNegationObject(PObj *ele) {
 void freeObject(PObj *o) {
   switch (o->type) {
     case INFIX:
-      freeObject(o->infix.left);
-      freeObject(o->infix.right);
-      free(o);
+      release(o->infix.left);
+      release(o->infix.right);
       break;
     case NUMBER:
-      free(o);
       break;
     case NEGATION:
       freeObject(o->neg.ele);
-      free(o);
       break;
     default:
       break;
   }
+  free(o);
 }
 
 void retain(PObj *o) {
@@ -384,7 +382,7 @@ PObj *parsePrefix(pCtx *ctx) {
 
 PrefixFn getPrefixFn(pCtx *ctx) {
   pTable table = ctx->table;
-  char type = ctx->lexer.curToken->type;
+  TokenType type = ctx->lexer.curToken->type;
   for (int i = 0; i < table.count; i++) {
     if (table.entry != NULL && table.entry[i]->type == type) {
       return table.entry[i]->prefixFn;
@@ -396,7 +394,7 @@ PrefixFn getPrefixFn(pCtx *ctx) {
 
 InfixFn getInfixFn(pCtx *ctx) {
   pTable table = ctx->table;
-  char type = ctx->lexer.curToken->type;
+  TokenType type = ctx->lexer.curToken->type;
   for (int i = 0; i < table.count; i++) {
     if (table.entry != NULL && table.entry[i]->type == type) {
       return table.entry[i]->infixFn;
@@ -464,6 +462,7 @@ pCtx *createContext(char *buf) {
   ctx->lexer.p = buf;
   addRule(ctx, TOKEN_NUMBER, -1, parsePrefix, NULL);
   addRule(ctx, TOKEN_PLUS, 2, NULL, parseInfix);
+  addRule(ctx, TOKEN_ENDOFFILE, 0, NULL, NULL);
   readEndOfFile(ctx);
   advanceLexer(ctx);
   printToken(ctx->lexer.curToken);
