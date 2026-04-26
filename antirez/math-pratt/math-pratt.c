@@ -178,7 +178,8 @@ void readEndOfFile(pCtx *ctx) {
 void advanceLexer(pCtx *ctx) {
   char c = ctx->lexer.p[0];
 
-  while (isspace(c)) ctx->lexer.p++;
+  while (isspace(c))
+    ctx->lexer.p++;
 
   if (isdigit(c)) {
     readNumber(ctx);
@@ -312,7 +313,6 @@ PObj *parseInfix(pCtx *ctx, PObj *left) {
   return createInfixObject(left, op, right);
 }
 
-
 PObj *parseExpression(pCtx *ctx, int precedence) {
   TokenType type = ctx->lexer.curToken.type;
   PrefixFn prefix = rulesTable[type].prefixFn;
@@ -339,22 +339,19 @@ PObj *parseExpression(pCtx *ctx, int precedence) {
   return left;
 }
 
-
 /* ------------------  Context Management  ----------------  */
 
-pCtx *createContext(char *buf) {
-  pCtx *ctx = xmalloc(sizeof(pCtx));
+void initContext(pCtx *ctx, char *buf) {
+  memset(ctx, 0, sizeof(pCtx));
+
   ctx->lexer.prg = buf;
   ctx->lexer.p = buf;
-  ctx->ast = NULL;
-  return ctx;
 }
 
 void freeContext(pCtx *ctx) {
   if (ctx->ast) {
     release(ctx->ast);
   }
-  free(ctx);
 }
 
 /* -------------------------  Main ----------------------------- */
@@ -379,16 +376,17 @@ int main(int argc, char **argv) {
   buf[file_size] = 0;
   fclose(fp);
 
-  pCtx *ctx = createContext(buf);
+  pCtx ctx;
+  initContext(&ctx, buf);
 
-  advanceLexer(ctx);
-  ctx->ast = parseExpression(ctx, 0);
+  advanceLexer(&ctx);
+  ctx.ast = parseExpression(&ctx, 0);
 
   printf("AST result: \n");
-  printPObj(ctx->ast);
+  printPObj(ctx.ast);
   printf("\n");
 
-  freeContext(ctx);
+  freeContext(&ctx);
   free(buf);
   return 0;
 }
