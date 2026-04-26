@@ -10,7 +10,6 @@
 #define SY_OK 0
 #define SY_ERR 1
 
-
 /* ------------------------ Allocation wrappers ----------------------------*/
 
 void *xmalloc(size_t size) {
@@ -31,7 +30,7 @@ void *xrealloc(void *old_ptr, size_t size) {
   return ptr;
 }
 
-/* ----------------   Data structures: Lexer ------------------ */
+/* ----------------   Data structures: Lexer & Parser ------------------ */
 
 typedef enum {
   TOKEN_NUMBER = 0,
@@ -58,26 +57,46 @@ typedef struct Lexer {
   Token curToken;
 } Lexer;
 
-struct pCtx;
-struct PObj;
-typedef struct PObj *(*PrefixFn)(struct pCtx *ctx);
-typedef struct PObj *(*InfixFn)(struct pCtx *ctx, struct PObj *left);
+// AST Object (PObj)
 
-typedef struct parsingRulesTableEntry {
-  PrefixFn prefixFn;
-  InfixFn infixFn;
-  int i;
-} pTableEntry;
+typedef enum { NUMBER = 0, INFIX, NEGATION } PObjType;
 
+typedef struct PObj {
+  int refcount;
+  PObjType type;
+  union {
+    int i;
+    struct {
+      struct PObj *left;
+      char operator;
+      struct PObj *right;
+    } infix;
+    struct {
+      struct PObj *ele;
+    } neg;
+  };
+} PObj;
 
 typedef struct pCtx {
   Lexer lexer;
-  struct PObj *ast;
+  PObj *ast;
 } pCtx;
 
-struct PObj;
-struct PObj *parsePrefix(pCtx *ctx);
-struct PObj *parseInfix(pCtx *ctx, struct PObj *left);
+/* Prototypes for the parsing table and related functions */
+typedef PObj *(*PrefixFn)(pCtx *ctx);
+typedef PObj *(*InfixFn)(pCtx *ctx, PObj *left);
+
+typedef struct {
+  PrefixFn prefixFn;
+  InfixFn infixFn;
+  int precedence;
+} pTableEntry;
+
+PObj *parsePrefix(pCtx *ctx);
+PObj *parseInfix(pCtx *ctx, PObj *left);
+PObj *parseExpression(pCtx *ctx, int precedence);
+
+/* ------------------ Static Parsing Table ---------------- */
 
 static pTableEntry rulesTable[] = {
     [TOKEN_NUMBER] = {parsePrefix, NULL, 0},
@@ -88,8 +107,7 @@ static pTableEntry rulesTable[] = {
     [TOKEN_ENDOFFILE] = {NULL, NULL, 0},
 };
 
-
-/* ------------------  Token related functions ----------------  */
+/* ------------------  Lexer related functions ----------------  */
 
 void readNumber(pCtx *ctx) {
   char buf[128];
@@ -123,9 +141,9 @@ int isSymbolChar(int c) {
 
 void readSymbol(pCtx *ctx) {
   char s = ctx->lexer.p[0];
-  printf("s: %c\n", s);
   ctx->lexer.p++;
-  ctx->lexer.curToken.type = TOKEN_ILLEGAL;
+
+  ctx->lexer.curToken.symbol = s;
   switch (s) {
     case '+':
       ctx->lexer.curToken.type = TOKEN_PLUS;
@@ -140,10 +158,10 @@ void readSymbol(pCtx *ctx) {
       ctx->lexer.curToken.type = TOKEN_DIV;
       break;
     default:
+      ctx->lexer.curToken.type = TOKEN_ILLEGAL;
       printf("??? - %d\n", s);
       break;
   }
-  ctx->lexer.curToken.symbol = s;
 }
 
 void readIllegalChar(pCtx *ctx, char s) {
@@ -157,18 +175,12 @@ void readEndOfFile(pCtx *ctx) {
   ctx->lexer.curToken.symbol = 0;
 }
 
-void skipSpaces(pCtx *ctx) {
-  while (isspace(ctx->lexer.p[0])) {
-    ctx->lexer.p++;
-  }
-}
-
 void advanceLexer(pCtx *ctx) {
   char c = ctx->lexer.p[0];
-  if (isspace(c)) {
-    skipSpaces(ctx);
-    advanceLexer(ctx);
-  } else if (isdigit(c)) {
+
+  while (isspace(c)) ctx->lexer.p++;
+
+  if (isdigit(c)) {
     readNumber(ctx);
   } else if (isSymbolChar(c)) {
     readSymbol(ctx);
@@ -197,35 +209,38 @@ void printToken(Token *t) {
       break;
   }
 }
+/* ------------------  AST Object Management (PObj) ----------------  */
 
-
-/* ------------------    Data structure Pratt object ---------------- */
-
-typedef enum { NUMBER = 0, INFIX, NEGATION } PObjType;
-
-typedef struct PObj {
-  int refcount;
-  PObjType type;
-  union {
-    int i;
-    struct {
-      struct PObj *left;
-      char operator;
-      struct PObj *right;
-    } infix;
-    struct {
-      struct PObj *ele;
-    } neg;
-  };
-} PObj;
-
-/* -------------  Functions prototypes ------------------------- */
-void retain(PObj *o);
 void release(PObj *o);
 
-/*---------------     Object related functions ----------------  */
+/* Free an object and all the other nested objects. */
+void freeObject(PObj *o) {
+  switch (o->type) {
+    case INFIX:
+      release(o->infix.left);
+      release(o->infix.right);
+      break;
+    case NUMBER:
+      break;
+    case NEGATION:
+      release(o->neg.ele);
+      break;
+    default:
+      break;
+  }
+  free(o);
+}
 
-/* Allocate and initialize e new Pratt Object */
+void retain(PObj *o) {
+  o->refcount++;
+}
+
+void release(PObj *o) {
+  if (!o) return;
+  assert(o->refcount > 0);
+  o->refcount--;
+  if (o->refcount == 0) freeObject(o);
+}
 
 PObj *createObject(PObjType type) {
   PObj *o = xmalloc(sizeof(PObj));
@@ -253,33 +268,6 @@ PObj *createNegationObject(PObj *ele) {
   o->neg.ele = ele;
   return o;
 }
-/* Free an object and all the other nested objects. */
-void freeObject(PObj *o) {
-  switch (o->type) {
-    case INFIX:
-      release(o->infix.left);
-      release(o->infix.right);
-      break;
-    case NUMBER:
-      break;
-    case NEGATION:
-      release(o->neg.ele);
-      break;
-    default:
-      break;
-  }
-  free(o);
-}
-
-void retain(PObj *o) {
-  o->refcount++;
-}
-
-void release(PObj *o) {
-  assert(o->refcount > 0);
-  o->refcount--;
-  if (o->refcount == 0) freeObject(o);
-}
 
 void printPObj(PObj *o) {
   switch (o->type) {
@@ -301,56 +289,46 @@ void printPObj(PObj *o) {
       break;
   }
 }
+/* ------------------  Pratt Parser logic ----------------  */
+
+int getPrecedence(pCtx *ctx) {
+  return rulesTable[ctx->lexer.curToken.type].precedence;
+}
 
 PObj *parsePrefix(pCtx *ctx) {
-  switch (ctx->lexer.curToken.type) {
-    case TOKEN_NUMBER:
-      return createNumberObject(ctx->lexer.curToken.i);
-      break;
-
-    default:
-      printf("???\n");
-      break;
+  if (ctx->lexer.curToken.type == TOKEN_NUMBER) {
+    return createNumberObject(ctx->lexer.curToken.i);
   }
+  printf("Error: No prefix function for the token %d\n",
+         ctx->lexer.curToken.type);
   return NULL;
 }
 
-int getPrecedence(pCtx *ctx) {
-  TokenType type = ctx->lexer.curToken.type;
-  return rulesTable[type].i;
+PObj *parseInfix(pCtx *ctx, PObj *left) {
+  int precedence = getPrecedence(ctx);
+  char op = ctx->lexer.curToken.symbol;
+  advanceLexer(ctx);
+  PObj *right = parseExpression(ctx, precedence);
+  return createInfixObject(left, op, right);
 }
 
-PrefixFn getPrefixFn(pCtx *ctx) {
-  TokenType type = ctx->lexer.curToken.type;
-  PrefixFn fn = rulesTable[type].prefixFn;
-  if (fn == NULL) {
-    printf("No prefixFn for token type: %c\n", type);
-    return NULL;
-  }
-  return fn;
-}
-
-InfixFn getInfixFn(pCtx *ctx) {
-  TokenType type = ctx->lexer.curToken.type;
-  InfixFn fn = rulesTable[type].infixFn;
-  if (fn == NULL) {
-    printf("No infixFn for token type: %c\n", type);
-    return NULL;
-  }
-  return fn;
-}
 
 PObj *parseExpression(pCtx *ctx, int precedence) {
-  PrefixFn prefix = getPrefixFn(ctx);
+  TokenType type = ctx->lexer.curToken.type;
+  PrefixFn prefix = rulesTable[type].prefixFn;
+
   if (prefix == NULL) {
-    printf("Error: prefix is NULL");
+    printf("Error: Token %d cannot be used in prefix notation \n", type);
     return NULL;
   }
+
   PObj *left = prefix(ctx);
   advanceLexer(ctx);
+
   while (ctx->lexer.curToken.type != TOKEN_ENDOFFILE &&
          precedence < getPrecedence(ctx)) {
-    InfixFn infix = getInfixFn(ctx);
+
+    InfixFn infix = rulesTable[ctx->lexer.curToken.type].infixFn;
 
     if (infix == NULL) {
       return left;
@@ -361,18 +339,16 @@ PObj *parseExpression(pCtx *ctx, int precedence) {
   return left;
 }
 
-PObj *parseInfix(pCtx *ctx, PObj *left) {
-  int precedence = getPrecedence(ctx);
-  if (precedence == -1) {
-    printf("Error: precedence cannot be -1 in parseInfix\n");
-    exit(1);
-  }
-  char operator = ctx->lexer.curToken.symbol;
-  advanceLexer(ctx);
-  PObj *right = parseExpression(ctx, precedence);
-  return createInfixObject(left, operator, right);
-}
 
+/* ------------------  Context Management  ----------------  */
+
+pCtx *createContext(char *buf) {
+  pCtx *ctx = xmalloc(sizeof(pCtx));
+  ctx->lexer.prg = buf;
+  ctx->lexer.p = buf;
+  ctx->ast = NULL;
+  return ctx;
+}
 
 void freeContext(pCtx *ctx) {
   if (ctx->ast) {
@@ -380,18 +356,6 @@ void freeContext(pCtx *ctx) {
   }
   free(ctx);
 }
-
-pCtx *createContext(char *buf) {
-  pCtx *ctx = xmalloc(sizeof(pCtx));
-  ctx->lexer.prg = buf;
-  ctx->lexer.p = buf;
-  readEndOfFile(ctx);
-  advanceLexer(ctx);
-  printToken(&ctx->lexer.curToken);
-  ctx->ast = parseExpression(ctx, 0);
-  return ctx;
-}
-
 
 /* -------------------------  Main ----------------------------- */
 
@@ -417,8 +381,12 @@ int main(int argc, char **argv) {
 
   pCtx *ctx = createContext(buf);
 
-  printf("Result is: \n");
+  advanceLexer(ctx);
+  ctx->ast = parseExpression(ctx, 0);
+
+  printf("AST result: \n");
   printPObj(ctx->ast);
+  printf("\n");
 
   freeContext(ctx);
   free(buf);
