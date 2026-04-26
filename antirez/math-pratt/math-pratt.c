@@ -7,9 +7,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#define SY_OK 0
-#define SY_ERR 1
-
 /* ------------------------ Allocation wrappers ----------------------------*/
 
 void *xmalloc(size_t size) {
