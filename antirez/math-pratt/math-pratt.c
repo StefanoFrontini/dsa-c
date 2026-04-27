@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#define PREFIX_PRECEDENCE 6
+
 /* ------------------------ Allocation wrappers ----------------------------*/
 
 void *xmalloc(size_t size) {
@@ -80,6 +82,7 @@ typedef struct pCtx {
 } pCtx;
 
 /* Prototypes for the parsing table and related functions */
+
 typedef PObj *(*PrefixFn)(pCtx *ctx);
 typedef PObj *(*InfixFn)(pCtx *ctx, PObj *left);
 
@@ -98,7 +101,7 @@ PObj *parseExpression(pCtx *ctx, int precedence);
 static pTableEntry rulesTable[] = {
     [TOKEN_NUMBER] = {parsePrefix, NULL, 0},
     [TOKEN_PLUS] = {NULL, parseInfix, 2},
-    [TOKEN_MINUS] = {NULL, parseInfix, 2},
+    [TOKEN_MINUS] = {parsePrefix, parseInfix, 2},
     [TOKEN_MULT] = {NULL, parseInfix, 3},
     [TOKEN_DIV] = {NULL, parseInfix, 3},
     [TOKEN_ENDOFFILE] = {NULL, NULL, 0},
@@ -177,6 +180,8 @@ void advanceLexer(pCtx *ctx) {
 
   while (isspace(c))
     ctx->lexer.p++;
+
+  printf("c: %c\n", c);
 
   if (isdigit(c)) {
     readNumber(ctx);
@@ -270,17 +275,19 @@ PObj *createNegationObject(PObj *ele) {
 void printPObj(PObj *o) {
   switch (o->type) {
     case NUMBER:
-      printf("num: %d ", o->i);
+      printf("(num: %d)", o->i);
       break;
     case INFIX:
       printf("infix: [ ");
       printPObj(o->infix.left);
-      printf("operator: %c ", o->infix.operator);
+      printf("(operator: %c) ", o->infix.operator);
       printPObj(o->infix.right);
       printf(" ] ");
       break;
     case NEGATION:
+      printf("(-");
       printPObj(o->neg.ele);
+      printf(") ");
       break;
     default:
       printf("?\n");
@@ -295,7 +302,13 @@ int getPrecedence(pCtx *ctx) {
 
 PObj *parsePrefix(pCtx *ctx) {
   if (ctx->lexer.curToken.type == TOKEN_NUMBER) {
-    return createNumberObject(ctx->lexer.curToken.i);
+    PObj *o = createNumberObject(ctx->lexer.curToken.i);
+    advanceLexer(ctx);
+    return o;
+  } else if (ctx->lexer.curToken.type == TOKEN_MINUS) {
+    advanceLexer(ctx);
+    PObj *ele = parseExpression(ctx, PREFIX_PRECEDENCE);
+    return createNegationObject(ele);
   }
   printf("Error: No prefix function for the token %d\n",
          ctx->lexer.curToken.type);
@@ -320,12 +333,12 @@ PObj *parseExpression(pCtx *ctx, int precedence) {
   }
 
   PObj *left = prefix(ctx);
-  advanceLexer(ctx);
 
   while (ctx->lexer.curToken.type != TOKEN_ENDOFFILE &&
          precedence < getPrecedence(ctx)) {
 
     InfixFn infix = rulesTable[ctx->lexer.curToken.type].infixFn;
+    printf("infix\n");
 
     if (infix == NULL) {
       return left;
@@ -367,6 +380,11 @@ int main(int argc, char **argv) {
 
   fseek(fp, 0, SEEK_END);
   long file_size = ftell(fp);
+  if (file_size == 0) {
+    fprintf(stderr, "File is empty\n");
+    fclose(fp);
+    return 1;
+  }
   fseek(fp, 0, SEEK_SET);
   char *buf = xmalloc(file_size + 1);
   fread(buf, file_size, 1, fp);
