@@ -38,6 +38,8 @@ typedef enum {
   TOKEN_DIV,
   TOKEN_MULT,
   TOKEN_SYMBOL,
+  TOKEN_OPENPAREN,
+  TOKEN_CLOSEPAREN,
   TOKEN_ILLEGAL,
   TOKEN_ENDOFFILE
 } TokenType;
@@ -104,6 +106,8 @@ static pTableEntry rulesTable[] = {
     [TOKEN_MINUS] = {parsePrefix, parseInfix, 2},
     [TOKEN_MULT] = {NULL, parseInfix, 3},
     [TOKEN_DIV] = {NULL, parseInfix, 3},
+    [TOKEN_OPENPAREN] = {parsePrefix, NULL, 0},
+    [TOKEN_CLOSEPAREN] = {NULL, NULL, 0},
     [TOKEN_ENDOFFILE] = {NULL, NULL, 0},
 };
 
@@ -135,7 +139,7 @@ void readNumber(pCtx *ctx) {
 /* Return true if the character 'c' is one of the characters acceptable for our
  * symbols. */
 int isSymbolChar(int c) {
-  char symchars[] = "+-*/";
+  char symchars[] = "+-*/()";
   return c != 0 && (isalpha(c) || strchr(symchars, c) != NULL);
 }
 
@@ -157,6 +161,12 @@ void readSymbol(pCtx *ctx) {
     case '/':
       ctx->lexer.curToken.type = TOKEN_DIV;
       break;
+    case '(':
+      ctx->lexer.curToken.type = TOKEN_OPENPAREN;
+      break;
+    case ')':
+      ctx->lexer.curToken.type = TOKEN_CLOSEPAREN;
+      break;
     default:
       ctx->lexer.curToken.type = TOKEN_ILLEGAL;
       printf("??? - %d\n", s);
@@ -176,10 +186,11 @@ void readEndOfFile(pCtx *ctx) {
 }
 
 void advanceLexer(pCtx *ctx) {
+  while (isspace(ctx->lexer.p[0]))
+    ctx->lexer.p++;
+
   char c = ctx->lexer.p[0];
 
-  while (isspace(c))
-    ctx->lexer.p++;
 
   printf("c: %c\n", c);
 
@@ -285,7 +296,7 @@ void printPObj(PObj *o) {
       printf(" ] ");
       break;
     case NEGATION:
-      printf("(-");
+      printf("(NEGATION ");
       printPObj(o->neg.ele);
       printf(") ");
       break;
@@ -309,6 +320,17 @@ PObj *parsePrefix(pCtx *ctx) {
     advanceLexer(ctx);
     PObj *ele = parseExpression(ctx, PREFIX_PRECEDENCE);
     return createNegationObject(ele);
+  }
+  else if(ctx->lexer.curToken.type == TOKEN_OPENPAREN){
+    advanceLexer(ctx);
+    PObj *innerAST = parseExpression(ctx, 0);
+
+    if(ctx->lexer.curToken.type != TOKEN_CLOSEPAREN){
+      printf("Syntax error: close paren expected ')'\n");
+      exit(1);
+    }
+    advanceLexer(ctx);
+    return innerAST;
   }
   printf("Error: No prefix function for the token %d\n",
          ctx->lexer.curToken.type);
