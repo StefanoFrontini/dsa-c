@@ -191,9 +191,6 @@ void advanceLexer(pCtx *ctx) {
 
   char c = ctx->lexer.p[0];
 
-
-  printf("c: %c\n", c);
-
   if (isdigit(c)) {
     readNumber(ctx);
   } else if (isSymbolChar(c)) {
@@ -320,12 +317,11 @@ PObj *parsePrefix(pCtx *ctx) {
     advanceLexer(ctx);
     PObj *ele = parseExpression(ctx, PREFIX_PRECEDENCE);
     return createNegationObject(ele);
-  }
-  else if(ctx->lexer.curToken.type == TOKEN_OPENPAREN){
+  } else if (ctx->lexer.curToken.type == TOKEN_OPENPAREN) {
     advanceLexer(ctx);
     PObj *innerAST = parseExpression(ctx, 0);
 
-    if(ctx->lexer.curToken.type != TOKEN_CLOSEPAREN){
+    if (ctx->lexer.curToken.type != TOKEN_CLOSEPAREN) {
       printf("Syntax error: close paren expected ')'\n");
       exit(1);
     }
@@ -360,7 +356,6 @@ PObj *parseExpression(pCtx *ctx, int precedence) {
          precedence < getPrecedence(ctx)) {
 
     InfixFn infix = rulesTable[ctx->lexer.curToken.type].infixFn;
-    printf("infix\n");
 
     if (infix == NULL) {
       return left;
@@ -383,6 +378,43 @@ void initContext(pCtx *ctx, char *buf) {
 void freeContext(pCtx *ctx) {
   if (ctx->ast) {
     release(ctx->ast);
+  }
+}
+
+int evalAST(PObj *ast) {
+  switch (ast->type) {
+    case NUMBER:
+      return ast->i;
+
+    case INFIX: {
+      int a = evalAST(ast->infix.left);
+      int b = evalAST(ast->infix.right);
+      switch (ast->infix.operator) {
+        case '+':
+          return a + b;
+        case '-':
+          return a - b;
+        case '*':
+          return a * b;
+        case '/':
+          if (b == 0) {
+            fprintf(stderr, "Runtime error: Division by zero!\n");
+            exit(1);
+          }
+          return a / b;
+        default:
+          fprintf(stderr, "Unknown operator: %c\n", ast->infix.operator);
+          exit(1);
+      }
+    }
+
+    case NEGATION: {
+      return -evalAST(ast->neg.ele);
+    }
+
+    default:
+      fprintf(stderr, "Unknown AST type\n");
+      exit(1);
   }
 }
 
@@ -422,6 +454,9 @@ int main(int argc, char **argv) {
   printf("AST result: \n");
   printPObj(ctx.ast);
   printf("\n");
+
+  int result = evalAST(ctx.ast);
+  printf("Result is: %d\n", result);
 
   freeContext(&ctx);
   free(buf);
