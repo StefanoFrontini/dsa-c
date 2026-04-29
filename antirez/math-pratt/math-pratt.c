@@ -280,6 +280,204 @@ PObj *createNegationObject(PObj *ele) {
   return o;
 }
 
+// Il buffer condiviso passa tramite il puntatore 'sharedBuf'
+void printAST_recursive(PObj *node, char *sharedBuf, int isTail) {
+  if (node == NULL) return;
+
+  // 1. Stampa usando lo stato attuale del buffer
+  printf("%s%s", sharedBuf, isTail ? "└── " : "├── ");
+
+  switch (node->type) {
+    case NUMBER:
+      printf("NUM: %d\n", node->i);
+      break;
+    case INFIX:
+      printf("OP:  %c\n", node->infix.operator);
+      break;
+    case NEGATION:
+      printf("UNARY: -\n");
+      break;
+    default:
+      break;
+  }
+
+  // 2. BACKTRACKING: Salviamo la lunghezza originale
+  size_t originalLen = strlen(sharedBuf);
+
+  // Scegliamo la stringa da accodare
+  const char *appendStr = isTail ? "    " : "│   ";
+
+  // Dobbiamo calcolare quanti byte copiare.
+  // ATTENZIONE: "│   " sembra lungo 4 caratteri, ma '│' in UTF-8
+  // occupa 3 byte! Quindi strlen("│   ") restituisce 6.
+  size_t appendLen = strlen(appendStr);
+
+  // 3. Mutiamo il buffer (con controllo manuale dei limiti!)
+  // Controlliamo che ci sia spazio sufficiente, incluso il byte per '\0'
+  if (originalLen + appendLen < 1024) {
+    // Usiamo memcpy per copiare i byte esatti, PIÙ 1 per includere
+    // il terminatore nullo '\0' che si trova alla fine di appendStr.
+    memcpy(sharedBuf + originalLen, appendStr, appendLen + 1);
+  } else {
+    // Gestione dell'errore (opzionale, ma raccomandata in C puro)
+    fprintf(stderr, "Errore: Buffer dell'albero troppo piccolo!\n");
+    exit(1);
+  }
+  // 4. Chiamate ricorsive (passiamo lo STESSO IDENTICO puntatore fisico)
+  if (node->type == INFIX) {
+    printAST_recursive(node->infix.left, sharedBuf, 0);
+    printAST_recursive(node->infix.right, sharedBuf, 1);
+  } else if (node->type == NEGATION) {
+    printAST_recursive(node->neg.ele, sharedBuf, 1);
+  }
+
+  // 5. RIPRISTINO: Troncamo la stringa, cancellando di netto
+  // le modifiche fatte al punto 3!
+  sharedBuf[originalLen] = '\0';
+}
+
+void printTree(PObj *ast) {
+  printf("AST Structure:\n");
+  if (ast == NULL) return;
+
+  switch (ast->type) {
+    case NUMBER:
+      printf("NUM: %d\n", ast->i);
+      break;
+    case INFIX:
+      printf("OP:  %c\n", ast->infix.operator);
+      break;
+    case NEGATION:
+      printf("UNARY: -\n");
+      break;
+    default:
+      break;
+  }
+
+  // ALLOCAZIONE UNICA SULLO STACK!
+  // Solo 1 KB usato, indipendentemente da quanto è profondo l'albero.
+  char buffer[1024] = ""; // Inizializzato a stringa vuota
+
+  if (ast->type == INFIX) {
+    printAST_recursive(ast->infix.left, buffer, 0);
+    printAST_recursive(ast->infix.right, buffer, 1);
+  } else if (ast->type == NEGATION) {
+    printAST_recursive(ast->neg.ele, buffer, 1);
+  }
+  printf("\n");
+}
+// Funzione di supporto per stampare gli spazi di indentazione
+void printIndent(int indent) {
+  for (int i = 0; i < indent; i++) {
+    printf("  "); // 2 spazi per ogni livello di profondità
+  }
+}
+
+// Funzione ricorsiva DFS per la generazione dell'XML
+void printXML(PObj *node, int indent) {
+  if (node == NULL) return;
+
+  switch (node->type) {
+    case NUMBER:
+      printIndent(indent);
+      printf("<number>%d</number>\n", node->i);
+      break;
+
+    case INFIX:
+      printIndent(indent);
+      printf("<infix>\n"); // Pre-Order
+
+      // 1. Esplora il ramo sinistro (aumentando l'indentazione)
+      printXML(node->infix.left, indent + 1);
+
+      // 2. Stampa l'operatore al centro (In-Order)
+      printIndent(indent + 1);
+      printf("<op>%c</op>\n", node->infix.operator);
+
+      // 3. Esplora il ramo destro
+      printXML(node->infix.right, indent + 1);
+
+      // 4. Chiudi il tag
+      printIndent(indent);
+      printf("</infix>\n"); // Post-Order
+      break;
+
+    case NEGATION:
+      printIndent(indent);
+      printf("<negation>\n");
+
+      // Esplora l'unico figlio
+      printXML(node->neg.ele, indent + 1);
+
+      printIndent(indent);
+      printf("</negation>\n");
+      break;
+
+    default:
+      printIndent(indent);
+      printf("<error>Unknown Node</error>\n");
+      break;
+  }
+}
+
+void printJSON(PObj *node, int indent) {
+  if (node == NULL) {
+    printf("null");
+    return;
+  }
+
+  switch (node->type) {
+    case NUMBER:
+      printf("{\n");
+      printIndent(indent + 1);
+      printf("\"type\": \"Number\",\n");
+      printIndent(indent + 1);
+      printf("\"value\": %d\n", node->i);
+      printIndent(indent);
+      printf("}");
+      break;
+
+    case INFIX:
+      printf("{\n");
+      printIndent(indent + 1);
+      printf("\"type\": \"Infix\",\n");
+
+      printIndent(indent + 1);
+      printf("\"operator\": \"%c\",\n", node->infix.operator);
+
+      printIndent(indent + 1);
+      printf("\"left\": ");
+      printJSON(node->infix.left, indent + 1); // Ricorsione ramo sinistro
+      printf(",\n"); // La virgola separa la chiave "left" dalla chiave "right"
+
+      printIndent(indent + 1);
+      printf("\"right\": ");
+      printJSON(node->infix.right, indent + 1); // Ricorsione ramo destro
+      printf("\n");
+
+      printIndent(indent);
+      printf("}");
+      break;
+
+    case NEGATION:
+      printf("{\n");
+      printIndent(indent + 1);
+      printf("\"type\": \"Negation\",\n");
+
+      printIndent(indent + 1);
+      printf("\"element\": ");
+      printJSON(node->neg.ele, indent + 1); // Ricorsione sul figlio unico
+      printf("\n");
+
+      printIndent(indent);
+      printf("}");
+      break;
+
+    default:
+      printf("null");
+      break;
+  }
+}
 void printPObj(PObj *o) {
   switch (o->type) {
     case NUMBER:
@@ -451,8 +649,13 @@ int main(int argc, char **argv) {
   advanceLexer(&ctx);
   ctx.ast = parseExpression(&ctx, 0);
 
-  printf("AST result: \n");
-  printPObj(ctx.ast);
+  printTree(ctx.ast);
+  printf("XML Representation:\n");
+  printXML(ctx.ast, 0);
+
+  printf("\n");
+  printf("JSON Representation:\n");
+  printJSON(ctx.ast, 0);
   printf("\n");
 
   int result = evalAST(ctx.ast);
