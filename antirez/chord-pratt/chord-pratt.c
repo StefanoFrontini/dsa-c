@@ -52,6 +52,7 @@ typedef struct Lexer {
   char *prg;
   char *p;
   Token curToken;
+  int isNextTokenEmptyString;
 } Lexer;
 
 typedef struct CpCtx {
@@ -102,10 +103,12 @@ void readChord(CpCtx *ctx) {
     exit(1);
   }
   ctx->lexer.p++;
+  if (!isStringConstant(ctx)) {
+    ctx->lexer.isNextTokenEmptyString = 1;
+  }
 
   char *str = xmalloc(len + 1);
   ctx->lexer.curToken.type = TOKEN_CHORD;
-  printf("token type %d\n", ctx->lexer.curToken.type);
   ctx->lexer.curToken.str.ptr = str;
   ctx->lexer.curToken.str.len = len;
   memcpy(ctx->lexer.curToken.str.ptr, start, len);
@@ -130,24 +133,35 @@ void readEndOfFile(CpCtx *ctx) {
 }
 
 void advanceLexer(CpCtx *ctx) {
-  char c = ctx->lexer.p[0];
-  if (isStringConstant(ctx)) {
-    readLyric(ctx);
-  } else if (isBeginningChord(ctx)) {
-    readChord(ctx);
-  } else if (c == '\n' || c == '\r') {
-    readEndOfLine(ctx, c);
-  } else if (c == 0) {
-    readEndOfFile(ctx);
+  if (ctx->lexer.isNextTokenEmptyString) {
+    ctx->lexer.curToken.type = TOKEN_LYRIC;
+    ctx->lexer.curToken.str.ptr = NULL;
+    ctx->lexer.curToken.str.len = 0;
+    ctx->lexer.isNextTokenEmptyString = 0;
   } else {
-    readIllegalChar(ctx, c);
+    char c = ctx->lexer.p[0];
+    if (isStringConstant(ctx)) {
+      readLyric(ctx);
+    } else if (isBeginningChord(ctx)) {
+      readChord(ctx);
+    } else if (c == '\n' || c == '\r') {
+      readEndOfLine(ctx, c);
+    } else if (c == 0) {
+      readEndOfFile(ctx);
+    } else {
+      readIllegalChar(ctx, c);
+    }
   }
 }
 
 void printToken(Token *t) {
   switch (t->type) {
     case TOKEN_LYRIC:
-      printf("Current token is Lyric: %s\n", t->str.ptr);
+      if (t->str.ptr == NULL) {
+        printf("Current token is Empty Lyric: \n");
+      } else {
+        printf("Current token is Lyric: %s\n", t->str.ptr);
+      }
       break;
     case TOKEN_CHORD:
       printf("Current token is Chord: %s\n", t->str.ptr);
@@ -172,6 +186,8 @@ void initContext(CpCtx *ctx, char *buf) {
 
   ctx->lexer.prg = buf;
   ctx->lexer.p = buf;
+  ctx->lexer.isNextTokenEmptyString = 0;
+
 }
 
 /* -------------------------  Main ----------------------------- */
