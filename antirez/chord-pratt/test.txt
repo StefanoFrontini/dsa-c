@@ -1,1 +1,2 @@
-[C][D]aaa
+[C]hello[B]aaa
+bbb[D]ccc
