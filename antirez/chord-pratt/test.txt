@@ -1,2 +1,0 @@
-[C]hello[B]aaa
-bbb[D]ccc

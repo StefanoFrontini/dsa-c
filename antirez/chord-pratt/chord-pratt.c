@@ -32,6 +32,8 @@ typedef enum {
   TOKEN_LYRIC = 0,
   TOKEN_CHORD,
   TOKEN_WORD_MULT,
+  TOKEN_LINE,
+  TOKEN_SONG,
   TOKEN_ENDOFLINE,
   TOKEN_ILLEGAL,
   TOKEN_ENDOFFILE
@@ -48,14 +50,25 @@ typedef struct Token {
   };
 } Token;
 
+typedef enum {
+  STATE_EMPTY_CHORD = 0,
+  STATE_EMPTY_LYRIC,
+  STATE_WORD_MULT,
+  STATE_READING,
+  STATE_START_SONG,
+  STATE_START_ENDOFLINE,
+  STATE_EMPTY_LINE,
+  STATE_EMPTY_CHORD_ENDING,
+  STATE_EMPTY_LYRIC_ENDING,
+  STATE_ENDOFFILE
+} LexerState;
+
 typedef struct Lexer {
   char *prg;
   char *p;
   Token curToken;
-  int isNextTokenEmptyString;
-  int isNextTokenWordMult;
+  LexerState state;
 } Lexer;
-
 
 // AST Object (PObj)
 
@@ -65,7 +78,10 @@ typedef struct PObj {
   int refcount;
   PObjType type;
   union {
-    int i;
+    struct {
+      char *ptr;
+      size_t len;
+    } str;
     struct {
       struct PObj *left;
       char operator;
@@ -98,20 +114,19 @@ typedef struct {
   int precedence;
 } pTableEntry;
 
-PObj *parsePrefix(CpCtx *ctx);
-PObj *parseInfix(CpCtx *ctx, PObj *left);
-PObj *parseExpression(CpCtx *ctx, int precedence);
+// PObj *parsePrefix(CpCtx *ctx);
+// PObj *parseInfix(CpCtx *ctx, PObj *left);
+// PObj *parseExpression(CpCtx *ctx, int precedence);
 
 /* ------------------ Static Parsing Table ---------------- */
 
-static pTableEntry rulesTable[] = {
-    [TOKEN_CHORD] = {parsePrefix, NULL, 0},
-    [TOKEN_LYRIC] = {parsePrefix, NULL, 0},
-    [TOKEN_ENDOFLINE] = {NULL, parseInfix, 2},
-    [TOKEN_WORD_MULT] = {NULL, parseInfix, 3},
-    [TOKEN_ENDOFFILE] = {NULL, NULL, 0},
-};
-
+// static pTableEntry rulesTable[] = {
+//     [TOKEN_CHORD] = {parsePrefix, NULL, 0},
+//     [TOKEN_LYRIC] = {parsePrefix, NULL, 0},
+//     [TOKEN_ENDOFLINE] = {NULL, parseInfix, 2},
+//     [TOKEN_WORD_MULT] = {NULL, parseInfix, 3},
+//     [TOKEN_ENDOFFILE] = {NULL, NULL, 0},
+// };
 
 int isStringConstant(CpCtx *ctx) {
   char c = ctx->lexer.p[0];
@@ -121,9 +136,10 @@ int isStringConstant(CpCtx *ctx) {
 
 void readLyric(CpCtx *ctx) {
   if (ctx->lexer.curToken.type != TOKEN_CHORD) {
-    ctx->lexer.curToken.type = TOKEN_CHORD;
-    ctx->lexer.curToken.str.ptr = NULL;
-    ctx->lexer.curToken.str.len = 0;
+    ctx->lexer.state = STATE_EMPTY_CHORD;
+    // ctx->lexer.curToken.type = TOKEN_CHORD;
+    // ctx->lexer.curToken.str.ptr = NULL;
+    // ctx->lexer.curToken.str.len = 0;
     return;
   }
   char *start = ctx->lexer.p;
@@ -138,9 +154,9 @@ void readLyric(CpCtx *ctx) {
   ctx->lexer.curToken.str.len = len;
   memcpy(ctx->lexer.curToken.str.ptr, start, len);
   ctx->lexer.curToken.str.ptr[len] = 0;
-  if (ctx->lexer.p[0] == '[') {
-    ctx->lexer.isNextTokenWordMult = 1;
-  }
+  // if (ctx->lexer.p[0] == '[') {
+  //   ctx->lexer.state = STATE_WORD_MULT;
+  // }
 }
 
 int isBeginningChord(CpCtx *ctx) {
@@ -167,7 +183,7 @@ void readChord(CpCtx *ctx) {
   }
   ctx->lexer.p++;
   if (!isStringConstant(ctx)) {
-    ctx->lexer.isNextTokenEmptyString = 1;
+    ctx->lexer.state = STATE_EMPTY_LYRIC;
   }
 
   char *str = xmalloc(len + 1);
@@ -182,6 +198,7 @@ void readEndOfLine(CpCtx *ctx, char s) {
   ctx->lexer.curToken.type = TOKEN_ENDOFLINE;
   ctx->lexer.curToken.symbol = s;
   ctx->lexer.p++;
+  ctx->lexer.state = STATE_EMPTY_LINE;
 }
 
 void readIllegalChar(CpCtx *ctx, char s) {
@@ -195,29 +212,109 @@ void readEndOfFile(CpCtx *ctx) {
   ctx->lexer.curToken.symbol = 0;
 }
 
+// Token *createEmptyChordToken(void) {
+//   Token *t = xmalloc(sizeof(Token));
+//   t->type = CHORD_TOKEN;
+//   t->refcount = 1;
+//   t->str.ptr = xmalloc(1);
+//   t->str.ptr[0] = 0;
+//   t->str.len = 0;
+//   return t;
+// }
+
+// Token *createEmptyLyricToken(void) {
+//   Token *t = xmalloc(sizeof(Token));
+//   t->type = LYRIC_TOKEN;
+//   t->refcount = 1;
+//   t->str.ptr = xmalloc(1);
+//   t->str.ptr[0] = 0;
+//   t->str.len = 0;
+//   return t;
+// }
+
 void advanceLexer(CpCtx *ctx) {
-  if (ctx->lexer.isNextTokenEmptyString) {
-    ctx->lexer.curToken.type = TOKEN_LYRIC;
-    ctx->lexer.curToken.str.ptr = NULL;
-    ctx->lexer.curToken.str.len = 0;
-    ctx->lexer.isNextTokenEmptyString = 0;
-  } else if (ctx->lexer.isNextTokenWordMult) {
-    ctx->lexer.curToken.type = TOKEN_WORD_MULT;
-    ctx->lexer.curToken.symbol = '*';
-    ctx->lexer.isNextTokenWordMult = 0;
-  } else {
-    char c = ctx->lexer.p[0];
-    if (isStringConstant(ctx)) {
-      readLyric(ctx);
-    } else if (isBeginningChord(ctx)) {
-      readChord(ctx);
-    } else if (c == '\n' || c == '\r') {
-      readEndOfLine(ctx, c);
-    } else if (c == 0) {
-      readEndOfFile(ctx);
-    } else {
-      readIllegalChar(ctx, c);
+  switch (ctx->lexer.state) {
+    case STATE_START_SONG: {
+      ctx->lexer.curToken.type = TOKEN_SONG;
+      ctx->lexer.curToken.symbol = 'S';
+      ctx->lexer.state = STATE_START_ENDOFLINE;
+      break;
     }
+    case STATE_START_ENDOFLINE: {
+      ctx->lexer.curToken.type = TOKEN_ENDOFLINE;
+      ctx->lexer.curToken.symbol = '\n';
+      ctx->lexer.state = STATE_EMPTY_LINE;
+      break;
+    }
+    case STATE_EMPTY_LINE: {
+      ctx->lexer.curToken.type = TOKEN_LINE;
+      ctx->lexer.curToken.symbol = 'L';
+      ctx->lexer.state = STATE_READING;
+      break;
+    }
+    case STATE_EMPTY_CHORD: {
+      ctx->lexer.curToken.type = TOKEN_CHORD;
+      ctx->lexer.curToken.str.ptr = NULL;
+      ctx->lexer.curToken.str.len = 0;
+      ctx->lexer.state = STATE_READING;
+      break;
+    }
+    case STATE_EMPTY_LYRIC: {
+      ctx->lexer.curToken.type = TOKEN_LYRIC;
+      ctx->lexer.curToken.str.ptr = NULL;
+      ctx->lexer.curToken.str.len = 0;
+      ctx->lexer.state = STATE_READING;
+      break;
+    }
+    case STATE_EMPTY_CHORD_ENDING: {
+      ctx->lexer.curToken.type = TOKEN_CHORD;
+      ctx->lexer.curToken.str.ptr = NULL;
+      ctx->lexer.curToken.str.len = 0;
+      ctx->lexer.state = STATE_EMPTY_LYRIC_ENDING;
+      break;
+    }
+    case STATE_EMPTY_LYRIC_ENDING: {
+      ctx->lexer.curToken.type = TOKEN_LYRIC;
+      ctx->lexer.curToken.str.ptr = NULL;
+      ctx->lexer.curToken.str.len = 0;
+      ctx->lexer.state = STATE_ENDOFFILE;
+      break;
+    }
+    case STATE_ENDOFFILE: {
+       readEndOfFile(ctx);
+       break;
+    }
+    case STATE_READING: {
+      char c = ctx->lexer.p[0];
+      if (isStringConstant(ctx)) {
+        if (ctx->lexer.curToken.type != TOKEN_CHORD) {
+          ctx->lexer.curToken.type = TOKEN_WORD_MULT;
+          ctx->lexer.curToken.symbol = '*';
+          ctx->lexer.state = STATE_EMPTY_CHORD;
+        } else {
+          readLyric(ctx);
+        }
+      } else if (isBeginningChord(ctx)) {
+        if (ctx->lexer.curToken.type != TOKEN_WORD_MULT) {
+          ctx->lexer.curToken.type = TOKEN_WORD_MULT;
+          ctx->lexer.curToken.symbol = '*';
+        } else {
+          readChord(ctx);
+        }
+      } else if (c == '\n' || c == '\r') {
+        readEndOfLine(ctx, c);
+      } else if (c == 0) {
+        ctx->lexer.curToken.type = TOKEN_WORD_MULT;
+        ctx->lexer.curToken.symbol = '*';
+        ctx->lexer.state = STATE_EMPTY_CHORD_ENDING;
+      } else {
+        readIllegalChar(ctx, c);
+      }
+      break;
+    }
+    default:
+      printf("???\n");
+      break;
   }
 }
 
@@ -249,6 +346,12 @@ void printToken(Token *t) {
     case TOKEN_ENDOFFILE:
       printf("Current token is Endoffile:\n");
       break;
+    case TOKEN_LINE:
+      printf("Current token is Empty Line\n");
+      break;
+    case TOKEN_SONG:
+      printf("Current token is Empty Song\n");
+      break;
     default:
       printf("? - %d\n", t->type);
       break;
@@ -260,8 +363,7 @@ void initContext(CpCtx *ctx, char *buf) {
 
   ctx->lexer.prg = buf;
   ctx->lexer.p = buf;
-  ctx->lexer.isNextTokenEmptyString = 0;
-  ctx->lexer.isNextTokenWordMult = 0;
+  ctx->lexer.state = STATE_START_SONG;
 }
 
 /* ------------------  AST Object Management (PObj) ----------------  */
@@ -269,33 +371,33 @@ void initContext(CpCtx *ctx, char *buf) {
 void release(PObj *o);
 
 /* Free an object and all the other nested objects. */
-void freeObject(PObj *o) {
-  switch (o->type) {
-    case INFIX:
-      release(o->infix.left);
-      release(o->infix.right);
-      break;
-    case WORD:
-      break;
-    case NEGATION:
-      release(o->neg.ele);
-      break;
-    default:
-      break;
-  }
-  free(o);
-}
+// void freeObject(PObj *o) {
+//   switch (o->type) {
+//     case INFIX:
+//       release(o->infix.left);
+//       release(o->infix.right);
+//       break;
+//     case WORD:
+//       break;
+//     case NEGATION:
+//       release(o->neg.ele);
+//       break;
+//     default:
+//       break;
+//   }
+//   free(o);
+// }
 
-void retain(PObj *o) {
-  o->refcount++;
-}
+// void retain(PObj *o) {
+//   o->refcount++;
+// }
 
-void release(PObj *o) {
-  if (!o) return;
-  assert(o->refcount > 0);
-  o->refcount--;
-  if (o->refcount == 0) freeObject(o);
-}
+// void release(PObj *o) {
+//   if (!o) return;
+//   assert(o->refcount > 0);
+//   o->refcount--;
+//   if (o->refcount == 0) freeObject(o);
+// }
 
 PObj *createObject(PObjType type) {
   PObj *o = xmalloc(sizeof(PObj));
@@ -304,9 +406,24 @@ PObj *createObject(PObjType type) {
   return o;
 }
 
-PObj *createLyricObject(int n) {
-  PObj *o = createObject();
-  o->i = n;
+PObj *createSongObject(void) {
+  PObj *o = createObject(SONG);
+  o->list.ele = NULL;
+  o->list.len = 0;
+  return o;
+}
+
+PObj *createLineObject(void) {
+  PObj *o = createObject(LINE);
+  o->list.ele = NULL;
+  o->list.len = 0;
+  return o;
+}
+
+PObj *createWordObject(void) {
+  PObj *o = createObject(WORD);
+  o->list.ele = NULL;
+  o->list.len = 0;
   return o;
 }
 
@@ -318,77 +435,97 @@ PObj *createInfixObject(PObj *left, char operator, PObj *right) {
   return o;
 }
 
-PObj *createNegationObject(PObj *ele) {
-  PObj *o = createObject(NEGATION);
-  o->neg.ele = ele;
+PObj *createChordObject(char *str, size_t len) {
+  PObj *o = createObject(CHORD);
+  if (len > 0) {
+    o->str.ptr = xmalloc(len + 1);
+    memcpy(o->str.ptr, str, len);
+    o->str.ptr[len] = 0;
+  } else {
+    o->str.ptr = xmalloc(1);
+    o->str.ptr[0] = 0;
+  }
+  o->str.len = len;
   return o;
 }
 
+PObj *createLyricObject(char *str, size_t len) {
+  PObj *o = createObject(LYRIC);
+  if (len > 0) {
+    o->str.ptr = xmalloc(len + 1);
+    memcpy(o->str.ptr, str, len);
+    o->str.ptr[len] = 0;
+  } else {
+    o->str.ptr = xmalloc(1);
+    o->str.ptr[0] = 0;
+  }
+  o->str.len = len;
+  return o;
+}
 
 /* ------------------  Pratt Parser logic ----------------  */
 
-int getPrecedence(CpCtx *ctx) {
-  return rulesTable[ctx->lexer.curToken.type].precedence;
-}
+// int getPrecedence(CpCtx *ctx) {
+//   return rulesTable[ctx->lexer.curToken.type].precedence;
+// }
 
-PObj *parsePrefix(CpCtx *ctx) {
-  if (ctx->lexer.curToken.type == TOKEN_LYRIC) {
-    PObj *o = createNumberObject(ctx->lexer.curToken.i);
-    advanceLexer(ctx);
-    return o;
-  } else if (ctx->lexer.curToken.type == TOKEN_MINUS) {
-    advanceLexer(ctx);
-    PObj *ele = parseExpression(ctx, PREFIX_PRECEDENCE);
-    return createNegationObject(ele);
-  } else if (ctx->lexer.curToken.type == TOKEN_OPENPAREN) {
-    advanceLexer(ctx);
-    PObj *innerAST = parseExpression(ctx, 0);
+// PObj *parsePrefix(CpCtx *ctx) {
+//   if (ctx->lexer.curToken.type == TOKEN_LYRIC) {
+//     PObj *o = createNumberObject(ctx->lexer.curToken.i);
+//     advanceLexer(ctx);
+//     return o;
+//   } else if (ctx->lexer.curToken.type == TOKEN_MINUS) {
+//     advanceLexer(ctx);
+//     PObj *ele = parseExpression(ctx, PREFIX_PRECEDENCE);
+//     return createNegationObject(ele);
+//   } else if (ctx->lexer.curToken.type == TOKEN_OPENPAREN) {
+//     advanceLexer(ctx);
+//     PObj *innerAST = parseExpression(ctx, 0);
 
-    if (ctx->lexer.curToken.type != TOKEN_CLOSEPAREN) {
-      printf("Syntax error: close paren expected ')'\n");
-      exit(1);
-    }
-    advanceLexer(ctx);
-    return innerAST;
-  }
-  printf("Error: No prefix function for the token %d\n",
-         ctx->lexer.curToken.type);
-  return NULL;
-}
+//     if (ctx->lexer.curToken.type != TOKEN_CLOSEPAREN) {
+//       printf("Syntax error: close paren expected ')'\n");
+//       exit(1);
+//     }
+//     advanceLexer(ctx);
+//     return innerAST;
+//   }
+//   printf("Error: No prefix function for the token %d\n",
+//          ctx->lexer.curToken.type);
+//   return NULL;
+// }
 
-PObj *parseInfix(CpCtx *ctx, PObj *left) {
-  int precedence = getPrecedence(ctx);
-  char op = ctx->lexer.curToken.symbol;
-  advanceLexer(ctx);
-  PObj *right = parseExpression(ctx, precedence);
-  return createInfixObject(left, op, right);
-}
+// PObj *parseInfix(CpCtx *ctx, PObj *left) {
+//   int precedence = getPrecedence(ctx);
+//   char op = ctx->lexer.curToken.symbol;
+//   advanceLexer(ctx);
+//   PObj *right = parseExpression(ctx, precedence);
+//   return createInfixObject(left, op, right);
+// }
 
-PObj *parseExpression(CpCtx *ctx, int precedence) {
-  TokenType type = ctx->lexer.curToken.type;
-  PrefixFn prefix = rulesTable[type].prefixFn;
+// PObj *parseExpression(CpCtx *ctx, int precedence) {
+//   TokenType type = ctx->lexer.curToken.type;
+//   PrefixFn prefix = rulesTable[type].prefixFn;
 
-  if (prefix == NULL) {
-    printf("Error: Token %d cannot be used in prefix notation \n", type);
-    return NULL;
-  }
+//   if (prefix == NULL) {
+//     printf("Error: Token %d cannot be used in prefix notation \n", type);
+//     return NULL;
+//   }
 
-  PObj *left = prefix(ctx);
+//   PObj *left = prefix(ctx);
 
-  while (ctx->lexer.curToken.type != TOKEN_ENDOFFILE &&
-         precedence < getPrecedence(ctx)) {
+//   while (ctx->lexer.curToken.type != TOKEN_ENDOFFILE &&
+//          precedence < getPrecedence(ctx)) {
 
-    InfixFn infix = rulesTable[ctx->lexer.curToken.type].infixFn;
+//     InfixFn infix = rulesTable[ctx->lexer.curToken.type].infixFn;
 
-    if (infix == NULL) {
-      return left;
-    }
+//     if (infix == NULL) {
+//       return left;
+//     }
 
-    left = infix(ctx, left);
-  }
-  return left;
-}
-
+//     left = infix(ctx, left);
+//   }
+//   return left;
+// }
 
 /* -------------------------  Main ----------------------------- */
 
@@ -406,11 +543,11 @@ int main(int argc, char **argv) {
 
   fseek(fp, 0, SEEK_END);
   long file_size = ftell(fp);
-  if (file_size == 0) {
-    fprintf(stderr, "File is empty\n");
-    fclose(fp);
-    return 1;
-  }
+  // if (file_size == 0) {
+  //   fprintf(stderr, "File is empty\n");
+  //   fclose(fp);
+  //   return 1;
+  // }
   fseek(fp, 0, SEEK_SET);
   char *buf = xmalloc(file_size + 1);
   fread(buf, file_size, 1, fp);
