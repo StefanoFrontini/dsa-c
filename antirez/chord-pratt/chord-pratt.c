@@ -6,6 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#define PREFIX_PRECEDENCE 6
+
 /* ------------------------ Allocation wrappers ----------------------------*/
 
 void *xmalloc(size_t size) {
@@ -114,19 +116,21 @@ typedef struct {
   int precedence;
 } pTableEntry;
 
-// PObj *parsePrefix(CpCtx *ctx);
-// PObj *parseInfix(CpCtx *ctx, PObj *left);
-// PObj *parseExpression(CpCtx *ctx, int precedence);
+PObj *parsePrefix(CpCtx *ctx);
+PObj *parseInfix(CpCtx *ctx, PObj *left);
+PObj *parseExpression(CpCtx *ctx, int precedence);
 
 /* ------------------ Static Parsing Table ---------------- */
 
-// static pTableEntry rulesTable[] = {
-//     [TOKEN_CHORD] = {parsePrefix, NULL, 0},
-//     [TOKEN_LYRIC] = {parsePrefix, NULL, 0},
-//     [TOKEN_ENDOFLINE] = {NULL, parseInfix, 2},
-//     [TOKEN_WORD_MULT] = {NULL, parseInfix, 3},
-//     [TOKEN_ENDOFFILE] = {NULL, NULL, 0},
-// };
+static pTableEntry rulesTable[] = {
+    [TOKEN_CHORD] = {parsePrefix, NULL, 0},
+    [TOKEN_LYRIC] = {parsePrefix, NULL, 0},
+    [TOKEN_LINE] = {parsePrefix, NULL, 0},
+    [TOKEN_SONG] = {parsePrefix, NULL, 0},
+    [TOKEN_ENDOFLINE] = {NULL, parseInfix, 2},
+    [TOKEN_WORD_MULT] = {NULL, parseInfix, 3},
+    [TOKEN_ENDOFFILE] = {NULL, NULL, 0},
+};
 
 int isStringConstant(CpCtx *ctx) {
   char c = ctx->lexer.p[0];
@@ -135,13 +139,6 @@ int isStringConstant(CpCtx *ctx) {
 }
 
 void readLyric(CpCtx *ctx) {
-  if (ctx->lexer.curToken.type != TOKEN_CHORD) {
-    ctx->lexer.state = STATE_EMPTY_CHORD;
-    // ctx->lexer.curToken.type = TOKEN_CHORD;
-    // ctx->lexer.curToken.str.ptr = NULL;
-    // ctx->lexer.curToken.str.len = 0;
-    return;
-  }
   char *start = ctx->lexer.p;
   while (isStringConstant(ctx)) {
     ctx->lexer.p++;
@@ -154,9 +151,6 @@ void readLyric(CpCtx *ctx) {
   ctx->lexer.curToken.str.len = len;
   memcpy(ctx->lexer.curToken.str.ptr, start, len);
   ctx->lexer.curToken.str.ptr[len] = 0;
-  // if (ctx->lexer.p[0] == '[') {
-  //   ctx->lexer.state = STATE_WORD_MULT;
-  // }
 }
 
 int isBeginningChord(CpCtx *ctx) {
@@ -212,26 +206,6 @@ void readEndOfFile(CpCtx *ctx) {
   ctx->lexer.curToken.symbol = 0;
 }
 
-// Token *createEmptyChordToken(void) {
-//   Token *t = xmalloc(sizeof(Token));
-//   t->type = CHORD_TOKEN;
-//   t->refcount = 1;
-//   t->str.ptr = xmalloc(1);
-//   t->str.ptr[0] = 0;
-//   t->str.len = 0;
-//   return t;
-// }
-
-// Token *createEmptyLyricToken(void) {
-//   Token *t = xmalloc(sizeof(Token));
-//   t->type = LYRIC_TOKEN;
-//   t->refcount = 1;
-//   t->str.ptr = xmalloc(1);
-//   t->str.ptr[0] = 0;
-//   t->str.len = 0;
-//   return t;
-// }
-
 void advanceLexer(CpCtx *ctx) {
   switch (ctx->lexer.state) {
     case STATE_START_SONG: {
@@ -281,8 +255,8 @@ void advanceLexer(CpCtx *ctx) {
       break;
     }
     case STATE_ENDOFFILE: {
-       readEndOfFile(ctx);
-       break;
+      readEndOfFile(ctx);
+      break;
     }
     case STATE_READING: {
       char c = ctx->lexer.p[0];
@@ -463,69 +437,177 @@ PObj *createLyricObject(char *str, size_t len) {
   return o;
 }
 
+void listPushObj(PObj *l, PObj *ele) {
+  l->list.ele = xrealloc(l->list.ele, sizeof(PObj *) * (l->list.len + 1));
+  l->list.ele[l->list.len] = ele;
+  l->list.len++;
+}
+
 /* ------------------  Pratt Parser logic ----------------  */
 
-// int getPrecedence(CpCtx *ctx) {
-//   return rulesTable[ctx->lexer.curToken.type].precedence;
-// }
+int getPrecedence(CpCtx *ctx) {
+  return rulesTable[ctx->lexer.curToken.type].precedence;
+}
 
-// PObj *parsePrefix(CpCtx *ctx) {
-//   if (ctx->lexer.curToken.type == TOKEN_LYRIC) {
-//     PObj *o = createNumberObject(ctx->lexer.curToken.i);
-//     advanceLexer(ctx);
-//     return o;
-//   } else if (ctx->lexer.curToken.type == TOKEN_MINUS) {
-//     advanceLexer(ctx);
-//     PObj *ele = parseExpression(ctx, PREFIX_PRECEDENCE);
-//     return createNegationObject(ele);
-//   } else if (ctx->lexer.curToken.type == TOKEN_OPENPAREN) {
-//     advanceLexer(ctx);
-//     PObj *innerAST = parseExpression(ctx, 0);
+PObj *parsePrefix(CpCtx *ctx) {
+  if (ctx->lexer.curToken.type == TOKEN_LYRIC) {
+    PObj *o = createLyricObject(ctx->lexer.curToken.str.ptr,
+                                ctx->lexer.curToken.str.len);
+    advanceLexer(ctx);
+    return o;
+  } else if (ctx->lexer.curToken.type == TOKEN_CHORD) {
+    PObj *word = createWordObject();
+    PObj *chord = createChordObject(ctx->lexer.curToken.str.ptr,
+                                    ctx->lexer.curToken.str.len);
+    advanceLexer(ctx);
+    PObj *lyric = parseExpression(ctx, PREFIX_PRECEDENCE);
+    listPushObj(word, chord);
+    listPushObj(word, lyric);
+    return word;
+  } else if (ctx->lexer.curToken.type == TOKEN_LINE) {
+    PObj *o = createLineObject();
+    advanceLexer(ctx);
+    return o;
+  } else if (ctx->lexer.curToken.type == TOKEN_SONG) {
+    PObj *o = createSongObject();
+    advanceLexer(ctx);
+    return o;
+  }
+  printf("Error: No prefix function for the token %d\n",
+         ctx->lexer.curToken.type);
+  return NULL;
+}
 
-//     if (ctx->lexer.curToken.type != TOKEN_CLOSEPAREN) {
-//       printf("Syntax error: close paren expected ')'\n");
-//       exit(1);
-//     }
-//     advanceLexer(ctx);
-//     return innerAST;
-//   }
-//   printf("Error: No prefix function for the token %d\n",
-//          ctx->lexer.curToken.type);
-//   return NULL;
-// }
+PObj *parseInfix(CpCtx *ctx, PObj *left) {
+  int precedence = getPrecedence(ctx);
+  char op = ctx->lexer.curToken.symbol;
+  advanceLexer(ctx);
+  PObj *right = parseExpression(ctx, precedence);
+  return createInfixObject(left, op, right);
+}
 
-// PObj *parseInfix(CpCtx *ctx, PObj *left) {
-//   int precedence = getPrecedence(ctx);
-//   char op = ctx->lexer.curToken.symbol;
-//   advanceLexer(ctx);
-//   PObj *right = parseExpression(ctx, precedence);
-//   return createInfixObject(left, op, right);
-// }
+PObj *parseExpression(CpCtx *ctx, int precedence) {
+  TokenType type = ctx->lexer.curToken.type;
+  PrefixFn prefix = rulesTable[type].prefixFn;
 
-// PObj *parseExpression(CpCtx *ctx, int precedence) {
-//   TokenType type = ctx->lexer.curToken.type;
-//   PrefixFn prefix = rulesTable[type].prefixFn;
+  if (prefix == NULL) {
+    printf("Error: Token %d cannot be used in prefix notation \n", type);
+    return NULL;
+  }
 
-//   if (prefix == NULL) {
-//     printf("Error: Token %d cannot be used in prefix notation \n", type);
-//     return NULL;
-//   }
+  PObj *left = prefix(ctx);
 
-//   PObj *left = prefix(ctx);
+  while (ctx->lexer.curToken.type != TOKEN_ENDOFFILE &&
+         precedence < getPrecedence(ctx)) {
 
-//   while (ctx->lexer.curToken.type != TOKEN_ENDOFFILE &&
-//          precedence < getPrecedence(ctx)) {
+    InfixFn infix = rulesTable[ctx->lexer.curToken.type].infixFn;
 
-//     InfixFn infix = rulesTable[ctx->lexer.curToken.type].infixFn;
+    if (infix == NULL) {
+      return left;
+    }
 
-//     if (infix == NULL) {
-//       return left;
-//     }
+    left = infix(ctx, left);
+  }
+  return left;
+}
 
-//     left = infix(ctx, left);
-//   }
-//   return left;
-// }
+// Funzione di supporto per stampare gli spazi di indentazione
+void printIndent(int indent) {
+  for (int i = 0; i < indent; i++) {
+    printf("  "); // 2 spazi per ogni livello di profondità
+  }
+}
+
+// typedef enum { LYRIC = 0, CHORD, INFIX, WORD, LINE, SONG } PObjType;
+// Funzione ricorsiva DFS per la generazione dell'XML
+void printXML(PObj *node, int indent) {
+  if (node == NULL) return;
+
+  switch (node->type) {
+    case LYRIC:
+      printIndent(indent);
+      if (node->str.len == 0) {
+        printf("<lyric>empty_lyric</lyric>\n");
+      } else {
+        printf("<lyric>%s</lyric>\n", node->str.ptr);
+      }
+      break;
+
+    case CHORD:
+      printIndent(indent);
+      if (node->str.len == 0) {
+        printf("<chord>empty_chord</chord>\n");
+      } else {
+        printf("<chord>%s</chord>\n", node->str.ptr);
+      }
+      break;
+
+    case INFIX:
+      printIndent(indent);
+      printf("<infix>\n"); // Pre-Order
+
+      // 1. Esplora il ramo sinistro (aumentando l'indentazione)
+      printXML(node->infix.left, indent + 1);
+
+      // 2. Stampa l'operatore al centro (In-Order)
+      printIndent(indent + 1);
+      printf("<op>%c</op>\n", node->infix.operator == '\n' ? '+' : '*');
+
+      // 3. Esplora il ramo destro
+      printXML(node->infix.right, indent + 1);
+
+      // 4. Chiudi il tag
+      printIndent(indent);
+      printf("</infix>\n"); // Post-Order
+      break;
+
+    case WORD:
+      printIndent(indent);
+      printf("<word>\n");
+
+      printXML(node->word.chord, indent + 1);
+      printXML(node->word.lyric, indent + 1);
+
+      printIndent(indent);
+      printf("</word>\n");
+      break;
+
+    case LINE:
+      printIndent(indent);
+      printf("<line>\n");
+      if (node->list.len == 0) {
+        printIndent(indent);
+        printf("empty_line\n");
+      } else {
+        for (size_t i = 0; i < node->list.len; i++) {
+          printXML(node->list.ele[i], indent + 1);
+        }
+      }
+      printIndent(indent);
+      printf("</line>\n");
+      break;
+
+    case SONG:
+      printIndent(indent);
+      printf("<song>\n");
+      if (node->list.len == 0) {
+        printIndent(indent);
+        printf("empty_song\n");
+      } else {
+        for (size_t i = 0; i < node->list.len; i++) {
+          printXML(node->list.ele[i], indent + 1);
+        }
+      }
+      printIndent(indent);
+      printf("</song>\n");
+      break;
+
+    default:
+      printIndent(indent);
+      printf("<error>Unknown Node</error>\n");
+      break;
+  }
+}
 
 /* -------------------------  Main ----------------------------- */
 
@@ -543,11 +625,6 @@ int main(int argc, char **argv) {
 
   fseek(fp, 0, SEEK_END);
   long file_size = ftell(fp);
-  // if (file_size == 0) {
-  //   fprintf(stderr, "File is empty\n");
-  //   fclose(fp);
-  //   return 1;
-  // }
   fseek(fp, 0, SEEK_SET);
   char *buf = xmalloc(file_size + 1);
   fread(buf, file_size, 1, fp);
@@ -558,10 +635,17 @@ int main(int argc, char **argv) {
   initContext(&ctx, buf);
 
   advanceLexer(&ctx);
-  while (ctx.lexer.curToken.type != TOKEN_ENDOFFILE) {
-    printToken(&ctx.lexer.curToken);
-    advanceLexer(&ctx);
-  }
+
+  ctx.ast = parseExpression(&ctx, 0);
+
+  printf("XML Representation:\n");
+  printXML(ctx.ast, 0);
+
+  printf("\n");
+  // while (ctx.lexer.curToken.type != TOKEN_ENDOFFILE) {
+  //   printToken(&ctx.lexer.curToken);
+  //   advanceLexer(&ctx);
+  // }
   free(buf);
   return 0;
 }
