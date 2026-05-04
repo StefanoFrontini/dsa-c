@@ -130,6 +130,7 @@ static pTableEntry rulesTable[] = {
     [TOKEN_ENDOFLINE] = {NULL, parseInfix, 2},
     [TOKEN_WORD_MULT] = {NULL, parseInfix, 3},
     [TOKEN_ENDOFFILE] = {NULL, NULL, 0},
+    [TOKEN_ILLEGAL] = {NULL, NULL, 0},
 };
 
 int isStringConstant(CpCtx *ctx) {
@@ -204,6 +205,46 @@ void readIllegalChar(CpCtx *ctx, char s) {
 void readEndOfFile(CpCtx *ctx) {
   ctx->lexer.curToken.type = TOKEN_ENDOFFILE;
   ctx->lexer.curToken.symbol = 0;
+}
+
+void printToken(Token *t) {
+  switch (t->type) {
+    case TOKEN_LYRIC:
+      if (t->str.ptr == NULL) {
+        printf("Current token is Empty Lyric: \n");
+      } else {
+        printf("Current token is Lyric: %s\n", t->str.ptr);
+      }
+      break;
+    case TOKEN_CHORD:
+      if (t->str.ptr == NULL) {
+        printf("Current token is Empty Chord: \n");
+      } else {
+        printf("Current token is Chord: %s\n", t->str.ptr);
+      }
+      break;
+    case TOKEN_WORD_MULT:
+      printf("Current token is WORD_MULT: %c\n", t->symbol);
+      break;
+    case TOKEN_ILLEGAL:
+      printf("Current token is Illegal: %c\n", t->symbol);
+      break;
+    case TOKEN_ENDOFLINE:
+      printf("Current token is: 'newLine'\n");
+      break;
+    case TOKEN_ENDOFFILE:
+      printf("Current token is Endoffile:\n");
+      break;
+    case TOKEN_LINE:
+      printf("Current token is Empty Line\n");
+      break;
+    case TOKEN_SONG:
+      printf("Current token is Empty Song\n");
+      break;
+    default:
+      printf("? - %d\n", t->type);
+      break;
+  }
 }
 
 void advanceLexer(CpCtx *ctx) {
@@ -290,46 +331,8 @@ void advanceLexer(CpCtx *ctx) {
       printf("???\n");
       break;
   }
-}
 
-void printToken(Token *t) {
-  switch (t->type) {
-    case TOKEN_LYRIC:
-      if (t->str.ptr == NULL) {
-        printf("Current token is Empty Lyric: \n");
-      } else {
-        printf("Current token is Lyric: %s\n", t->str.ptr);
-      }
-      break;
-    case TOKEN_CHORD:
-      if (t->str.ptr == NULL) {
-        printf("Current token is Empty Chord: \n");
-      } else {
-        printf("Current token is Chord: %s\n", t->str.ptr);
-      }
-      break;
-    case TOKEN_WORD_MULT:
-      printf("Current token is WORD_MULT: %c\n", t->symbol);
-      break;
-    case TOKEN_ILLEGAL:
-      printf("Current token is Illegal: %c\n", t->symbol);
-      break;
-    case TOKEN_ENDOFLINE:
-      printf("Current token is: 'newLine'\n");
-      break;
-    case TOKEN_ENDOFFILE:
-      printf("Current token is Endoffile:\n");
-      break;
-    case TOKEN_LINE:
-      printf("Current token is Empty Line\n");
-      break;
-    case TOKEN_SONG:
-      printf("Current token is Empty Song\n");
-      break;
-    default:
-      printf("? - %d\n", t->type);
-      break;
-  }
+  // printToken(&ctx->lexer.curToken);
 }
 
 void initContext(CpCtx *ctx, char *buf) {
@@ -456,14 +459,14 @@ PObj *parsePrefix(CpCtx *ctx) {
     advanceLexer(ctx);
     return o;
   } else if (ctx->lexer.curToken.type == TOKEN_CHORD) {
-    PObj *word = createWordObject();
+    PObj *o = createWordObject();
     PObj *chord = createChordObject(ctx->lexer.curToken.str.ptr,
                                     ctx->lexer.curToken.str.len);
     advanceLexer(ctx);
     PObj *lyric = parseExpression(ctx, PREFIX_PRECEDENCE);
-    listPushObj(word, chord);
-    listPushObj(word, lyric);
-    return word;
+    o->word.chord = chord;
+    o->word.lyric =lyric;
+    return o;
   } else if (ctx->lexer.curToken.type == TOKEN_LINE) {
     PObj *o = createLineObject();
     advanceLexer(ctx);
@@ -604,7 +607,7 @@ void printXML(PObj *node, int indent) {
 
     default:
       printIndent(indent);
-      printf("<error>Unknown Node</error>\n");
+      printf("<error>Unknown Node %d</error>\n", node->type);
       break;
   }
 }

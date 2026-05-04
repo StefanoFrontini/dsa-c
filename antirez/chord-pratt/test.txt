@@ -1,2 +1,2 @@
-[A]aaa
+[A]aaa[D][C]
 [B]bbb
