@@ -248,6 +248,11 @@ void printToken(Token *t) {
 }
 
 void advanceLexer(CpCtx *ctx) {
+  if ((ctx->lexer.curToken.type == TOKEN_CHORD ||
+       ctx->lexer.curToken.type == TOKEN_LYRIC) &&
+      ctx->lexer.curToken.str.len > 0) {
+    free(ctx->lexer.curToken.str.ptr);
+  }
   switch (ctx->lexer.state) {
     case STATE_START_SONG: {
       ctx->lexer.curToken.type = TOKEN_SONG;
@@ -348,33 +353,44 @@ void initContext(CpCtx *ctx, char *buf) {
 void release(PObj *o);
 
 /* Free an object and all the other nested objects. */
-// void freeObject(PObj *o) {
-//   switch (o->type) {
-//     case INFIX:
-//       release(o->infix.left);
-//       release(o->infix.right);
-//       break;
-//     case WORD:
-//       break;
-//     case NEGATION:
-//       release(o->neg.ele);
-//       break;
-//     default:
-//       break;
-//   }
-//   free(o);
-// }
+void freeObject(PObj *o) {
+  switch (o->type) {
+    case INFIX:
+      release(o->infix.left);
+      release(o->infix.right);
+      break;
+    case WORD:
+      release(o->word.chord);
+      release(o->word.lyric);
+      break;
 
-// void retain(PObj *o) {
-//   o->refcount++;
-// }
+    case SONG:
+    case LINE:
+      for (size_t i = 0; i < o->list.len; i++) {
+        release(o->list.ele[i]);
+      }
+      free(o->list.ele);
+      break;
+    case CHORD:
+    case LYRIC:
+      free(o->str.ptr);
+      break;
+    default:
+      break;
+  }
+  free(o);
+}
 
-// void release(PObj *o) {
-//   if (!o) return;
-//   assert(o->refcount > 0);
-//   o->refcount--;
-//   if (o->refcount == 0) freeObject(o);
-// }
+void retain(PObj *o) {
+  o->refcount++;
+}
+
+void release(PObj *o) {
+  if (!o) return;
+  assert(o->refcount > 0);
+  o->refcount--;
+  if (o->refcount == 0) freeObject(o);
+}
 
 PObj *createObject(PObjType type) {
   PObj *o = xmalloc(sizeof(PObj));
@@ -465,7 +481,7 @@ PObj *parsePrefix(CpCtx *ctx) {
     advanceLexer(ctx);
     PObj *lyric = parseExpression(ctx, PREFIX_PRECEDENCE);
     o->word.chord = chord;
-    o->word.lyric =lyric;
+    o->word.lyric = lyric;
     return o;
   } else if (ctx->lexer.curToken.type == TOKEN_LINE) {
     PObj *o = createLineObject();
@@ -612,6 +628,29 @@ void printXML(PObj *node, int indent) {
   }
 }
 
+PObj *evalAST(PObj *ast) {
+  switch (ast->type) {
+    case CHORD:
+    case LYRIC:
+    case LINE:
+    case SONG:
+    case WORD:
+      return ast;
+
+    case INFIX: {
+      PObj *a = evalAST(ast->infix.left);
+      PObj *b = evalAST(ast->infix.right);
+      listPushObj(a, b);
+      retain(b);
+      return a;
+    }
+
+    default:
+      fprintf(stderr, "Unknown AST type\n");
+      exit(1);
+  }
+}
+
 /* -------------------------  Main ----------------------------- */
 
 int main(int argc, char **argv) {
@@ -645,10 +684,16 @@ int main(int argc, char **argv) {
   printXML(ctx.ast, 0);
 
   printf("\n");
+  PObj *result = evalAST(ctx.ast);
+  printf("XML Result Representation:\n");
+  printXML(result, 0);
+  printf("\n");
   // while (ctx.lexer.curToken.type != TOKEN_ENDOFFILE) {
   //   printToken(&ctx.lexer.curToken);
   //   advanceLexer(&ctx);
   // }
+  release(ctx.ast);
+  release(result);
   free(buf);
   return 0;
 }
