@@ -685,7 +685,6 @@ int main(int argc, char **argv) {
 
   printf("\n");
   PObj *result = evalAST(ctx.ast);
-  retain(result);
   printf("XML Result Representation:\n");
   printXML(result, 0);
   printf("\n");
@@ -694,7 +693,6 @@ int main(int argc, char **argv) {
   //   advanceLexer(&ctx);
   // }
   release(ctx.ast);
-  release(result);
   free(buf);
   return 0;
 }
