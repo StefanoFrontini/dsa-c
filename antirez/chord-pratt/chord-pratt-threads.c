@@ -1,14 +1,14 @@
+
 #include <assert.h>
 #include <ctype.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <pthread.h>
 
 #define PREFIX_PRECEDENCE 6
-#define THREAD_COUNT 2
 
 /* ------------------------ Allocation wrappers ----------------------------*/
 
@@ -652,20 +652,41 @@ PObj *evalAST(PObj *ast) {
       exit(1);
   }
 }
-// ritorna uno struct con dentro un array di contesti e la grandezza dell'array
-/*
 
-void initContext(CpCtx *ctx, char *buf) {
-  memset(ctx, 0, sizeof(CpCtx));
+struct Buffers {
+  char *buf1;
+  char *buf2;
+};
 
-  ctx->lexer.prg = buf;
-  ctx->lexer.p = buf;
-  ctx->lexer.state = STATE_START_SONG;
+void split(char *buf, struct Buffers *bufs, long len) {
+
+  long middle = len / 2;
+  long index = middle;
+
+  for (; index < len; index++) {
+    if (buf[index] == '\n') {
+      break;
+    }
+  }
+  bufs->buf1 = buf;
+  if (index < len) {
+    bufs->buf1[index] = 0;
+    char *buf2 = xmalloc(len - index);
+    memcpy(buf2, buf + index + 1, len - index);
+    bufs->buf2 = buf2;
+  }
 }
 
-*/
-
 /* -------------------------  Main ----------------------------- */
+
+void *parse(void *arg) {
+  CpCtx *ctx = (CpCtx *)arg;
+  advanceLexer(ctx);
+
+  ctx->ast = parseExpression(ctx, 0);
+
+  pthread_exit(NULL);
+}
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -687,27 +708,45 @@ int main(int argc, char **argv) {
   buf[file_size] = 0;
   fclose(fp);
 
-  CpCtx ctx;
+  struct Buffers bufs;
+  bufs.buf1 = NULL;
+  bufs.buf2 = NULL;
+  split(buf, &bufs, file_size);
 
-  initContext(&ctx, buf);
+  CpCtx ctx1;
+  CpCtx ctx2;
 
-  advanceLexer(&ctx);
+  initContext(&ctx1, bufs.buf1);
+  initContext(&ctx2, bufs.buf2);
 
-  ctx.ast = parseExpression(&ctx, 0);
+  pthread_t t1;
+  pthread_t t2;
+  pthread_create(&t1, NULL, parse, &ctx1);
+  pthread_create(&t2, NULL, parse, &ctx2);
 
-  printf("XML Representation:\n");
-  printXML(ctx.ast, 0);
+  pthread_join(t1, NULL);
 
-  printf("\n");
-  PObj *result = evalAST(ctx.ast);
+  pthread_join(t2, NULL);
+
+  PObj *result1 = evalAST(ctx1.ast);
+  PObj *result2 = evalAST(ctx2.ast);
+
+  //REDUCE
+  for (size_t i = 0; i < result2->list.len; i++) {
+    PObj *line = result2->list.ele[i];
+    listPushObj(result1, line);
+    retain(line);
+  }
   printf("XML Result Representation:\n");
-  printXML(result, 0);
+  printXML(result1, 0);
   printf("\n");
-  // while (ctx.lexer.curToken.type != TOKEN_ENDOFFILE) {
-  //   printToken(&ctx.lexer.curToken);
-  //   advanceLexer(&ctx);
-  // }
-  release(ctx.ast);
+
+  release(ctx1.ast);
+  release(ctx2.ast);
   free(buf);
+  if (bufs.buf2 != NULL) {
+
+    free(bufs.buf2);
+  }
   return 0;
 }
