@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
 #define PREFIX_PRECEDENCE 6
@@ -689,10 +691,15 @@ void *parse(void *arg) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <filename> [--multi]\n", argv[0]);
     return 1;
   }
+  int thread_usage = 0;
+  if (argc == 3 && strcmp(argv[2], "--multi") == 0) {
+    thread_usage = 1;
+  }
+  thread_usage ? printf("Multithreading ON\n") : printf("Multithreading OFF\n");
 
   FILE *fp = fopen(argv[1], "r");
   if (fp == NULL) {
@@ -708,45 +715,93 @@ int main(int argc, char **argv) {
   buf[file_size] = 0;
   fclose(fp);
 
-  struct Buffers bufs;
-  bufs.buf1 = NULL;
-  bufs.buf2 = NULL;
-  split(buf, &bufs, file_size);
+  if (thread_usage) {
 
-  CpCtx ctx1;
-  CpCtx ctx2;
+    struct Buffers bufs;
+    bufs.buf1 = NULL;
+    bufs.buf2 = NULL;
 
-  initContext(&ctx1, bufs.buf1);
-  initContext(&ctx2, bufs.buf2);
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
 
-  pthread_t t1;
-  pthread_t t2;
-  pthread_create(&t1, NULL, parse, &ctx1);
-  pthread_create(&t2, NULL, parse, &ctx2);
+    split(buf, &bufs, file_size);
 
-  pthread_join(t1, NULL);
+    CpCtx ctx1;
+    CpCtx ctx2;
 
-  pthread_join(t2, NULL);
+    initContext(&ctx1, bufs.buf1);
+    initContext(&ctx2, bufs.buf2);
 
-  PObj *result1 = evalAST(ctx1.ast);
-  PObj *result2 = evalAST(ctx2.ast);
+    pthread_t t1;
+    pthread_t t2;
+    pthread_create(&t1, NULL, parse, &ctx1);
+    pthread_create(&t2, NULL, parse, &ctx2);
 
-  //REDUCE
-  for (size_t i = 0; i < result2->list.len; i++) {
-    PObj *line = result2->list.ele[i];
-    listPushObj(result1, line);
-    retain(line);
+    pthread_join(t1, NULL);
+
+    pthread_join(t2, NULL);
+
+    PObj *result1 = evalAST(ctx1.ast);
+    PObj *result2 = evalAST(ctx2.ast);
+
+    // REDUCE
+    for (size_t i = 0; i < result2->list.len; i++) {
+      PObj *line = result2->list.ele[i];
+      listPushObj(result1, line);
+      retain(line);
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
+    long seconds = end.tv_sec - start.tv_sec;
+    long nanoseconds = end.tv_nsec - start.tv_nsec;
+    double elapsed = seconds + nanoseconds * 1e-9;
+
+    printf("Execution Time: %.9f seconds\n", elapsed);
+    // printf("XML Result Representation:\n");
+    // printXML(result1, 0);
+    // printf("\n");
+
+    release(ctx1.ast);
+    release(ctx2.ast);
+    free(buf);
+    if (bufs.buf2 != NULL) {
+      free(bufs.buf2);
+    }
+
+  } else {
+
+    CpCtx ctx;
+
+    initContext(&ctx, buf);
+
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    advanceLexer(&ctx);
+
+    ctx.ast = parseExpression(&ctx, 0);
+
+    // printf("XML Representation:\n");
+    // printXML(ctx.ast, 0);
+
+    // printf("\n");
+    PObj *result = evalAST(ctx.ast);
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
+    long seconds = end.tv_sec - start.tv_sec;
+    long nanoseconds = end.tv_nsec - start.tv_nsec;
+    double elapsed = seconds + nanoseconds * 1e-9;
+
+    printf("Execution Time: %.9f seconds\n", elapsed);
+
+    // printf("XML Result Representation:\n");
+    // printXML(result, 0);
+    // printf("\n");
+    release(ctx.ast);
+    free(buf);
   }
-  printf("XML Result Representation:\n");
-  printXML(result1, 0);
-  printf("\n");
 
-  release(ctx1.ast);
-  release(ctx2.ast);
-  free(buf);
-  if (bufs.buf2 != NULL) {
-
-    free(bufs.buf2);
-  }
   return 0;
 }

@@ -5,10 +5,48 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <pthread.h>
 
 #define PREFIX_PRECEDENCE 6
-#define THREAD_COUNT 2
+/*
+struct timespec {
+               time_t  tv_sec;     // seconds
+               long    tv_nsec;    // and nanoseconds
+           };
+uint64_t platform_get_time_us() {
+        struct timeval te;
+        gettimeofday(&te, NULL);
+        return te.tv_sec * 1000000LL + te.tv_usec;
+    }
+
+uint64_t platform_get_time_us(void) {
+  struct timeval te;
+  gettimeofday(&te, NULL);
+  return te.tv_sec * 1000000LL + te.tv_usec;
+}
+
+void platform_sleep_us(uint64_t us) {
+  usleep(us);
+}
+// Inserisci questo attorno alla chiamata di bfs_path dentro determineDirection
+o update
+
+struct timespec start, end;
+clock_gettime(CLOCK_MONOTONIC, &start); // Start cronometro
+
+int next_dir = bfs_path(ctx); // La funzione da testare
+
+clock_gettime(CLOCK_MONOTONIC, &end); // Stop cronometro
+
+// Calcola la differenza in nanosecondi
+long seconds = end.tv_sec - start.tv_sec;
+long nanoseconds = end.tv_nsec - start.tv_nsec;
+double elapsed = seconds + nanoseconds*1e-9;
+
+// Stampa solo se supera una certa soglia o ogni X frame per non intasare
+// printf("BFS Time: %.9f seconds\n", elapsed);
+
+*/
+
 
 /* ------------------------ Allocation wrappers ----------------------------*/
 
