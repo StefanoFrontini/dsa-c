@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ITERATIONS=50
-STRESS_TEST_FILE="./stress_test2.txt"
+STRESS_TEST_FILE="./stress_test4.txt"
 CSV_FILE="benchmarks.csv"
 
 # Scriviamo l'intestazione del CSV (sovrascrivendo il vecchio file)
@@ -39,7 +39,7 @@ run_benchmark() {
         local diff
         local squared
         diff=$(echo "${data[i]} - $mean" | bc -l)
-        squared=$(echo "$diff ^ 2" | bc -l) # <--- CORRETTO: aggiunto -l
+        squared=$(echo "$diff ^ 2" | bc -l)
         sum_squared=$(echo "$sum_squared + $squared" | bc -l)
     done
 

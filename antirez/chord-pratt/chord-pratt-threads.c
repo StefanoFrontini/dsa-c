@@ -357,33 +357,87 @@ void initContext(CpCtx *ctx, char *buf) {
 void release(PObj *o);
 
 /* Free an object and all the other nested objects. */
+/* Free an object and all the other nested objects iteratively. */
 void freeObject(PObj *o) {
-  switch (o->type) {
-    case INFIX:
-      release(o->infix.left);
-      release(o->infix.right);
-      break;
-    case WORD:
-      release(o->word.chord);
-      release(o->word.lyric);
-      break;
+  while (o) {
+    switch (o->type) {
+      case INFIX: {
+        PObj *left = o->infix.left;
+        PObj *right = o->infix.right;
 
-    case SONG:
-    case LINE:
-      for (size_t i = 0; i < o->list.len; i++) {
-        release(o->list.ele[i]);
+        // Rilasciamo il ramo destro normalmente (è una foglia corta, non fa ricorsione profonda)
+        release(right);
+
+        // Liberiamo la struttura del nodo INFIX corrente
+        free(o);
+
+        // Invece di ricorsione su 'left', simuliamo la chiamata riducendo il refcount.
+        // Se il refcount scende a 0, il ciclo 'while' processerà il nodo sinistro alla prossima iterazione.
+        if (left) {
+          assert(left->refcount > 0);
+          left->refcount--;
+          if (left->refcount == 0) {
+            o = left; // Spostiamo il puntatore e continuiamo il ciclo
+            continue;
+          }
+        }
+        return; // Il nodo sinistro è ancora posseduto da qualcun altro, possiamo fermarci
       }
-      free(o->list.ele);
-      break;
-    case CHORD:
-    case LYRIC:
-      free(o->str.ptr);
-      break;
-    default:
-      break;
+
+      case WORD:
+        release(o->word.chord);
+        release(o->word.lyric);
+        free(o);
+        return;
+
+      case SONG:
+      case LINE:
+        for (size_t i = 0; i < o->list.len; i++) {
+          release(o->list.ele[i]);
+        }
+        free(o->list.ele);
+        free(o);
+        return;
+
+      case CHORD:
+      case LYRIC:
+        free(o->str.ptr);
+        free(o);
+        return;
+
+      default:
+        free(o);
+        return;
+    }
   }
-  free(o);
 }
+// void freeObject(PObj *o) {
+//   switch (o->type) {
+//     case INFIX:
+//       release(o->infix.left);
+//       release(o->infix.right);
+//       break;
+//     case WORD:
+//       release(o->word.chord);
+//       release(o->word.lyric);
+//       break;
+
+//     case SONG:
+//     case LINE:
+//       for (size_t i = 0; i < o->list.len; i++) {
+//         release(o->list.ele[i]);
+//       }
+//       free(o->list.ele);
+//       break;
+//     case CHORD:
+//     case LYRIC:
+//       free(o->str.ptr);
+//       break;
+//     default:
+//       break;
+//   }
+//   free(o);
+// }
 
 void retain(PObj *o) {
   o->refcount++;
@@ -465,6 +519,31 @@ void listPushObj(PObj *l, PObj *ele) {
   l->list.ele[l->list.len] = ele;
   l->list.len++;
 }
+
+PObj *listPopObj(PObj *l) {
+  l->list.len--;
+  return l->list.ele[l->list.len];
+}
+
+// TfObj *listPopType(Tfctx *ctx, int type){
+//   TfObj *stack = ctx->stack;
+//   if(ctx->stack->list.len == 0) return NULL;
+//   TfObj *to_pop = stack->list.ele[stack->list.len-1];
+//   if(type != ALL && to_pop->type != type) return NULL;
+
+//   stack->list.len--;
+//   if(stack->list.len == 0){
+//     free(stack->list.ele);
+//     stack->list.ele = NULL;
+
+//   } else {
+//     stack->list.ele = xrealloc(stack->list.ele, sizeof(TfObj*) *
+//     (stack->list.len));
+
+//   }
+
+//   return to_pop;
+// };
 
 /* ------------------  Pratt Parser logic ----------------  */
 
@@ -632,7 +711,7 @@ void printXML(PObj *node, int indent) {
   }
 }
 
-PObj *evalAST(PObj *ast) {
+PObj *eval(PObj *ast) {
   switch (ast->type) {
     case CHORD:
     case LYRIC:
@@ -642,8 +721,8 @@ PObj *evalAST(PObj *ast) {
       return ast;
 
     case INFIX: {
-      PObj *a = evalAST(ast->infix.left);
-      PObj *b = evalAST(ast->infix.right);
+      PObj *a = eval(ast->infix.left);
+      PObj *b = eval(ast->infix.right);
       listPushObj(a, b);
       retain(b);
       return a;
@@ -653,6 +732,41 @@ PObj *evalAST(PObj *ast) {
       fprintf(stderr, "Unknown AST type\n");
       exit(1);
   }
+}
+
+PObj *evalAST(PObj *ast) {
+  PObj *node = ast;
+  int count = 0;
+  while (node->type == INFIX) {
+    node = node->infix.left;
+    count++;
+  }
+  if (count == 0) {
+    return eval(ast);
+  }
+  PObj **stack = xmalloc(sizeof(PObj *) * count);
+
+  PObj *current = ast;
+  int j = 0;
+  while (current->type == INFIX) {
+    stack[j] = current->infix.right;
+    current = current->infix.left;
+    j++;
+  }
+  PObj *acc = eval(current);
+  acc->list.ele = xmalloc(sizeof(PObj *) * count);
+  acc->list.len = 0;
+  while (j > 0) {
+    j--;
+    PObj *last_node = stack[j];
+    PObj *b = eval(last_node);
+
+    acc->list.ele[acc->list.len] = b;
+    acc->list.len++;
+    retain(b);
+  }
+  free(stack);
+  return acc;
 }
 
 struct Buffers {
