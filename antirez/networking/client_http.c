@@ -19,11 +19,11 @@
 typedef enum {
   HEADER_ACC = 0,
   HEADER_PARSING,
-  BODY_READING,
+  BODY_PARSING,
   BODY_PARSING_CHUNKED,
   CONNECTION_CLOSED,
   RECV_ERROR
-} HttpParserState;
+} ParserState;
 
 typedef enum {
   HEADER_STATUS_LINE = 0,
@@ -34,24 +34,51 @@ typedef enum {
 
 } HeaderState;
 
-int main(void) {
-  int status, sockfd, numbytes;
-  int header_idx = 0, body_idx = 0, status_code = 0;
-  size_t k_idx = 0, v_idx = 0;
-  struct addrinfo hints, *servinfo, *p;
-  char ipstr[INET6_ADDRSTRLEN];
-
-  char recv_buf[MAXDATASIZE];
+typedef struct Parser {
+  ParserState state;
+  HeaderState headerState;
+  int header_idx;
+  int body_idx;
+  size_t k_idx;
+  size_t v_idx;
   char header_accumulator[MAXHEADER];
-  char *ipver;
-  char get_buf[512];
   char key_buffer[128];
   char value_buffer[512];
-  long content_length = 0;
-  int isEncodingChunked = 0;
-  HttpParserState state = HEADER_ACC;
-  HeaderState headerState = HEADER_STATUS_LINE;
-  snprintf(get_buf, sizeof(get_buf),
+  long content_length;
+  int isEncodingChunked;
+} Parser;
+
+typedef struct Connection {
+  char req_buf[512];
+  int status;
+  int sockfd;
+  int numbytes;
+  int status_code;
+  char ipstr[INET6_ADDRSTRLEN];
+  char recv_buf[MAXDATASIZE];
+  struct addrinfo hints;
+  struct addrinfo *servinfo;
+  struct addrinfo *p;
+  char *ipver;
+
+} Connection;
+
+typedef struct Ctx {
+  Parser parser;
+  Connection conn;
+} Ctx;
+
+void initCtx(Ctx *ctx) {
+  ctx->parser.header_idx = 0;
+  ctx->parser.body_idx = 0;
+  ctx->conn.status_code = 0;
+  ctx->parser.k_idx = 0;
+  ctx->parser.v_idx = 0;
+  ctx->parser.content_length = 0;
+  ctx->parser.state = HEADER_ACC;
+  ctx->parser.headerState = HEADER_STATUS_LINE;
+
+  snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
            "GET %s HTTP/1.1\r\n"
            "Host: %s\r\n"
            "User-Agent: UndergroundRadio/1.0\r\n"
@@ -59,75 +86,77 @@ int main(void) {
            "\r\n",
            ABSOLUTE_PATH, HOST);
 
-  memset(&hints, 0, sizeof hints);
-  hints.ai_family = AF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
+  memset(&ctx->conn.hints, 0, sizeof(ctx->conn.hints));
+  ctx->conn.hints.ai_family = AF_UNSPEC;
+  ctx->conn.hints.ai_socktype = SOCK_STREAM;
+}
 
-  if ((status = getaddrinfo(HOST, PORT, &hints, &servinfo)) != 0) {
-    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+int initConnection(Ctx *ctx) {
+  if ((ctx->conn.status = getaddrinfo(HOST, PORT, &ctx->conn.hints,
+                                      &ctx->conn.servinfo)) != 0) {
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ctx->conn.status));
     return 1;
   }
 
-  for (p = servinfo; p != NULL; p = p->ai_next) {
+  for (ctx->conn.p = ctx->conn.servinfo; ctx->conn.p != NULL;
+       ctx->conn.p = ctx->conn.p->ai_next) {
     void *addr;
     struct sockaddr_in *ipv4;
     struct sockaddr_in6 *ipv6;
 
-    if (p->ai_family == AF_INET) {
-      ipv4 = (struct sockaddr_in *)p->ai_addr;
+    if (ctx->conn.p->ai_family == AF_INET) {
+      ipv4 = (struct sockaddr_in *)ctx->conn.p->ai_addr;
 
       addr = &(ipv4->sin_addr);
-      ipver = "IPv4";
+      ctx->conn.ipver = "IPv4";
     } else {
-      ipv6 = (struct sockaddr_in6 *)p->ai_addr;
+      ipv6 = (struct sockaddr_in6 *)ctx->conn.p->ai_addr;
       addr = &(ipv6->sin6_addr);
-      ipver = "IPv6";
+      ctx->conn.ipver = "IPv6";
     }
 
-    sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-    if (sockfd == -1) {
+    ctx->conn.sockfd = socket(ctx->conn.p->ai_family, ctx->conn.p->ai_socktype,
+                              ctx->conn.p->ai_protocol);
+    if (ctx->conn.sockfd == -1) {
       perror("client: socket");
       continue;
     }
     // convert the IP to a string
-    inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
+    inet_ntop(ctx->conn.p->ai_family, addr, ctx->conn.ipstr,
+              sizeof ctx->conn.ipstr);
     // printf("Socket created with %s: %s!\n", ipver, ipstr);
 
-    if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+    if (connect(ctx->conn.sockfd, ctx->conn.p->ai_addr,
+                ctx->conn.p->ai_addrlen) == -1) {
       perror("client: connect");
-      close(sockfd);
+      close(ctx->conn.sockfd);
       continue;
     };
     break;
   }
 
-  if (p == NULL) {
+  if (ctx->conn.p == NULL) {
     fprintf(stderr, "client: failed to connect\n");
     return 2;
   }
-  printf("Connected with %s: %s!\n", ipver, ipstr);
-  freeaddrinfo(servinfo);
-
-  int len, bytes_send;
-  len = strlen(get_buf);
-  printf("Sending msg, len: %d\n", len);
-  bytes_send = send(sockfd, get_buf, len, 0);
-  if (bytes_send == -1) {
-    perror("send");
-    exit(1);
-  }
-  printf("Bytes sent: %d\n", bytes_send);
-  while (state != CONNECTION_CLOSED) {
-    switch (state) {
+  printf("Connected with %s: %s!\n", ctx->conn.ipver, ctx->conn.ipstr);
+  freeaddrinfo(ctx->conn.servinfo);
+  return 0;
+}
+int parseResponse(Ctx *ctx){
+  while (ctx->parser.state != CONNECTION_CLOSED) {
+    switch (ctx->parser.state) {
       case HEADER_ACC: {
-        while ((numbytes = recv(sockfd, recv_buf, sizeof(recv_buf), 0)) > 0) {
-          if(header_idx > MAXHEADER){
+        while ((ctx->conn.numbytes = recv(ctx->conn.sockfd, ctx->conn.recv_buf,
+                                         sizeof(ctx->conn.recv_buf), 0)) > 0) {
+          if (ctx->parser.header_idx > MAXHEADER) {
             fprintf(stderr, "Error reading header");
-            exit(1);
+            return 1;
           }
-          memcpy(header_accumulator + header_idx, recv_buf, numbytes);
-          int old_header_idx = header_idx;
-          header_idx += numbytes;
+          memcpy(ctx->parser.header_accumulator + ctx->parser.header_idx,
+                 ctx->conn.recv_buf, ctx->conn.numbytes);
+          int old_header_idx = ctx->parser.header_idx;
+          ctx->parser.header_idx += ctx->conn.numbytes;
           /*
           we have already scanned header_accumulator till header_idx. So we scan
           only the added chunk. The sequence \n\r could be split between two
@@ -135,90 +164,101 @@ int main(void) {
           In order to handle this case we subtract 1 to old_header_idx.
           */
           int i = old_header_idx - 1;
-          for (; i < header_idx; i++) {
-            if (header_accumulator[i] == '\n' &&
-                header_accumulator[i + 1] == '\r') {
-              state = HEADER_PARSING;
-              body_idx = i + 3;
-              printf("body_idx is: %d\n", body_idx);
+          for (; i < ctx->parser.header_idx; i++) {
+            if (ctx->parser.header_accumulator[i] == '\n' &&
+                ctx->parser.header_accumulator[i + 1] == '\r') {
+              ctx->parser.state = HEADER_PARSING;
+              ctx->parser.body_idx = i + 3;
+              printf("body_idx is: %d\n", ctx->parser.body_idx);
               break; // break from for loop
             }
           }
-          if (state == HEADER_PARSING) break; // break from while loop
+          if (ctx->parser.state == HEADER_PARSING)
+            break; // break from while loop
         }
-        if (numbytes == -1) {
+        if (ctx->conn.numbytes == -1) {
           perror("recv");
-          exit(1);
+          return 1;
         }
         break;
       }
       case HEADER_PARSING: {
         printf("HeaderParsing: \n");
-        for (int i = 0; i < header_idx; i++) {
-          char c = header_accumulator[i];
+        for (int i = 0; i < ctx->parser.header_idx; i++) {
+          char c = ctx->parser.header_accumulator[i];
 
-          if (headerState == HEADER_DONE) {
+          if (ctx->parser.headerState == HEADER_DONE) {
             printf("--- Fine Header. Inizio Body al byte indicizzato: %d ---\n",
                    i);
-            if (status_code == 200 && isEncodingChunked) {
-              state = BODY_PARSING_CHUNKED;
+            if (ctx->conn.status_code == 200 && ctx->parser.isEncodingChunked) {
+              ctx->parser.state = BODY_PARSING_CHUNKED;
             }
             break;
           }
 
-          switch (headerState) {
+          switch (ctx->parser.headerState) {
             case HEADER_STATUS_LINE: {
-              if (c > 8 && isdigit(c) && isdigit(header_accumulator[i + 1]) &&
-                  isdigit(header_accumulator[i + 2])) {
+              if (c > 8 && isdigit(c) &&
+                  isdigit(ctx->parser.header_accumulator[i + 1]) &&
+                  isdigit(ctx->parser.header_accumulator[i + 2])) {
                 char num_buf[4];
-                memcpy(num_buf, header_accumulator + i, 3);
+                memcpy(num_buf, ctx->parser.header_accumulator + i, 3);
                 num_buf[3] = '\0';
-                status_code = atoi(num_buf);
-                printf("Status Code Rilevato: %d\n", status_code);
+                ctx->conn.status_code = atoi(num_buf);
+                printf("Status Code Rilevato: %d\n", ctx->conn.status_code);
 
-                if (status_code == 400) {
+                if (ctx->conn.status_code == 400) {
                   fprintf(stderr, "Error: 400\n");
                   exit(1);
                 }
               }
               if (c == '\n') {
-                headerState = HEADER_KEY;
+                ctx->parser.headerState = HEADER_KEY;
               }
               break;
             }
             case HEADER_KEY: {
               if (c == '\r') {
-                headerState = HEADER_CRLF; // Riga vuota? Controlliamo se è la
-                                           // fine degli header
+                ctx->parser.headerState =
+                    HEADER_CRLF;
+
               } else if (c == ':') {
-                key_buffer[k_idx] = '\0'; // Chiudiamo la stringa della chiave
-                headerState = HEADER_VALUE;
-                v_idx = 0;
-              } else if (k_idx < sizeof(key_buffer) - 1 && c != '\n') {
-                key_buffer[k_idx++] = c; // Accumuliamo il nome dell'header
+                ctx->parser.key_buffer[ctx->parser.k_idx] =
+                    '\0';
+                ctx->parser.headerState = HEADER_VALUE;
+                ctx->parser.v_idx = 0;
+              } else if (ctx->parser.k_idx < sizeof(ctx->parser.key_buffer) - 1 &&
+                         c != '\n') {
+                ctx->parser.key_buffer[ctx->parser.k_idx++] =
+                    c;
               }
               break;
             }
             case HEADER_VALUE: {
               if (c == '\r') {
-                value_buffer[v_idx] = '\0'; // Chiudiamo la stringa del valore
+                ctx->parser.value_buffer[ctx->parser.v_idx] =
+                    '\0';
 
-                printf("Header: [%s] -> [%s]\n", key_buffer, value_buffer);
-                if (strcasecmp(key_buffer, "Content-Length") == 0) {
-                  content_length = atol(value_buffer);
-                } else if ((strcasecmp(key_buffer, "Transfer-Encoding") == 0) &&
-                           (strcasecmp(value_buffer, "chunked") == 0)) {
-                  isEncodingChunked = 1;
+                printf("Header: [%s] -> [%s]\n", ctx->parser.key_buffer,
+                       ctx->parser.value_buffer);
+                if (strcasecmp(ctx->parser.key_buffer, "Content-Length") == 0) {
+                  ctx->parser.content_length = atoi(ctx->parser.value_buffer);
+                } else if ((strcasecmp(ctx->parser.key_buffer,
+                                       "Transfer-Encoding") == 0) &&
+                           (strcasecmp(ctx->parser.value_buffer, "chunked") ==
+                            0)) {
+                  ctx->parser.isEncodingChunked = 1;
                   printf("Encoding Chunked: true\n");
                 }
 
-                k_idx =
-                    0; // Resettiamo l'indice della chiave per il prossimo ciclo
-                headerState = HEADER_CRLF;
-              } else if (v_idx < sizeof(value_buffer) - 1) {
-                // Salto lo spazio iniziale dopo i due punti se presente
-                if (v_idx == 0 && c == ' ') continue;
-                value_buffer[v_idx++] = c;
+                ctx->parser.k_idx =
+                    0;
+                ctx->parser.headerState = HEADER_CRLF;
+              } else if (ctx->parser.v_idx <
+                         sizeof(ctx->parser.value_buffer) - 1) {
+
+                if (ctx->parser.v_idx == 0 && c == ' ') continue;
+                ctx->parser.value_buffer[ctx->parser.v_idx++] = c;
               }
               break;
             }
@@ -226,11 +266,12 @@ int main(void) {
               if (c == '\n') {
                 // Se il carattere successivo è un altro '\r', significa che
                 // abbiamo fatto \r\n\r
-                if (header_accumulator[i + 1] == '\r') {
-                  headerState = HEADER_DONE;
+                if (ctx->parser.header_accumulator[i + 1] == '\r') {
+                  ctx->parser.headerState = HEADER_DONE;
                   i++; // Salto anche l'ultimo '\n' che seguirà
                 } else {
-                  headerState = HEADER_KEY; // C'è un altro header in arrivo
+                  ctx->parser.headerState =
+                      HEADER_KEY;
                 }
               }
               break;
@@ -248,42 +289,37 @@ int main(void) {
       }
       case BODY_PARSING_CHUNKED: {
         printf("\n--- RISULTATO PARSING ---\n");
-        printf("HTTP Status: %d\n", status_code);
-        printf("Content-Length: %ld byte\n", content_length);
-        printf("Start parsing body chunked at %d\n", body_idx);
-        state = CONNECTION_CLOSED;
+        printf("HTTP Status: %d\n", ctx->conn.status_code);
+        printf("Content-Length: %ld byte\n", ctx->parser.content_length);
+        printf("Start parsing body chunked at %d\n", ctx->parser.body_idx);
+        ctx->parser.state = CONNECTION_CLOSED;
         break;
       }
       default:
         break;
     }
   }
-  // while ((numbytes = recv(sockfd, recv_buf, sizeof(recv_buf), 0)) > 0) {
-  //   switch (state) {
-  //     case HEADER_ACC: {
-  //       for (int i = 0; i < numbytes; i++) {
-  //         if(recv_buf[i] == '\n' && recv_buf[i + 1] == '\r'){
-  //           state = HEADER_PARSING;
-  //         }
-  //       }
-  //       break;
-  //     }
-  //   }
-  // }
-  // if (numbytes == -1) {
-  //   perror("recv");
-  //   exit(1);
-  // }
-  // if ((numbytes = recv(sockfd, buf, sizeof(buf), 0)) == -1) {
-  //   perror("recv");
-  //   exit(1);
-  // };
-  // printf("Bytes received: %d\n", numbytes);
-  // buf[numbytes] = '\0';
 
-  // printf("Message received from the server: %s\n", buf);
+  close(ctx->conn.sockfd);
+  return 0;
 
-  close(sockfd);
+}
 
+int main(void) {
+  Ctx ctx;
+  initCtx(&ctx);
+  if (initConnection(&ctx) != 0) return 1;
+
+  int len, bytes_send;
+  len = strlen(ctx.conn.req_buf);
+  printf("Sending msg, len: %d\n", len);
+  bytes_send = send(ctx.conn.sockfd, ctx.conn.req_buf, len, 0);
+  if (bytes_send == -1) {
+    perror("send");
+    exit(1);
+  }
+  printf("Bytes sent: %d\n", bytes_send);
+
+  parseResponse(&ctx);
   return 0;
 }
