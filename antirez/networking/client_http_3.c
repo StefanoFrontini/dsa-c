@@ -25,7 +25,7 @@ pedia\r\n
 
 #define HOST "example.com"
 #define PORT "80"
-#define MAXDATASIZE 5
+#define MAXDATASIZE 1000
 #define MAXACCUMULATOR 8192
 #define ABSOLUTE_PATH "/"
 
@@ -330,6 +330,7 @@ int parseResponse(Ctx *ctx) {
             ctx->parser.state =
                 HEADER_KEY_RECV; // prima riga finita iniziamo gli header.
             i++;
+            // TO DO: copiare i byte da \n a acc_len in recv
             break;
           }
           i++;
@@ -353,6 +354,7 @@ int parseResponse(Ctx *ctx) {
       }
 
       case HEADER_KEY_RECV: {
+        // se recv_len == 0 leggi con recv() altrimenti inizi il parsing.
         printf("Success!!\n");
         exit(1);
         break;
