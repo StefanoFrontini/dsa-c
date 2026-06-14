@@ -545,6 +545,7 @@ int parseResponse(Ctx *ctx) {
       //   break;
       // }
       case HEADER_CRLF: {
+        // printf("HEADER_CRLF!\n");
         // printf("(%zu, %zu)", ctx->parser.recv_idx, ctx->parser.recv_len);
         if (ctx->parser.recv_idx == ctx->parser.recv_len) {
           // leggo con recv()
@@ -602,11 +603,11 @@ int parseResponse(Ctx *ctx) {
       }
       case HEADER_VALUE: {
         // printf("Header_key is: %s\n", key_buffer);
-        printf("Header Value!!!\n");
+        // printf("Header Value!!!\n");
         // exit(1);
-        printf("recv_idx: %zu\n", ctx->parser.recv_idx);
-        printf("recv_len: %zu\n", ctx->parser.recv_len);
-        printf("v_idx: %zu\n", v_idx);
+        // printf("recv_idx: %zu\n", ctx->parser.recv_idx);
+        // printf("recv_len: %zu\n", ctx->parser.recv_len);
+        // printf("v_idx: %zu\n", v_idx);
         while (ctx->parser.recv_idx < ctx->parser.recv_len) {
           char c = ctx->parser.recv_buf[ctx->parser.recv_idx];
           // printf("c is: %c\n", c);
@@ -647,12 +648,14 @@ int parseResponse(Ctx *ctx) {
           } else {
             ctx->parser.recv_idx++;
           }
+          break;
         }
 
         break;
       }
       case HEADER_DONE:
         printf("Header Done!\n");
+        exit(1);
         break;
 
       case DONE:
