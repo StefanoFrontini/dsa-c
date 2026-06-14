@@ -266,10 +266,9 @@ int parseResponse(Ctx *ctx) {
       }
       case HEADER_STATUS_LINE_ACC: {
 
-        // size_t len = ctx->parser.acc_len;
-        printf("acc_len: %zu\n", ctx->parser.acc_len);
+        // printf("acc_len: %zu\n", ctx->parser.acc_len);
         char *acc_buf = ctx->parser.acc_buf;
-                printf("acc_buf: %s", acc_buf );
+        // printf("acc_buf: %s", acc_buf );
         ctx->parser.acc_idx = 0;
 
         while (ctx->parser.acc_idx < ctx->parser.acc_len) {
@@ -314,7 +313,8 @@ int parseResponse(Ctx *ctx) {
             } else {
 
               ctx->parser.acc_idx++;
-              memcpy(ctx->parser.recv_buf, acc_buf + ctx->parser.acc_idx, ctx->parser.acc_len - ctx->parser.acc_idx);
+              memcpy(ctx->parser.recv_buf, acc_buf + ctx->parser.acc_idx,
+                     ctx->parser.acc_len - ctx->parser.acc_idx);
 
               ctx->parser.recv_idx = 0;
               ctx->parser.recv_len = ctx->parser.acc_len - ctx->parser.acc_idx;
@@ -352,37 +352,14 @@ int parseResponse(Ctx *ctx) {
           break;
         }
         size_t start = ctx->parser.recv_idx;
-        printf("start is: %zu\n", start);
-        printf("end is: %zu\n", ctx->parser.recv_len);
+        // printf("start is: %zu\n", start);
+        // printf("end is: %zu\n", ctx->parser.recv_len);
 
         while (ctx->parser.recv_idx < ctx->parser.recv_len) {
           char c = ctx->parser.recv_buf[ctx->parser.recv_idx];
-        printf("char is: %c\n", c);
+          // printf("char is: %c\n", c);
 
-          if (c == '\r') {
-            printf("Unhandled!\n");
-            // ctx->parser.state = HEADER_CRLF; // Riga vuota? Controlliamo se è la
-            //                                  // fine degli header
-            // if (ctx->parser.recv_idx == ctx->parser.recv_len) {
-
-            //   ctx->parser.numbytes =
-            //       recv(ctx->conn.sockfd, ctx->parser.recv_buf,
-            //            sizeof(ctx->parser.recv_buf), 0);
-
-            //   if (ctx->parser.numbytes == 0) {
-            //     fprintf(stderr,
-            //             "header_key recv Error: recv returned 0 bytes\n");
-            //     return 1;
-            //   }
-            //   ctx->parser.recv_idx = 0;
-            //   ctx->parser.recv_len = ctx->parser.numbytes;
-            // } else {
-
-            //   ctx->parser.recv_idx++;
-            // }
-            break;
-
-          } else if (c == ':') {
+          if (c == ':') {
             key_buffer[k_idx] = '\0';
             ctx->parser.state = HEADER_VALUE;
             v_idx = 0;
@@ -412,8 +389,8 @@ int parseResponse(Ctx *ctx) {
 
         if (!(ctx->parser.state == HEADER_CRLF ||
               ctx->parser.state == HEADER_VALUE)) {
-                printf("HERE!\n");
-                printf("acc_len is: %zu\n", ctx->parser.acc_len);
+          // printf("HERE!\n");
+          // printf("acc_len is: %zu\n", ctx->parser.acc_len);
 
           memcpy(ctx->parser.acc_buf + ctx->parser.acc_len,
                  ctx->parser.recv_buf + start, ctx->parser.recv_len - start);
@@ -438,52 +415,20 @@ int parseResponse(Ctx *ctx) {
         break;
       }
       case HEADER_KEY_ACC: {
-        printf("Header key acc!\n");
+        // printf("Header key acc!\n");
         /*
         iniziare il parsing in acc fino a quando non trovo \r
         copiare da \r a len da acc in recv
         cambiare lo stato in HEADER_VALUE
-
-
         */
-        // if (ctx->parser.acc_buf[ctx->parser.acc_idx] == '\r') {
-        //   ctx->parser.state = HEADER_CRLF_ACC;
-        //   break;
-        // }
-        // s0ize_t start = ctx->parser.acc_idx;
-        // printf("acc_idx: %zu, acc_len: %zu\n", ctx->parser.acc_idx,
-        //        ctx->parser.acc_len);
 
         while (ctx->parser.acc_idx < ctx->parser.acc_len) {
           char c = ctx->parser.acc_buf[ctx->parser.acc_idx];
 
-          printf("acc_idx: %zu, acc_len: %zu\n", ctx->parser.acc_idx,
-                 ctx->parser.acc_len);
-          if (c == '\r') {
-            printf("Not handled!!!\n");
-            // ctx->parser.state = HEADER_CRLF_ACC;
-            // if (ctx->parser.acc_idx == ctx->parser.acc_len) {
-
-            //   ctx->parser.numbytes =
-            //       recv(ctx->conn.sockfd, ctx->parser.recv_buf,
-            //            sizeof(ctx->parser.recv_buf), 0);
-
-            //   if (ctx->parser.numbytes == 0) {
-            //     fprintf(stderr,
-            //             "header_key_acc recv Error: recv returned 0
-            //             bytes\n");
-            //     return 1;
-            //   }
-            //   ctx->parser.recv_idx = 0;
-            //   ctx->parser.recv_len = ctx->parser.numbytes;
-            // } else {
-
-            //   ctx->parser.acc_idx++;
-            // }
-            break;
-
-          } else if (c == ':') {
-            printf("k_idx is: %zu\n", k_idx);
+          // printf("acc_idx: %zu, acc_len: %zu\n", ctx->parser.acc_idx,
+          //        ctx->parser.acc_len);
+          if (c == ':') {
+            // printf("k_idx is: %zu\n", k_idx);
             key_buffer[k_idx] = '\0';
             ctx->parser.state = HEADER_VALUE;
             v_idx = 0;
@@ -600,7 +545,7 @@ int parseResponse(Ctx *ctx) {
       //   break;
       // }
       case HEADER_CRLF: {
-        printf("(%zu, %zu)", ctx->parser.recv_idx, ctx->parser.recv_len);
+        // printf("(%zu, %zu)", ctx->parser.recv_idx, ctx->parser.recv_len);
         if (ctx->parser.recv_idx == ctx->parser.recv_len) {
           // leggo con recv()
           ctx->parser.numbytes = recv(ctx->conn.sockfd, ctx->parser.recv_buf,
@@ -656,9 +601,53 @@ int parseResponse(Ctx *ctx) {
         break;
       }
       case HEADER_VALUE: {
-        printf("Header_key is: %s\n", key_buffer);
+        // printf("Header_key is: %s\n", key_buffer);
         printf("Header Value!!!\n");
-        exit(1);
+        // exit(1);
+        printf("recv_idx: %zu\n", ctx->parser.recv_idx);
+        printf("recv_len: %zu\n", ctx->parser.recv_len);
+        printf("v_idx: %zu\n", v_idx);
+        while (ctx->parser.recv_idx < ctx->parser.recv_len) {
+          char c = ctx->parser.recv_buf[ctx->parser.recv_idx];
+          // printf("c is: %c\n", c);
+
+          if (c == '\r') {
+            value_buffer[v_idx] = '\0';
+
+            printf("Header: [%s] -> [%s]\n", key_buffer, value_buffer);
+            if (strcasecmp(key_buffer, "Content-Length") == 0) {
+              ctx->parser.content_length = atoi(value_buffer);
+            } else if ((strcasecmp(key_buffer, "Transfer-Encoding") == 0) &&
+                       (strcasecmp(value_buffer, "chunked") == 0)) {
+              ctx->parser.isEncodingChunked = 1;
+              printf("Encoding Chunked: true\n");
+            }
+
+            k_idx = 0;
+            ctx->parser.state = HEADER_CRLF;
+          } else if (v_idx < sizeof(value_buffer) - 1) {
+            // printf("recv_idx: %zu\n", ctx->parser.recv_idx);
+
+            if (!(v_idx == 0 && c == ' ')) {
+              value_buffer[v_idx++] = c;
+            };
+          }
+          if (ctx->parser.recv_idx == ctx->parser.recv_len) {
+
+            // leggo con recv()
+            ctx->parser.numbytes = recv(ctx->conn.sockfd, ctx->parser.recv_buf,
+                                        sizeof(ctx->parser.recv_buf), 0);
+
+            if (ctx->parser.numbytes == 0) {
+              fprintf(stderr, "Error: recv returned 0 bytes\n");
+              return 1;
+            }
+            ctx->parser.recv_idx = 0;
+            ctx->parser.recv_len = ctx->parser.numbytes;
+          } else {
+            ctx->parser.recv_idx++;
+          }
+        }
 
         break;
       }
