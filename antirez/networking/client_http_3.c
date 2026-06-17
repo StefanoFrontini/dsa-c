@@ -179,6 +179,23 @@ int accumulate(Ctx *ctx, size_t recv_start_idx) {
   return 0;
 }
 
+/* Keeps Accumulating bytes on the the acc_buf. Return -1 on error and 0 on
+ * success.*/
+int keepAccumulating(Ctx *ctx) {
+  ctx->parser.numbytes = recv(ctx->conn.sockfd, ctx->parser.recv_buf,
+                              sizeof(ctx->parser.recv_buf), 0);
+
+  if (ctx->parser.numbytes == 0) {
+    fprintf(stderr, "Error: numbytes = 0\n");
+    return -1;
+  }
+  memcpy(ctx->parser.acc_buf + ctx->parser.acc_len, ctx->parser.recv_buf,
+         ctx->parser.numbytes);
+
+  ctx->parser.acc_len += ctx->parser.numbytes;
+  return 0;
+}
+
 int parseResponse(Ctx *ctx) {
 
   char key_buffer[128] = {0};
@@ -341,18 +358,23 @@ int parseResponse(Ctx *ctx) {
         // se sono arrivato qui e lo stato non è HEADER_KEY_RECV leggo con
         // recv() e continuo ad accumulare
         if (ctx->parser.state != HEADER_KEY) {
-
-          ctx->parser.numbytes = recv(ctx->conn.sockfd, ctx->parser.recv_buf,
-                                      sizeof(ctx->parser.recv_buf), 0);
-
-          if (ctx->parser.numbytes == 0) {
-            fprintf(stderr, "Error: numbytes = 0\n");
-            return 1;
+          int res = keepAccumulating(ctx);
+          if (res == -1) {
+            ctx->parser.state = HEADER_ERROR;
+            break;
           }
-          memcpy(ctx->parser.acc_buf + ctx->parser.acc_len,
-                 ctx->parser.recv_buf, ctx->parser.numbytes);
 
-          ctx->parser.acc_len += ctx->parser.numbytes;
+          // ctx->parser.numbytes = recv(ctx->conn.sockfd, ctx->parser.recv_buf,
+          //                             sizeof(ctx->parser.recv_buf), 0);
+
+          // if (ctx->parser.numbytes == 0) {
+          //   fprintf(stderr, "Error: numbytes = 0\n");
+          //   return 1;
+          // }
+          // memcpy(ctx->parser.acc_buf + ctx->parser.acc_len,
+          //        ctx->parser.recv_buf, ctx->parser.numbytes);
+
+          // ctx->parser.acc_len += ctx->parser.numbytes;
           break;
         }
         break;
@@ -478,18 +500,23 @@ int parseResponse(Ctx *ctx) {
         if (!(ctx->parser.state == HEADER_CRLF ||
               ctx->parser.state == HEADER_VALUE)) {
 
-          ctx->parser.numbytes = recv(ctx->conn.sockfd, ctx->parser.recv_buf,
-                                      sizeof(ctx->parser.recv_buf), 0);
-
-          if (ctx->parser.numbytes == 0) {
-            fprintf(stderr, "Error header_key_recv: recv returned 0 bytes\n");
-            return 1;
+          int res = keepAccumulating(ctx);
+          if (res == -1) {
+            ctx->parser.state = HEADER_ERROR;
+            break;
           }
+          // ctx->parser.numbytes = recv(ctx->conn.sockfd, ctx->parser.recv_buf,
+          //                             sizeof(ctx->parser.recv_buf), 0);
 
-          memcpy(ctx->parser.acc_buf + ctx->parser.acc_len,
-                 ctx->parser.recv_buf, ctx->parser.numbytes);
+          // if (ctx->parser.numbytes == 0) {
+          //   fprintf(stderr, "Error header_key_recv: recv returned 0
+          //   bytes\n"); return 1;
+          // }
 
-          ctx->parser.acc_len += ctx->parser.numbytes;
+          // memcpy(ctx->parser.acc_buf + ctx->parser.acc_len,
+          //        ctx->parser.recv_buf, ctx->parser.numbytes);
+
+          // ctx->parser.acc_len += ctx->parser.numbytes;
           ctx->parser.state = HEADER_KEY_ACC;
           k_idx = 0;
           ctx->parser.acc_idx = 0;
@@ -707,18 +734,23 @@ int parseResponse(Ctx *ctx) {
 
         if (ctx->parser.state != HEADER_CRLF) {
 
-          // leggo con recv()
-          ctx->parser.numbytes = recv(ctx->conn.sockfd, ctx->parser.recv_buf,
-                                      sizeof(ctx->parser.recv_buf), 0);
-
-          if (ctx->parser.numbytes == 0) {
-            fprintf(stderr, "Error: recv returned 0 bytes\n");
-            return 1;
+          int res = keepAccumulating(ctx);
+          if (res == -1) {
+            ctx->parser.state = HEADER_ERROR;
+            break;
           }
-          memcpy(ctx->parser.acc_buf + ctx->parser.acc_idx,
-                 ctx->parser.recv_buf, ctx->parser.numbytes);
+          // leggo con recv()
+          // ctx->parser.numbytes = recv(ctx->conn.sockfd, ctx->parser.recv_buf,
+          //                             sizeof(ctx->parser.recv_buf), 0);
 
-          ctx->parser.acc_len += ctx->parser.numbytes;
+          // if (ctx->parser.numbytes == 0) {
+          //   fprintf(stderr, "Error: recv returned 0 bytes\n");
+          //   return 1;
+          // }
+          // memcpy(ctx->parser.acc_buf + ctx->parser.acc_idx,
+          //        ctx->parser.recv_buf, ctx->parser.numbytes);
+
+          // ctx->parser.acc_len += ctx->parser.numbytes;
           ctx->parser.state = HEADER_VALUE_ACC;
           v_idx = 0;
           ctx->parser.acc_idx = 0;
