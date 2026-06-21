@@ -341,7 +341,7 @@ int parseResponse(Ctx *ctx) {
           if (getNextByte(ctx, &next_c) && next_c == '\n') {
             size_buffer[i] = '\0';
             chunk_size = strtol(size_buffer, NULL, 16);
-            printf("Chunk size is: %d\n", chunk_size);
+            printf("\n[DEBUG] Chunk size rilevato: %d byte\n", chunk_size);
             if (chunk_size == 0) {
               ctx->parser.state = BODY_DONE;
               break;
@@ -351,28 +351,37 @@ int parseResponse(Ctx *ctx) {
             ctx->parser.state = BODY_ERROR;
           }
           break;
-        } else {
-          size_buffer[i] = c;
         }
-        i++;
 
+        if (i < MAXSIZECHUNKED - 1) {
+          size_buffer[i++] = c;
+        } else {
+          ctx->parser.state = BODY_ERROR;
+        }
         break;
       }
 
       case BODY_CHUNKED_HTML: {
-        if (!getNextByte(ctx, &c)) {
-          ctx->parser.state = BODY_ERROR;
-          break;
+        if (chunk_size > 0) {
+          if (!getNextByte(ctx, &c)) {
+            ctx->parser.state = BODY_ERROR;
+            break;
+          }
+          printf("%c", c);
+          chunk_size--;
         }
         if (chunk_size == 0) {
-          ctx->parser.state = BODY_CHUNKED_SIZE;
-          i = 0;
-          break;
-        } else {
-          printf("%c", c);
+          char trailing_r, trailing_n;
+          if (getNextByte(ctx, &trailing_r) && trailing_r == '\r' &&
+              getNextByte(ctx, &trailing_n) && trailing_n == '\n') {
+            ctx->parser.state = BODY_CHUNKED_SIZE;
+            i = 0;
+          } else {
+            fprintf(stderr,
+                    "Errore: Mancava il \\r\\n di chiusura del chunk data\n");
+            ctx->parser.state = BODY_ERROR;
+          }
         }
-        chunk_size--;
-
         break;
       }
       case BODY_DONE:
