@@ -17,6 +17,8 @@ pedia\r\n
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,11 +26,11 @@ pedia\r\n
 #include <sys/types.h>
 #include <unistd.h>
 
-#define HOST "127.0.0.1"
-#define PORT "8080"
+#define HOST "ilsole24ore-radio.akamaized.net"
+#define PORT "443"
 #define MAXDATASIZE 1
 #define MAXACCUMULATOR 8192
-#define ABSOLUTE_PATH "/"
+#define ABSOLUTE_PATH "/hls/live/2035301/radio24/playlist.m3u8"
 #define MAXHEADERKEY 128
 #define MAXHEADERVALUE 512
 #define MAXSIZECHUNKED 128
@@ -46,6 +48,7 @@ typedef enum {
   HEADER_ERROR,
   BODY_CHUNKED_SIZE,
   BODY_CHUNKED_HTML,
+  BODY_CONTENT_LENGTH,
   BODY_CHUNKED_AUDIO,
   BODY_ERROR,
   BODY_DONE,
@@ -77,6 +80,8 @@ typedef struct Connection {
   struct addrinfo *servinfo;
   struct addrinfo *p;
   char *ipver;
+  SSL_CTX *ssl_ctx;
+  SSL *ssl_handle;
 
 } Connection;
 
@@ -84,6 +89,25 @@ typedef struct Ctx {
   Parser parser;
   Connection conn;
 } Ctx;
+
+int initSSL(Ctx *ctx) {
+  const SSL_METHOD *method = TLS_client_method();
+
+  if (!method) {
+    fprintf(stderr, "Error creating TLS method\n");
+    return -1;
+  }
+
+  ctx->conn.ssl_ctx = SSL_CTX_new(method);
+  if (!ctx->conn.ssl_ctx) {
+    fprintf(stderr, "Error creating SSL context\n");
+    return -1;
+  }
+
+  SSL_CTX_set_default_verify_paths(ctx->conn.ssl_ctx);
+
+  return 0;
+}
 
 void initCtx(Ctx *ctx) {
   ctx->parser.acc_idx = 0;
@@ -95,6 +119,7 @@ void initCtx(Ctx *ctx) {
   ctx->parser.state = HEADER_STATUS_LINE;
   ctx->parser.isAcc = 0;
   ctx->parser.status_code = 0;
+  ctx->parser.isEncodingChunked = 0;
 
   snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
            "GET %s HTTP/1.1\r\n"
@@ -157,7 +182,16 @@ int initConnection(Ctx *ctx) {
     fprintf(stderr, "client: failed to connect\n");
     return 2;
   }
-  printf("Connected with %s: %s!\n", ctx->conn.ipver, ctx->conn.ipstr);
+
+  ctx->conn.ssl_handle = SSL_new(ctx->conn.ssl_ctx);
+  SSL_set_fd(ctx->conn.ssl_handle, ctx->conn.sockfd);
+  printf("starting TLS handshake...\n");
+  if (SSL_connect(ctx->conn.ssl_handle) <= 0) {
+    fprintf(stderr, "Error during TLS handshake\n");
+    ERR_print_errors_fp(stderr);
+    return -1;
+  }
+  printf("Connected with %s: %s in HTTPS!\n", ctx->conn.ipver, ctx->conn.ipstr);
   freeaddrinfo(ctx->conn.servinfo);
   return 0;
 }
@@ -165,13 +199,11 @@ int initConnection(Ctx *ctx) {
 /* Read a chunk of bytes from the network and place it on recv_buf. Return -1 on
  * error and 0 on success.*/
 int readChunk(Ctx *ctx) {
-  ctx->parser.numbytes = recv(ctx->conn.sockfd, ctx->parser.recv_buf,
-                              sizeof(ctx->parser.recv_buf), 0);
+  int res = SSL_read(ctx->conn.ssl_handle, ctx->parser.recv_buf,
+                     sizeof(ctx->parser.recv_buf));
+  if (res <= 0) return -1;
 
-  if (ctx->parser.numbytes == 0) {
-    fprintf(stderr, "Error reading chunk from network\n");
-    return -1;
-  }
+  ctx->parser.numbytes = res;
   ctx->parser.recv_len = ctx->parser.numbytes;
   ctx->parser.recv_idx = 0;
   return 0;
@@ -324,10 +356,29 @@ int parseResponse(Ctx *ctx) {
         if (ctx->parser.isEncodingChunked) {
           ctx->parser.state = BODY_CHUNKED_SIZE;
           i = 0;
+        } else if (ctx->parser.content_length > 0) {
+          ctx->parser.state = BODY_CONTENT_LENGTH;
+          printf("[INFO] Start downloading static file (%ld byte):\n\n",
+                 ctx->parser.content_length);
         } else {
           ctx->parser.state = DONE;
         }
         break;
+
+      case BODY_CONTENT_LENGTH: {
+        if (ctx->parser.content_length > 0) {
+          if (!getNextByte(ctx, &c)) {
+            ctx->parser.state = BODY_ERROR;
+            break;
+          }
+          printf("%c", c);
+          ctx->parser.content_length--;
+        }
+        if(ctx->parser.content_length == 0) {
+          ctx->parser.state = DONE;
+        }
+        break;
+      }
 
       case BODY_CHUNKED_SIZE: {
 
@@ -390,8 +441,6 @@ int parseResponse(Ctx *ctx) {
         break;
 
       case DONE:
-        printf("Done!\n");
-        exit(1);
         break;
 
       case HEADER_ERROR:
@@ -407,6 +456,9 @@ int parseResponse(Ctx *ctx) {
     }
   }
 
+  SSL_shutdown(ctx->conn.ssl_handle);
+  SSL_free(ctx->conn.ssl_handle);
+  SSL_CTX_free(ctx->conn.ssl_ctx);
   close(ctx->conn.sockfd);
   return 0;
 }
@@ -414,12 +466,13 @@ int parseResponse(Ctx *ctx) {
 int main(void) {
   Ctx ctx;
   initCtx(&ctx);
+  if (initSSL(&ctx) != 0) return 1;
   if (initConnection(&ctx) != 0) return 1;
 
   int len, bytes_send;
   len = strlen(ctx.conn.req_buf);
   printf("Sending msg, len: %d\n", len);
-  bytes_send = send(ctx.conn.sockfd, ctx.conn.req_buf, len, 0);
+  bytes_send = SSL_write(ctx.conn.ssl_handle, ctx.conn.req_buf, len);
   if (bytes_send == -1) {
     perror("send");
     exit(1);
