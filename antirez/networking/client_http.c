@@ -24,8 +24,8 @@ pedia\r\n
 #include <sys/types.h>
 #include <unistd.h>
 
-#define HOST "example.com"
-#define PORT "80"
+#define HOST "127.0.0.1"
+#define PORT "8080"
 #define MAXDATASIZE 1
 #define MAXACCUMULATOR 8192
 #define ABSOLUTE_PATH "/"

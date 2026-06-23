@@ -1,0 +1,16 @@
+Connected with IPv4: 127.0.0.1!
+Sending msg, len: 88
+Bytes sent: 88
+Status Code Rilevato: 200
+Header: [Content-Type] -> [text/plain]
+Header: [Transfer-Encoding] -> [chunked]
+Encoding Chunked: true
+Header: [Connection] -> [close]
+--- parsing HEADER completato con successo ---
+
+[DEBUG] Chunk size rilevato: 5 byte
+Wiki
+[DEBUG] Chunk size rilevato: 5 byte
+pedia
+[DEBUG] Chunk size rilevato: 0 byte
+--- parsing BODY completato con successo ---
