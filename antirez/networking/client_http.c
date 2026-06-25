@@ -30,20 +30,21 @@ pedia\r\n
 #define PORT "443"
 #define MAXDATASIZE 1
 #define MAXACCUMULATOR 8192
+#define MAXLINE 512
 #define ABSOLUTE_PATH "/hls/live/2035301/radio24/playlist.m3u8"
+#define BASE_PATH "/hls/live/2035301/radio24/"
 #define MAXHEADERKEY 128
 #define MAXHEADERVALUE 512
 #define MAXSIZECHUNKED 128
+#define MASTER_PLAYLIST_STR "playlist.m3u8"
+// #define SUB_PLAYLIST_STR "playlist-64000.m3u8"
 
 typedef enum {
-  HEADER_STATUS_LINE = 0,
-  HEADER_STATUS_LINE_ACC,
+  INIT_CONNECTION = 0,
+  HEADER_STATUS_LINE,
   HEADER_KEY,
-  HEADER_KEY_ACC,
   HEADER_CRLF,
-  HEADER_CRLF_ACC,
   HEADER_VALUE,
-  HEADER_VALUE_ACC,
   HEADER_DONE,
   HEADER_ERROR,
   BODY_CHUNKED_SIZE,
@@ -52,23 +53,31 @@ typedef enum {
   BODY_CHUNKED_AUDIO,
   BODY_ERROR,
   BODY_DONE,
+  SENDING_REQUEST,
+  REQUEST_ERROR,
+  CONNECTION_ERROR,
   DONE,
-} ParserState;
+} State;
+
+typedef struct Line {
+  char line_buf[MAXLINE];
+  size_t line_idx;
+  size_t line_len;
+} Line;
+
+typedef enum { MASTER_PLAYLIST = 0, SUB_PLAYLIST, CHUNK_AUDIO } ResourceType;
 
 typedef struct Parser {
-  char acc_buf[MAXACCUMULATOR];
-  size_t acc_idx;
-  size_t acc_len;
   char recv_buf[MAXDATASIZE];
   size_t recv_idx;
   size_t recv_len;
-  size_t numbytes;
-  ParserState state;
-  int body_idx;
+  int numbytes;
+  State state;
   long content_length;
   int isEncodingChunked;
-  int isAcc;
   int status_code;
+  Line line;
+  ResourceType resource;
 } Parser;
 
 typedef struct Connection {
@@ -108,26 +117,64 @@ int initSSL(Ctx *ctx) {
 
   return 0;
 }
+void setRequest(Ctx *ctx, ResourceType resource) {
+  switch (resource) {
+
+  case MASTER_PLAYLIST: {
+    snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
+             "GET %s%s HTTP/1.1\r\n"
+             "Host: %s\r\n"
+             "User-Agent: UndergroundRadio/1.0\r\n"
+             "Connection: close\r\n"
+             "\r\n",
+             BASE_PATH, MASTER_PLAYLIST_STR, HOST);
+    break;
+  }
+  case SUB_PLAYLIST: {
+    snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
+             "GET %s%s HTTP/1.1\r\n"
+             "Host: %s\r\n"
+             "User-Agent: UndergroundRadio/1.0\r\n"
+             "Connection: close\r\n"
+             "\r\n",
+             BASE_PATH, MASTER_PLAYLIST_STR, HOST);
+    // BASE_PATH, ctx->parser.line.line_buf, HOST);
+    break;
+  }
+  case CHUNK_AUDIO: {
+    snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
+             "GET %s%s HTTP/1.1\r\n"
+             "Host: %s\r\n"
+             "User-Agent: UndergroundRadio/1.0\r\n"
+             "Connection: close\r\n"
+             "\r\n",
+             BASE_PATH, MASTER_PLAYLIST_STR, HOST);
+    // BASE_PATH, ctx->parser.line.line_buf, HOST);
+    break;
+  }
+  default:
+    break;
+  }
+}
 
 void initCtx(Ctx *ctx) {
-  ctx->parser.acc_idx = 0;
-  ctx->parser.acc_len = 0;
-  ctx->parser.body_idx = 0;
   ctx->parser.recv_idx = 0;
   ctx->parser.recv_len = 0;
   ctx->parser.content_length = 0;
-  ctx->parser.state = HEADER_STATUS_LINE;
-  ctx->parser.isAcc = 0;
+  ctx->parser.state = INIT_CONNECTION;
   ctx->parser.status_code = 0;
   ctx->parser.isEncodingChunked = 0;
+  ctx->parser.line.line_idx = 0;
+  ctx->parser.line.line_len = 0;
+  ctx->parser.resource = MASTER_PLAYLIST;
 
-  snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
-           "GET %s HTTP/1.1\r\n"
-           "Host: %s\r\n"
-           "User-Agent: UndergroundRadio/1.0\r\n"
-           "Connection: close\r\n"
-           "\r\n",
-           ABSOLUTE_PATH, HOST);
+  // snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
+  //          "GET %s%s HTTP/1.1\r\n"
+  //          "Host: %s\r\n"
+  //          "User-Agent: UndergroundRadio/1.0\r\n"
+  //          "Connection: close\r\n"
+  //          "\r\n",
+  //          BASE_PATH, MASTER_PLAYLIST_STR, HOST);
 
   memset(&ctx->conn.hints, 0, sizeof(ctx->conn.hints));
   ctx->conn.hints.ai_family = AF_UNSPEC;
@@ -201,7 +248,8 @@ int initConnection(Ctx *ctx) {
 int readChunk(Ctx *ctx) {
   int res = SSL_read(ctx->conn.ssl_handle, ctx->parser.recv_buf,
                      sizeof(ctx->parser.recv_buf));
-  if (res <= 0) return -1;
+  if (res <= 0)
+    return -1;
 
   ctx->parser.numbytes = res;
   ctx->parser.recv_len = ctx->parser.numbytes;
@@ -222,7 +270,8 @@ int getNextByte(Ctx *ctx, char *byte) {
   return 0; // End of stream or error
 }
 
-int parseResponse(Ctx *ctx) {
+int start(Ctx *ctx) {
+
   char key_buffer[MAXHEADERKEY] = {0};
   char value_buffer[MAXHEADERVALUE] = {0};
   size_t k_idx = 0, v_idx = 0;
@@ -230,229 +279,277 @@ int parseResponse(Ctx *ctx) {
   int chunk_size = 0;
   char c;
 
-  if (readChunk(ctx) != 0) {
-    ctx->parser.state = HEADER_ERROR;
-    return -1;
-  }
-
   int i = 0;
   char num_buf[4] = {0};
 
   while (ctx->parser.state != DONE) {
     switch (ctx->parser.state) {
 
-      case HEADER_STATUS_LINE: {
-        if (!getNextByte(ctx, &c)) {
-          ctx->parser.state = HEADER_ERROR;
-          break;
-        }
+    case INIT_CONNECTION: {
+      initCtx(ctx);
+      if (initSSL(ctx) != 0) {
+        ctx->parser.state = CONNECTION_ERROR;
+        break;
+      }
+      if (initConnection(ctx) != 0) {
+        ctx->parser.state = CONNECTION_ERROR;
+        break;
+      }
+      ctx->parser.state = SENDING_REQUEST;
+      break;
+    }
 
-        if (isdigit(c) && i >= 9 && i <= 11) {
-          num_buf[i - 9] = c;
-          if (i == 11) {
-            num_buf[3] = '\0';
-            ctx->parser.status_code = atoi(num_buf);
-            printf("Status Code Rilevato: %d\n", ctx->parser.status_code);
-            if (ctx->parser.status_code >= 400) {
-              ctx->parser.state = HEADER_ERROR;
-              break;
-            }
-          }
-        }
-        if (c == '\n') {
-          ctx->parser.state = HEADER_KEY;
-        }
-        i++;
+    case SENDING_REQUEST: {
+      int len, bytes_sent;
+      if (ctx->parser.resource == MASTER_PLAYLIST) {
+        setRequest(ctx, MASTER_PLAYLIST);
+      } else if (ctx->parser.resource == SUB_PLAYLIST) {
+        setRequest(ctx, SUB_PLAYLIST);
+      } else if (ctx->parser.resource == CHUNK_AUDIO) {
+        setRequest(ctx, CHUNK_AUDIO);
+      } else {
+        ctx->parser.state = REQUEST_ERROR;
+        break;
+      }
+      len = strlen(ctx->conn.req_buf);
+      printf("Sending request: %s\n", ctx->conn.req_buf);
+      bytes_sent = SSL_write(ctx->conn.ssl_handle, ctx->conn.req_buf, len);
+      if (bytes_sent == -1) {
+        perror("send");
+        ctx->parser.state = REQUEST_ERROR;
+        break;
+      }
+      printf("Bytes sent: %d\n", bytes_sent);
+      if (readChunk(ctx) != 0) {
+        ctx->parser.state = HEADER_ERROR;
+        break;
+      } else {
+        ctx->parser.state = HEADER_STATUS_LINE;
+      }
+      break;
+    }
+
+    case HEADER_STATUS_LINE: {
+      if (!getNextByte(ctx, &c)) {
+        ctx->parser.state = HEADER_ERROR;
         break;
       }
 
-      case HEADER_KEY: {
-        if (!getNextByte(ctx, &c)) {
-          ctx->parser.state = HEADER_ERROR;
-          break;
-        }
-
-        // CASO CRITICO: Se la riga inizia con \r, gli header sono FINITI!
-        if (k_idx == 0 && c == '\r') {
-          // Consumiamo il \n successivo per ripulire totalmente il flusso
-          char next_c;
-          if (getNextByte(ctx, &next_c) && next_c == '\n') {
-            ctx->parser.state = HEADER_DONE;
-            i = 0;
-          } else {
+      if (isdigit(c) && i >= 9 && i <= 11) {
+        num_buf[i - 9] = c;
+        if (i == 11) {
+          num_buf[3] = '\0';
+          ctx->parser.status_code = atoi(num_buf);
+          printf("Status Code Rilevato: %d\n", ctx->parser.status_code);
+          if (ctx->parser.status_code >= 400) {
             ctx->parser.state = HEADER_ERROR;
+            break;
           }
-          break;
         }
+      }
+      if (c == '\n') {
+        ctx->parser.state = HEADER_KEY;
+      }
+      i++;
+      break;
+    }
 
-        if (c == ':') {
-          key_buffer[k_idx] = '\0';
-          ctx->parser.state = HEADER_VALUE;
-          v_idx = 0;
-          break;
-        }
+    case HEADER_KEY: {
+      if (!getNextByte(ctx, &c)) {
+        ctx->parser.state = HEADER_ERROR;
+        break;
+      }
 
-        if (k_idx < sizeof(key_buffer) - 1) {
-          if (c != '\n' && c != '\r') {
-            key_buffer[k_idx++] = c;
-          }
+      // CASO CRITICO: Se la riga inizia con \r, gli header sono FINITI!
+      if (k_idx == 0 && c == '\r') {
+        // Consumiamo il \n successivo per ripulire totalmente il flusso
+        char next_c;
+        if (getNextByte(ctx, &next_c) && next_c == '\n') {
+          ctx->parser.state = HEADER_DONE;
+          i = 0;
         } else {
-          ctx->parser.state = HEADER_ERROR; // Buffer Overflow Guard
+          ctx->parser.state = HEADER_ERROR;
         }
         break;
       }
-      case HEADER_VALUE: {
 
+      if (c == ':') {
+        key_buffer[k_idx] = '\0';
+        ctx->parser.state = HEADER_VALUE;
+        v_idx = 0;
+        break;
+      }
+
+      if (k_idx < sizeof(key_buffer) - 1) {
+        if (c != '\n' && c != '\r') {
+          key_buffer[k_idx++] = c;
+        }
+      } else {
+        ctx->parser.state = HEADER_ERROR; // Buffer Overflow Guard
+      }
+      break;
+    }
+    case HEADER_VALUE: {
+
+      if (!getNextByte(ctx, &c)) {
+        ctx->parser.state = HEADER_ERROR;
+        break;
+      }
+
+      if (c == '\r') {
+        value_buffer[v_idx] = '\0';
+        printf("Header: [%s] -> [%s]\n", key_buffer, value_buffer);
+
+        // Elaborazione Metadati
+        if (strcasecmp(key_buffer, "Content-Length") == 0) {
+          ctx->parser.content_length = atol(value_buffer);
+        } else if (strcasecmp(key_buffer, "Transfer-Encoding") == 0 &&
+                   strcasecmp(value_buffer, "chunked") == 0) {
+          ctx->parser.isEncodingChunked = 1;
+          printf("Encoding Chunked: true\n");
+        }
+
+        ctx->parser.state = HEADER_CRLF;
+        break;
+      }
+
+      if (v_idx < sizeof(value_buffer) - 1) {
+        // Salta lo spazio iniziale standard dopo i due punti
+        if (v_idx == 0 && c == ' ')
+          continue;
+        value_buffer[v_idx++] = c;
+      } else {
+        ctx->parser.state = HEADER_ERROR;
+      }
+      break;
+    }
+
+    case HEADER_CRLF: {
+      if (!getNextByte(ctx, &c)) {
+        ctx->parser.state = HEADER_ERROR;
+        break;
+      }
+      if (c == '\n') {
+        // Reset per il prossimo header
+        k_idx = 0;
+        ctx->parser.state = HEADER_KEY;
+      } else {
+        ctx->parser.state = HEADER_ERROR;
+      }
+      break;
+    }
+    case HEADER_DONE:
+      printf("--- parsing HEADER completato con successo ---\n");
+      // Da questo punto in poi, tutto ciò che getNextByte estrarrà
+      // sarà il BODY puro (Html o Chunk Audio)!
+      if (ctx->parser.isEncodingChunked) {
+        ctx->parser.state = BODY_CHUNKED_SIZE;
+        i = 0;
+      } else if (ctx->parser.content_length > 0) {
+        ctx->parser.state = BODY_CONTENT_LENGTH;
+        printf("[INFO] Start downloading static file (%ld byte):\n\n",
+               ctx->parser.content_length);
+      } else {
+        ctx->parser.state = DONE;
+      }
+      break;
+
+    case BODY_CONTENT_LENGTH: {
+      if (ctx->parser.content_length > 0) {
         if (!getNextByte(ctx, &c)) {
-          ctx->parser.state = HEADER_ERROR;
+          ctx->parser.state = BODY_ERROR;
           break;
         }
+        printf("%c", c);
+        ctx->parser.content_length--;
+      }
+      if (ctx->parser.content_length == 0) {
+        ctx->parser.state = DONE;
+      }
+      break;
+    }
 
-        if (c == '\r') {
-          value_buffer[v_idx] = '\0';
-          printf("Header: [%s] -> [%s]\n", key_buffer, value_buffer);
+    case BODY_CHUNKED_SIZE: {
 
-          // Elaborazione Metadati
-          if (strcasecmp(key_buffer, "Content-Length") == 0) {
-            ctx->parser.content_length = atol(value_buffer);
-          } else if (strcasecmp(key_buffer, "Transfer-Encoding") == 0 &&
-                     strcasecmp(value_buffer, "chunked") == 0) {
-            ctx->parser.isEncodingChunked = 1;
-            printf("Encoding Chunked: true\n");
+      if (!getNextByte(ctx, &c)) {
+        ctx->parser.state = BODY_ERROR;
+        break;
+      }
+
+      if (c == '\r') {
+        char next_c;
+        if (getNextByte(ctx, &next_c) && next_c == '\n') {
+          size_buffer[i] = '\0';
+          chunk_size = strtol(size_buffer, NULL, 16);
+          printf("\n[DEBUG] Chunk size rilevato: %d byte\n", chunk_size);
+          if (chunk_size == 0) {
+            ctx->parser.state = BODY_DONE;
+            break;
           }
-
-          ctx->parser.state = HEADER_CRLF;
-          break;
-        }
-
-        if (v_idx < sizeof(value_buffer) - 1) {
-          // Salta lo spazio iniziale standard dopo i due punti
-          if (v_idx == 0 && c == ' ') continue;
-          value_buffer[v_idx++] = c;
+          ctx->parser.state = BODY_CHUNKED_HTML;
         } else {
-          ctx->parser.state = HEADER_ERROR;
+          ctx->parser.state = BODY_ERROR;
         }
         break;
       }
 
-      case HEADER_CRLF: {
+      if (i < MAXSIZECHUNKED - 1) {
+        size_buffer[i++] = c;
+      } else {
+        ctx->parser.state = BODY_ERROR;
+      }
+      break;
+    }
+
+    case BODY_CHUNKED_HTML: {
+      if (chunk_size > 0) {
         if (!getNextByte(ctx, &c)) {
-          ctx->parser.state = HEADER_ERROR;
+          ctx->parser.state = BODY_ERROR;
           break;
         }
-        if (c == '\n') {
-          // Reset per il prossimo header
-          k_idx = 0;
-          ctx->parser.state = HEADER_KEY;
-        } else {
-          ctx->parser.state = HEADER_ERROR;
-        }
-        break;
+        printf("%c", c);
+        chunk_size--;
       }
-      case HEADER_DONE:
-        printf("--- parsing HEADER completato con successo ---\n");
-        // Da questo punto in poi, tutto ciò che getNextByte estrarrà
-        // sarà il BODY puro (Html o Chunk Audio)!
-        if (ctx->parser.isEncodingChunked) {
+      if (chunk_size == 0) {
+        char trailing_r, trailing_n;
+        if (getNextByte(ctx, &trailing_r) && trailing_r == '\r' &&
+            getNextByte(ctx, &trailing_n) && trailing_n == '\n') {
           ctx->parser.state = BODY_CHUNKED_SIZE;
           i = 0;
-        } else if (ctx->parser.content_length > 0) {
-          ctx->parser.state = BODY_CONTENT_LENGTH;
-          printf("[INFO] Start downloading static file (%ld byte):\n\n",
-                 ctx->parser.content_length);
         } else {
-          ctx->parser.state = DONE;
-        }
-        break;
-
-      case BODY_CONTENT_LENGTH: {
-        if (ctx->parser.content_length > 0) {
-          if (!getNextByte(ctx, &c)) {
-            ctx->parser.state = BODY_ERROR;
-            break;
-          }
-          printf("%c", c);
-          ctx->parser.content_length--;
-        }
-        if(ctx->parser.content_length == 0) {
-          ctx->parser.state = DONE;
-        }
-        break;
-      }
-
-      case BODY_CHUNKED_SIZE: {
-
-        if (!getNextByte(ctx, &c)) {
-          ctx->parser.state = BODY_ERROR;
-          break;
-        }
-
-        if (c == '\r') {
-          char next_c;
-          if (getNextByte(ctx, &next_c) && next_c == '\n') {
-            size_buffer[i] = '\0';
-            chunk_size = strtol(size_buffer, NULL, 16);
-            printf("\n[DEBUG] Chunk size rilevato: %d byte\n", chunk_size);
-            if (chunk_size == 0) {
-              ctx->parser.state = BODY_DONE;
-              break;
-            }
-            ctx->parser.state = BODY_CHUNKED_HTML;
-          } else {
-            ctx->parser.state = BODY_ERROR;
-          }
-          break;
-        }
-
-        if (i < MAXSIZECHUNKED - 1) {
-          size_buffer[i++] = c;
-        } else {
+          fprintf(stderr,
+                  "Errore: Mancava il \\r\\n di chiusura del chunk data\n");
           ctx->parser.state = BODY_ERROR;
         }
-        break;
       }
+      break;
+    }
+    case BODY_DONE:
+      printf("--- parsing BODY completato con successo ---\n");
+      ctx->parser.state = DONE;
+      break;
 
-      case BODY_CHUNKED_HTML: {
-        if (chunk_size > 0) {
-          if (!getNextByte(ctx, &c)) {
-            ctx->parser.state = BODY_ERROR;
-            break;
-          }
-          printf("%c", c);
-          chunk_size--;
-        }
-        if (chunk_size == 0) {
-          char trailing_r, trailing_n;
-          if (getNextByte(ctx, &trailing_r) && trailing_r == '\r' &&
-              getNextByte(ctx, &trailing_n) && trailing_n == '\n') {
-            ctx->parser.state = BODY_CHUNKED_SIZE;
-            i = 0;
-          } else {
-            fprintf(stderr,
-                    "Errore: Mancava il \\r\\n di chiusura del chunk data\n");
-            ctx->parser.state = BODY_ERROR;
-          }
-        }
-        break;
-      }
-      case BODY_DONE:
-        printf("--- parsing BODY completato con successo ---\n");
-        ctx->parser.state = DONE;
-        break;
+    case DONE:
+      break;
 
-      case DONE:
-        break;
+    case HEADER_ERROR:
+      fprintf(stderr, "Errore fatale nel parsing dell'header HTTP.\n");
+      exit(1);
 
-      case HEADER_ERROR:
-        fprintf(stderr, "Errore fatale nel parsing dell'header HTTP.\n");
-        exit(1);
+    case BODY_ERROR:
+      fprintf(stderr, "Errore fatale nel parsing del body HTTP.\n");
+      exit(1);
 
-      case BODY_ERROR:
-        fprintf(stderr, "Errore fatale nel parsing del body HTTP.\n");
-        exit(1);
+    case REQUEST_ERROR:
+      fprintf(stderr, "Errore fatale nella GET request.\n");
+      exit(1);
 
-      default:
-        break;
+    case CONNECTION_ERROR:
+      fprintf(stderr, "Errore fatale nella connessione.\n");
+      exit(1);
+
+    default:
+      break;
     }
   }
 
@@ -464,21 +561,18 @@ int parseResponse(Ctx *ctx) {
 }
 
 int main(void) {
+
   Ctx ctx;
-  initCtx(&ctx);
-  if (initSSL(&ctx) != 0) return 1;
-  if (initConnection(&ctx) != 0) return 1;
+  // int len, bytes_send;
+  // len = strlen(ctx.conn.req_buf);
+  // printf("Sending msg, len: %d\n", len);
+  // bytes_send = SSL_write(ctx.conn.ssl_handle, ctx.conn.req_buf, len);
+  // if (bytes_send == -1) {
+  //   perror("send");
+  //   exit(1);
+  // }
+  // printf("Bytes sent: %d\n", bytes_send);
 
-  int len, bytes_send;
-  len = strlen(ctx.conn.req_buf);
-  printf("Sending msg, len: %d\n", len);
-  bytes_send = SSL_write(ctx.conn.ssl_handle, ctx.conn.req_buf, len);
-  if (bytes_send == -1) {
-    perror("send");
-    exit(1);
-  }
-  printf("Bytes sent: %d\n", bytes_send);
-
-  parseResponse(&ctx);
+  start(&ctx);
   return 0;
 }
