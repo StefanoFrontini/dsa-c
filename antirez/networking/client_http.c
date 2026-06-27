@@ -14,7 +14,7 @@ pedia\r\n
 #include <arpa/inet.h>
 #include <assert.h>
 #include <ctype.h>
-#include <errno.h>
+// #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <openssl/err.h>
@@ -30,14 +30,15 @@ pedia\r\n
 #define PORT "443"
 #define MAXDATASIZE 1
 #define MAXACCUMULATOR 8192
-#define MAXLINE 512
+#define MAXLINE 60
 #define ABSOLUTE_PATH "/hls/live/2035301/radio24/playlist.m3u8"
 #define BASE_PATH "/hls/live/2035301/radio24/"
 #define MAXHEADERKEY 128
 #define MAXHEADERVALUE 512
 #define MAXSIZECHUNKED 128
 #define MASTER_PLAYLIST_STR "playlist.m3u8"
-// #define SUB_PLAYLIST_STR "playlist-64000.m3u8"
+#define MAXAUDIOBUFFER                                                         \
+  5667553 // 67171 bit/sec, chunk audio is 6.82667 sec, 99 audio chunks
 
 typedef enum {
   INIT_CONNECTION = 0,
@@ -56,14 +57,27 @@ typedef enum {
   SENDING_REQUEST,
   REQUEST_ERROR,
   CONNECTION_ERROR,
+  RECONNECT,
   DONE,
 } State;
 
+// Audio Buffer is implemented as a Ring Buffer
+typedef struct AudioBuffer {
+  char data[MAXAUDIOBUFFER];
+  int head;
+  int tail;
+
+} AudioBuffer;
+
 typedef struct Line {
   char line_buf[MAXLINE];
-  size_t line_idx;
-  size_t line_len;
+  size_t l_idx;
 } Line;
+
+typedef struct ChunkUrl {
+  int i;
+  char url[60];
+} chunkUrl;
 
 typedef enum { MASTER_PLAYLIST = 0, SUB_PLAYLIST, CHUNK_AUDIO } ResourceType;
 
@@ -78,6 +92,8 @@ typedef struct Parser {
   int status_code;
   Line line;
   ResourceType resource;
+  AudioBuffer audio_buf;
+  chunkUrl urls_buf[99];
 } Parser;
 
 typedef struct Connection {
@@ -98,6 +114,25 @@ typedef struct Ctx {
   Parser parser;
   Connection conn;
 } Ctx;
+
+void enqueueAudioBuffer(Ctx *ctx, char *chunk, int numbytes) {
+  if (!numbytes)
+    return;
+
+  int i = 0;
+  while (numbytes--) {
+    ctx->parser.audio_buf.data[ctx->parser.audio_buf.head] = chunk[i++];
+    ctx->parser.audio_buf.head =
+        (ctx->parser.audio_buf.head + 1) % MAXAUDIOBUFFER;
+  }
+}
+
+char dequeueAudioBuffer(Ctx *ctx) {
+  char c = ctx->parser.audio_buf.data[ctx->parser.audio_buf.tail];
+  ctx->parser.audio_buf.tail =
+      (ctx->parser.audio_buf.tail + 1) % MAXAUDIOBUFFER;
+  return c;
+}
 
 int initSSL(Ctx *ctx) {
   const SSL_METHOD *method = TLS_client_method();
@@ -137,7 +172,7 @@ void setRequest(Ctx *ctx, ResourceType resource) {
              "User-Agent: UndergroundRadio/1.0\r\n"
              "Connection: close\r\n"
              "\r\n",
-             BASE_PATH, MASTER_PLAYLIST_STR, HOST);
+             BASE_PATH, ctx->parser.line.line_buf, HOST);
     // BASE_PATH, ctx->parser.line.line_buf, HOST);
     break;
   }
@@ -148,7 +183,7 @@ void setRequest(Ctx *ctx, ResourceType resource) {
              "User-Agent: UndergroundRadio/1.0\r\n"
              "Connection: close\r\n"
              "\r\n",
-             BASE_PATH, MASTER_PLAYLIST_STR, HOST);
+             BASE_PATH, ctx->parser.urls_buf[0].url, HOST);
     // BASE_PATH, ctx->parser.line.line_buf, HOST);
     break;
   }
@@ -161,20 +196,12 @@ void initCtx(Ctx *ctx) {
   ctx->parser.recv_idx = 0;
   ctx->parser.recv_len = 0;
   ctx->parser.content_length = 0;
-  ctx->parser.state = INIT_CONNECTION;
+  // ctx->parser.state = INIT_CONNECTION;
   ctx->parser.status_code = 0;
   ctx->parser.isEncodingChunked = 0;
-  ctx->parser.line.line_idx = 0;
-  ctx->parser.line.line_len = 0;
-  ctx->parser.resource = MASTER_PLAYLIST;
-
-  // snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
-  //          "GET %s%s HTTP/1.1\r\n"
-  //          "Host: %s\r\n"
-  //          "User-Agent: UndergroundRadio/1.0\r\n"
-  //          "Connection: close\r\n"
-  //          "\r\n",
-  //          BASE_PATH, MASTER_PLAYLIST_STR, HOST);
+  ctx->parser.line.l_idx = 0;
+  ctx->parser.audio_buf.head = 0;
+  ctx->parser.audio_buf.tail = 0;
 
   memset(&ctx->conn.hints, 0, sizeof(ctx->conn.hints));
   ctx->conn.hints.ai_family = AF_UNSPEC;
@@ -248,8 +275,23 @@ int initConnection(Ctx *ctx) {
 int readChunk(Ctx *ctx) {
   int res = SSL_read(ctx->conn.ssl_handle, ctx->parser.recv_buf,
                      sizeof(ctx->parser.recv_buf));
-  if (res <= 0)
+
+  if (res <= 0) {
+    int err = SSL_get_error(ctx->conn.ssl_handle, res);
+    fprintf(stderr, "\n[DEBUG] SSL_read fallita. Codice errore OpenSSL: %d\n",
+            err);
+
+    if (err == SSL_ERROR_ZERO_RETURN) {
+      fprintf(stderr, "[DEBUG] Motivo: Il server ha chiuso la connessione TLS "
+                      "in modo pulito (EOF).\n");
+    } else if (err == SSL_ERROR_SYSCALL) {
+      fprintf(stderr, "[DEBUG] Motivo: Errore di I/O sotto i piedi (TCP socket "
+                      "chiuso o Reset dal server).\n");
+    } else {
+      ERR_print_errors_fp(stderr);
+    }
     return -1;
+  }
 
   ctx->parser.numbytes = res;
   ctx->parser.recv_len = ctx->parser.numbytes;
@@ -274,7 +316,9 @@ int start(Ctx *ctx) {
 
   char key_buffer[MAXHEADERKEY] = {0};
   char value_buffer[MAXHEADERVALUE] = {0};
+  // char line_buffer[MAXLINE] = {0};
   size_t k_idx = 0, v_idx = 0;
+  // , l_idx = 0;
   char size_buffer[MAXSIZECHUNKED];
   int chunk_size = 0;
   char c;
@@ -286,7 +330,7 @@ int start(Ctx *ctx) {
     switch (ctx->parser.state) {
 
     case INIT_CONNECTION: {
-      initCtx(ctx);
+      // initCtx(ctx);
       if (initSSL(ctx) != 0) {
         ctx->parser.state = CONNECTION_ERROR;
         break;
@@ -298,12 +342,24 @@ int start(Ctx *ctx) {
       ctx->parser.state = SENDING_REQUEST;
       break;
     }
+    case RECONNECT: {
+      SSL_shutdown(ctx->conn.ssl_handle);
+      SSL_free(ctx->conn.ssl_handle);
+      SSL_CTX_free(ctx->conn.ssl_ctx);
+      close(ctx->conn.sockfd);
+      initCtx(ctx);
+      ctx->parser.state = INIT_CONNECTION;
+      break;
+    }
 
     case SENDING_REQUEST: {
       int len, bytes_sent;
       if (ctx->parser.resource == MASTER_PLAYLIST) {
         setRequest(ctx, MASTER_PLAYLIST);
       } else if (ctx->parser.resource == SUB_PLAYLIST) {
+        printf("SENDING REQUEST\n");
+        printf("k_idx, v_idx, chunck_size, i: %zu %zu %d %d", k_idx, v_idx,
+               chunk_size, i);
         setRequest(ctx, SUB_PLAYLIST);
       } else if (ctx->parser.resource == CHUNK_AUDIO) {
         setRequest(ctx, CHUNK_AUDIO);
@@ -312,7 +368,7 @@ int start(Ctx *ctx) {
         break;
       }
       len = strlen(ctx->conn.req_buf);
-      printf("Sending request: %s\n", ctx->conn.req_buf);
+      printf("\nSending request: %s\n", ctx->conn.req_buf);
       bytes_sent = SSL_write(ctx->conn.ssl_handle, ctx->conn.req_buf, len);
       if (bytes_sent == -1) {
         perror("send");
@@ -321,6 +377,7 @@ int start(Ctx *ctx) {
       }
       printf("Bytes sent: %d\n", bytes_sent);
       if (readChunk(ctx) != 0) {
+        printf("HERE\n");
         ctx->parser.state = HEADER_ERROR;
         break;
       } else {
@@ -440,6 +497,10 @@ int start(Ctx *ctx) {
     }
     case HEADER_DONE:
       printf("--- parsing HEADER completato con successo ---\n");
+      if (ctx->parser.resource == CHUNK_AUDIO) {
+        printf("\nExiting\n");
+        exit(1);
+      }
       // Da questo punto in poi, tutto ciò che getNextByte estrarrà
       // sarà il BODY puro (Html o Chunk Audio)!
       if (ctx->parser.isEncodingChunked) {
@@ -447,6 +508,7 @@ int start(Ctx *ctx) {
         i = 0;
       } else if (ctx->parser.content_length > 0) {
         ctx->parser.state = BODY_CONTENT_LENGTH;
+        ctx->parser.line.l_idx = 0;
         printf("[INFO] Start downloading static file (%ld byte):\n\n",
                ctx->parser.content_length);
       } else {
@@ -455,12 +517,70 @@ int start(Ctx *ctx) {
       break;
 
     case BODY_CONTENT_LENGTH: {
+
       if (ctx->parser.content_length > 0) {
         if (!getNextByte(ctx, &c)) {
           ctx->parser.state = BODY_ERROR;
           break;
         }
-        printf("%c", c);
+        // TO DO: if resource == CHUNK_AUDIO copy to ring buffer
+        // printf("%c\n", c);
+        if (c == '\n') {
+          ctx->parser.line.line_buf[ctx->parser.line.l_idx] = '\0';
+          if (ctx->parser.line.line_buf[0] == '#') {
+            ctx->parser.line.l_idx = 0;
+            break;
+          } else if (ctx->parser.resource == MASTER_PLAYLIST &&
+                     ctx->parser.line.line_buf[0] != '#' &&
+                     strcmp(ctx->parser.line.line_buf + ctx->parser.line.l_idx -
+                                5,
+                            ".m3u8") == 0) {
+            ctx->parser.resource = SUB_PLAYLIST;
+            ctx->parser.state = RECONNECT;
+            break;
+          } else if (ctx->parser.resource == SUB_PLAYLIST &&
+                     ctx->parser.line.line_buf[0] != '#' &&
+                     strcmp(ctx->parser.line.line_buf + ctx->parser.line.l_idx -
+                                3,
+                            ".ts") == 0) {
+
+            int chunk_num =
+                atol(ctx->parser.line.line_buf + ctx->parser.line.l_idx - 10);
+            // printf("\ni is %d\n", i);
+
+            ctx->parser.urls_buf[i].i = chunk_num;
+            memcpy(ctx->parser.urls_buf[i].url, ctx->parser.line.line_buf,
+                   strlen(ctx->parser.line.line_buf));
+
+            ctx->parser.line.l_idx = 0;
+            i++;
+
+            if (i == 99) {
+              ctx->parser.state = RECONNECT;
+              ctx->parser.resource = CHUNK_AUDIO;
+              i = 0;
+              break;
+              // for (int j = 0; j < 99; j++) {
+              //   printf("\n%d - %s\n", urls_buf[j].i, urls_buf[j].url);
+              // }
+              // exit(1);
+            }
+            break;
+          }
+
+          else {
+            ctx->parser.state = BODY_ERROR;
+            break;
+          }
+        }
+        if (ctx->parser.line.l_idx < sizeof(ctx->parser.line.line_buf) - 1) {
+          ctx->parser.line.line_buf[ctx->parser.line.l_idx++] = c;
+        } else {
+          ctx->parser.state = BODY_ERROR;
+          break;
+        }
+
+        // printf("%c", c);
         ctx->parser.content_length--;
       }
       if (ctx->parser.content_length == 0) {
@@ -563,15 +683,10 @@ int start(Ctx *ctx) {
 int main(void) {
 
   Ctx ctx;
-  // int len, bytes_send;
-  // len = strlen(ctx.conn.req_buf);
-  // printf("Sending msg, len: %d\n", len);
-  // bytes_send = SSL_write(ctx.conn.ssl_handle, ctx.conn.req_buf, len);
-  // if (bytes_send == -1) {
-  //   perror("send");
-  //   exit(1);
-  // }
-  // printf("Bytes sent: %d\n", bytes_send);
+
+  initCtx(&ctx);
+  ctx.parser.state = INIT_CONNECTION;
+  ctx.parser.resource = MASTER_PLAYLIST;
 
   start(&ctx);
   return 0;
