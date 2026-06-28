@@ -115,17 +115,22 @@ typedef struct Ctx {
   Connection conn;
 } Ctx;
 
-void enqueueAudioBuffer(Ctx *ctx, char *chunk, int numbytes) {
-  if (!numbytes)
-    return;
-
-  int i = 0;
-  while (numbytes--) {
-    ctx->parser.audio_buf.data[ctx->parser.audio_buf.head] = chunk[i++];
-    ctx->parser.audio_buf.head =
-        (ctx->parser.audio_buf.head + 1) % MAXAUDIOBUFFER;
-  }
+void enqueueAudioBuffer(Ctx *ctx, char *byte) {
+  ctx->parser.audio_buf.data[ctx->parser.audio_buf.head] = *byte;
+  ctx->parser.audio_buf.head =
+      (ctx->parser.audio_buf.head + 1) % MAXAUDIOBUFFER;
 }
+// void enqueueAudioBuffer(Ctx *ctx, char *chunk, int numbytes) {
+//   if (!numbytes)
+//     return;
+//
+//   int i = 0;
+//   while (numbytes--) {
+//     ctx->parser.audio_buf.data[ctx->parser.audio_buf.head] = chunk[i++];
+//     ctx->parser.audio_buf.head =
+//         (ctx->parser.audio_buf.head + 1) % MAXAUDIOBUFFER;
+//   }
+// }
 
 char dequeueAudioBuffer(Ctx *ctx) {
   char c = ctx->parser.audio_buf.data[ctx->parser.audio_buf.tail];
@@ -176,20 +181,29 @@ void setRequest(Ctx *ctx, ResourceType resource) {
     // BASE_PATH, ctx->parser.line.line_buf, HOST);
     break;
   }
-  case CHUNK_AUDIO: {
-    snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
-             "GET %s%s HTTP/1.1\r\n"
-             "Host: %s\r\n"
-             "User-Agent: UndergroundRadio/1.0\r\n"
-             "Connection: close\r\n"
-             "\r\n",
-             BASE_PATH, ctx->parser.urls_buf[0].url, HOST);
-    // BASE_PATH, ctx->parser.line.line_buf, HOST);
-    break;
-  }
+  // case CHUNK_AUDIO: {
+  //   snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
+  //            "GET %s%s HTTP/1.1\r\n"
+  //            "Host: %s\r\n"
+  //            "User-Agent: UndergroundRadio/1.0\r\n"
+  //            "Connection: close\r\n"
+  //            "\r\n",
+  //            BASE_PATH, ctx->parser.urls_buf[0].url, HOST);
+  //   break;
+  // }
   default:
-    break;
+    fprintf(stderr, "\nsetRequest: case not handled\n");
+    exit(1);
   }
+}
+void setAudioRequest(Ctx *ctx, int i) {
+  snprintf(ctx->conn.req_buf, sizeof(ctx->conn.req_buf),
+           "GET %s%s HTTP/1.1\r\n"
+           "Host: %s\r\n"
+           "User-Agent: UndergroundRadio/1.0\r\n"
+           "Connection: close\r\n"
+           "\r\n",
+           BASE_PATH, ctx->parser.urls_buf[i].url, HOST);
 }
 
 void initCtx(Ctx *ctx) {
@@ -311,6 +325,14 @@ int getNextByte(Ctx *ctx, char *byte) {
   printf("getNextByte returns 0\n");
   return 0; // End of stream or error
 }
+void resetParserForNextRequest(Ctx *ctx) {
+  ctx->parser.recv_idx = 0;
+  ctx->parser.recv_len = 0;
+  ctx->parser.content_length = 0;
+  ctx->parser.status_code = 0;
+  ctx->parser.isEncodingChunked = 0;
+  ctx->parser.line.l_idx = 0;
+}
 
 int start(Ctx *ctx) {
 
@@ -324,6 +346,8 @@ int start(Ctx *ctx) {
   char c;
 
   int i = 0;
+  int status_i = 0, size_i = 0, url_count = 0;
+  int audioCounter = 0;
   char num_buf[4] = {0};
 
   while (ctx->parser.state != DONE) {
@@ -345,39 +369,47 @@ int start(Ctx *ctx) {
     case RECONNECT: {
       SSL_shutdown(ctx->conn.ssl_handle);
       SSL_free(ctx->conn.ssl_handle);
-      SSL_CTX_free(ctx->conn.ssl_ctx);
+      // SSL_CTX_free(ctx->conn.ssl_ctx);
       close(ctx->conn.sockfd);
-      initCtx(ctx);
+
+      resetParserForNextRequest(ctx);
+
+      ctx->conn.ssl_handle = NULL;
       ctx->parser.state = INIT_CONNECTION;
       break;
     }
 
     case SENDING_REQUEST: {
+      status_i = 0, size_i = 0;
+
       int len, bytes_sent;
       if (ctx->parser.resource == MASTER_PLAYLIST) {
         setRequest(ctx, MASTER_PLAYLIST);
       } else if (ctx->parser.resource == SUB_PLAYLIST) {
-        printf("SENDING REQUEST\n");
-        printf("k_idx, v_idx, chunck_size, i: %zu %zu %d %d", k_idx, v_idx,
-               chunk_size, i);
+        printf("[INFO] Sub-Playlist request\n");
         setRequest(ctx, SUB_PLAYLIST);
       } else if (ctx->parser.resource == CHUNK_AUDIO) {
-        setRequest(ctx, CHUNK_AUDIO);
+        setAudioRequest(ctx, audioCounter);
       } else {
         ctx->parser.state = REQUEST_ERROR;
         break;
       }
+
       len = strlen(ctx->conn.req_buf);
       printf("\nSending request: %s\n", ctx->conn.req_buf);
+
+      if (ctx->parser.resource == CHUNK_AUDIO) {
+        printf("audioCounter is: %d\n", audioCounter);
+        sleep(2);
+      }
+
       bytes_sent = SSL_write(ctx->conn.ssl_handle, ctx->conn.req_buf, len);
-      if (bytes_sent == -1) {
-        perror("send");
+      if (bytes_sent <= 0) {
         ctx->parser.state = REQUEST_ERROR;
         break;
       }
-      printf("Bytes sent: %d\n", bytes_sent);
+
       if (readChunk(ctx) != 0) {
-        printf("HERE\n");
         ctx->parser.state = HEADER_ERROR;
         break;
       } else {
@@ -392,9 +424,9 @@ int start(Ctx *ctx) {
         break;
       }
 
-      if (isdigit(c) && i >= 9 && i <= 11) {
-        num_buf[i - 9] = c;
-        if (i == 11) {
+      if (isdigit(c) && status_i >= 9 && status_i <= 11) {
+        num_buf[status_i - 9] = c;
+        if (status_i == 11) {
           num_buf[3] = '\0';
           ctx->parser.status_code = atoi(num_buf);
           printf("Status Code Rilevato: %d\n", ctx->parser.status_code);
@@ -407,7 +439,7 @@ int start(Ctx *ctx) {
       if (c == '\n') {
         ctx->parser.state = HEADER_KEY;
       }
-      i++;
+      status_i++;
       break;
     }
 
@@ -497,10 +529,10 @@ int start(Ctx *ctx) {
     }
     case HEADER_DONE:
       printf("--- parsing HEADER completato con successo ---\n");
-      if (ctx->parser.resource == CHUNK_AUDIO) {
-        printf("\nExiting\n");
-        exit(1);
-      }
+      // if (ctx->parser.resource == CHUNK_AUDIO) {
+      //   printf("\nExiting\n");
+      //   exit(1);
+      // }
       // Da questo punto in poi, tutto ciò che getNextByte estrarrà
       // sarà il BODY puro (Html o Chunk Audio)!
       if (ctx->parser.isEncodingChunked) {
@@ -523,68 +555,81 @@ int start(Ctx *ctx) {
           ctx->parser.state = BODY_ERROR;
           break;
         }
-        // TO DO: if resource == CHUNK_AUDIO copy to ring buffer
-        // printf("%c\n", c);
+
+        if (ctx->parser.resource == CHUNK_AUDIO) {
+          enqueueAudioBuffer(ctx, &c);
+          ctx->parser.content_length--;
+          break;
+        }
+
         if (c == '\n') {
           ctx->parser.line.line_buf[ctx->parser.line.l_idx] = '\0';
+
           if (ctx->parser.line.line_buf[0] == '#') {
             ctx->parser.line.l_idx = 0;
+            ctx->parser.content_length--;
             break;
-          } else if (ctx->parser.resource == MASTER_PLAYLIST &&
-                     ctx->parser.line.line_buf[0] != '#' &&
-                     strcmp(ctx->parser.line.line_buf + ctx->parser.line.l_idx -
-                                5,
-                            ".m3u8") == 0) {
+          }
+
+          if (ctx->parser.resource == MASTER_PLAYLIST &&
+              strstr(ctx->parser.line.line_buf, ".m3u8") != NULL) {
             ctx->parser.resource = SUB_PLAYLIST;
             ctx->parser.state = RECONNECT;
             break;
-          } else if (ctx->parser.resource == SUB_PLAYLIST &&
-                     ctx->parser.line.line_buf[0] != '#' &&
-                     strcmp(ctx->parser.line.line_buf + ctx->parser.line.l_idx -
-                                3,
-                            ".ts") == 0) {
+          }
+
+          if (ctx->parser.resource == SUB_PLAYLIST &&
+              strstr(ctx->parser.line.line_buf, ".ts") != NULL) {
 
             int chunk_num =
                 atol(ctx->parser.line.line_buf + ctx->parser.line.l_idx - 10);
-            // printf("\ni is %d\n", i);
 
             ctx->parser.urls_buf[i].i = chunk_num;
-            memcpy(ctx->parser.urls_buf[i].url, ctx->parser.line.line_buf,
-                   strlen(ctx->parser.line.line_buf));
 
+            strncpy(ctx->parser.urls_buf[url_count].url,
+                    ctx->parser.line.line_buf,
+                    sizeof(ctx->parser.urls_buf[url_count].url) - 1);
+            ctx->parser.urls_buf[url_count]
+                .url[sizeof(ctx->parser.urls_buf[url_count].url) - 1] = '\0';
+            // memcpy(ctx->parser.urls_buf[i].url, ctx->parser.line.line_buf,
+            //        strlen(ctx->parser.line.line_buf));
+            //
             ctx->parser.line.l_idx = 0;
-            i++;
+            url_count++;
 
-            if (i == 99) {
+            if (url_count == 99) {
               ctx->parser.state = RECONNECT;
               ctx->parser.resource = CHUNK_AUDIO;
-              i = 0;
-              break;
-              // for (int j = 0; j < 99; j++) {
-              //   printf("\n%d - %s\n", urls_buf[j].i, urls_buf[j].url);
-              // }
-              // exit(1);
+              audioCounter = 0;
             }
-            break;
-          }
-
-          else {
-            ctx->parser.state = BODY_ERROR;
+            ctx->parser.content_length--;
             break;
           }
         }
+
         if (ctx->parser.line.l_idx < sizeof(ctx->parser.line.line_buf) - 1) {
           ctx->parser.line.line_buf[ctx->parser.line.l_idx++] = c;
         } else {
           ctx->parser.state = BODY_ERROR;
           break;
         }
-
-        // printf("%c", c);
         ctx->parser.content_length--;
       }
+
       if (ctx->parser.content_length == 0) {
-        ctx->parser.state = DONE;
+        if (ctx->parser.resource == CHUNK_AUDIO) {
+
+          if (audioCounter < 98) {
+            audioCounter++;
+            ctx->parser.state = RECONNECT;
+          } else {
+            printf("\n[SUCCESS] All 99 audio chunks copied to Ring Buffer!\n");
+            audioCounter = 0;
+            ctx->parser.state = BODY_DONE;
+          }
+        } else {
+          ctx->parser.state = DONE;
+        }
       }
       break;
     }
@@ -683,6 +728,7 @@ int start(Ctx *ctx) {
 int main(void) {
 
   Ctx ctx;
+  memset(&ctx, 0, sizeof(Ctx));
 
   initCtx(&ctx);
   ctx.parser.state = INIT_CONNECTION;
