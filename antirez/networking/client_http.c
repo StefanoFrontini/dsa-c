@@ -26,6 +26,9 @@ pedia\r\n
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <libavformat/avformat.h> // handle container MPEG-TS and Custom I/O
+#include <libavcodec/avcodec.h> // handle CODEC (decode AAC in PCM)
+#include <libavutil/avutil.h> // system utility (memory management, Frame, Packet)
 
 #define HOST "ilsole24ore-radio.akamaized.net"
 #define PORT "443"
@@ -744,6 +747,7 @@ void initAudioHardware() {
     fprintf(stderr, "Cannot open audio device: %s\n", SDL_GetError());
     exit(1);
   }
+
   SDL_ResumeAudioDeviceStream(stream);
 }
 
