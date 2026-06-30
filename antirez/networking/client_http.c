@@ -733,7 +733,7 @@ void initAudioHardware() {
   SDL_AudioSpec spec;
   SDL_AudioStream *stream = NULL;
 
-  if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
+  if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
     fprintf(stderr, "Error SDL_init: %s\n", SDL_GetError());
     exit(1);
   }
@@ -748,7 +748,7 @@ void initAudioHardware() {
     exit(1);
   }
 
-  SDL_ResumeAudioDeviceStream(stream);
+  // SDL_ResumeAudioStreamDevice(stream);
 }
 
 int main(void) {
