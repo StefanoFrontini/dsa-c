@@ -16,6 +16,9 @@ pedia\r\n
 #include <ctype.h>
 // #include <errno.h>
 #include <SDL3/SDL.h>
+#include <libavcodec/avcodec.h>   // handle CODEC (decode AAC in PCM)
+#include <libavformat/avformat.h> // handle container MPEG-TS and Custom I/O
+#include <libavutil/avutil.h> // system utility (memory management, Frame, Packet)
 #include <netdb.h>
 #include <netinet/in.h>
 #include <openssl/err.h>
@@ -26,9 +29,6 @@ pedia\r\n
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <libavformat/avformat.h> // handle container MPEG-TS and Custom I/O
-#include <libavcodec/avcodec.h> // handle CODEC (decode AAC in PCM)
-#include <libavutil/avutil.h> // system utility (memory management, Frame, Packet)
 
 #define HOST "ilsole24ore-radio.akamaized.net"
 #define PORT "443"
@@ -339,13 +339,34 @@ void resetParserForNextRequest(Ctx *ctx) {
   ctx->parser.line.l_idx = 0;
 }
 
+static int read_packet(void *opaque, uint8_t *buf, int buf_size) {
+  Ctx *ctx = (Ctx *)opaque;
+  int head = ctx->parser.audio_buf.head;
+  int tail = ctx->parser.audio_buf.tail;
+
+  int available =
+      (head >= tail) ? (head - tail) : (MAXAUDIOBUFFER - tail + head);
+
+  int bytes_to_read = (buf_size < available) ? buf_size : available;
+
+  if (bytes_to_read == 0) {
+    return AVERROR_EOF;
+  }
+
+  for (int i = 0; i < bytes_to_read; i++) {
+    buf[i] = dequeueAudioBuffer(ctx);
+  }
+  printf("[FFMPEG IO] Richiesti: %d byte | Forniti dal Ring Buffer: %d byte\n",
+
+         buf_size, bytes_to_read);
+  return bytes_to_read;
+}
+
 int fetch(Ctx *ctx) {
 
   char key_buffer[MAXHEADERKEY] = {0};
   char value_buffer[MAXHEADERVALUE] = {0};
-  // char line_buffer[MAXLINE] = {0};
   size_t k_idx = 0, v_idx = 0;
-  // , l_idx = 0;
   char size_buffer[MAXSIZECHUNKED];
   int chunk_size = 0;
   char c;
@@ -403,10 +424,10 @@ int fetch(Ctx *ctx) {
         len = strlen(ctx->conn.req_buf);
         printf("\nSending request: %s\n", ctx->conn.req_buf);
 
-        if (ctx->parser.resource == CHUNK_AUDIO) {
-          printf("audioCounter is: %d\n", audioCounter);
-          sleep(2);
-        }
+        // if (ctx->parser.resource == CHUNK_AUDIO) {
+        //   printf("audioCounter is: %d\n", audioCounter);
+        //   sleep(2);
+        // }
 
         bytes_sent = SSL_write(ctx->conn.ssl_handle, ctx->conn.req_buf, len);
         if (bytes_sent <= 0) {
@@ -434,7 +455,7 @@ int fetch(Ctx *ctx) {
           if (status_i == 11) {
             num_buf[3] = '\0';
             ctx->parser.status_code = atoi(num_buf);
-            printf("Status Code Rilevato: %d\n", ctx->parser.status_code);
+            // printf("Status Code Rilevato: %d\n", ctx->parser.status_code);
             if (ctx->parser.status_code >= 400) {
               ctx->parser.state = HEADER_ERROR;
               break;
@@ -492,7 +513,7 @@ int fetch(Ctx *ctx) {
 
         if (c == '\r') {
           value_buffer[v_idx] = '\0';
-          printf("Header: [%s] -> [%s]\n", key_buffer, value_buffer);
+          // printf("Header: [%s] -> [%s]\n", key_buffer, value_buffer);
 
           // Elaborazione Metadati
           if (strcasecmp(key_buffer, "Content-Length") == 0) {
@@ -500,7 +521,7 @@ int fetch(Ctx *ctx) {
           } else if (strcasecmp(key_buffer, "Transfer-Encoding") == 0 &&
                      strcasecmp(value_buffer, "chunked") == 0) {
             ctx->parser.isEncodingChunked = 1;
-            printf("Encoding Chunked: true\n");
+            // printf("Encoding Chunked: true\n");
           }
 
           ctx->parser.state = HEADER_CRLF;
@@ -729,27 +750,6 @@ int fetch(Ctx *ctx) {
   close(ctx->conn.sockfd);
   return 0;
 }
-void initAudioHardware() {
-  SDL_AudioSpec spec;
-  SDL_AudioStream *stream = NULL;
-
-  if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
-    fprintf(stderr, "Error SDL_init: %s\n", SDL_GetError());
-    exit(1);
-  }
-  spec.format = SDL_AUDIO_F32;
-  spec.channels = 2;
-  spec.freq = 44100;
-
-  stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec,
-                                     NULL, NULL);
-  if (!stream) {
-    fprintf(stderr, "Cannot open audio device: %s\n", SDL_GetError());
-    exit(1);
-  }
-
-  // SDL_ResumeAudioStreamDevice(stream);
-}
 
 int main(void) {
 
@@ -759,8 +759,152 @@ int main(void) {
   initCtx(&ctx);
   ctx.parser.state = INIT_CONNECTION;
   ctx.parser.resource = MASTER_PLAYLIST;
-  initAudioHardware();
 
+  // 1. SCARICAMENTO DEI 99 CHUNK (Il tuo Network Engine)
   fetch(&ctx);
+
+  // 2. INIZIALIZZAZIONE CONTESTI FFMPEG
+  AVFormatContext *fmt_ctx = avformat_alloc_context();
+
+  size_t avio_ctx_buffer_size = 4096;
+  uint8_t *avio_ctx_buffer = av_malloc(avio_ctx_buffer_size);
+
+  AVIOContext *avio_ctx = avio_alloc_context(
+      avio_ctx_buffer, avio_ctx_buffer_size, 0, &ctx, &read_packet, NULL, NULL);
+
+  fmt_ctx->pb = avio_ctx;
+
+  // 3. ALLOCAZIONE SICURA DI PACKET E FRAME
+
+  AVPacket *pkt = av_packet_alloc();
+  AVFrame *decoded_frame = av_frame_alloc();
+
+  if (!pkt || !decoded_frame) {
+    fprintf(stderr, "Errore: Impossibile allocare Packet o Frame\n");
+    exit(1);
+  }
+
+  // 4. APERTURA E AGGANCIO AL RING BUFFER
+  int ret = avformat_open_input(&fmt_ctx, NULL, NULL, NULL);
+  if (ret < 0) {
+    fprintf(stderr, "Error: FFmpeg cannot read the Ring Buffer\n");
+    exit(1);
+  }
+  if (avformat_find_stream_info(fmt_ctx, NULL) < 0) {
+    fprintf(stderr, "Error: Cannot find stream info\n");
+    exit(1);
+  }
+  printf("\n[SUCCESS] FFmpeg ha agganciato il Ring Buffer con successo!\n");
+
+  av_dump_format(fmt_ctx, 0, "Radio24_Stream", 0);
+  // 5. SELEZIONE AUTOMATICA DEL CODEC AUDIO (Rileva l'AAC da solo)
+
+  const AVCodec *codec = NULL;
+
+  int audio_stream_idx =
+      av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0);
+  if (audio_stream_idx < 0) {
+    fprintf(stderr, "Error: No audio stream found in the HLS chunks\n");
+    exit(1);
+  }
+  AVStream *audio_stream = fmt_ctx->streams[audio_stream_idx];
+
+  AVCodecContext *c = avcodec_alloc_context3(codec);
+
+  if (!c) {
+    fprintf(stderr, "Could not allocate audio codec context\n");
+    exit(1);
+  }
+
+  // Copiamo i parametri della traccia (canali, sample rate) nel contesto del
+  // decoder
+  avcodec_parameters_to_context(c, audio_stream->codecpar);
+
+  if (avcodec_open2(c, codec, NULL) < 0) {
+    fprintf(stderr, "Could not open codec\n");
+    exit(1);
+  }
+  // 6. INIZIALIZZAZIONE HARDWARE AUDIO CON SDL3
+  if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+    fprintf(stderr, "Error SDL_init: %s\n", SDL_GetError());
+    exit(1);
+  }
+  SDL_AudioSpec spec;
+  spec.format = SDL_AUDIO_F32; // Vogliamo campioni float a 32-bit
+  spec.channels = c->ch_layout.nb_channels;
+  spec.freq = c->sample_rate;
+
+  SDL_AudioStream *stream = SDL_OpenAudioDeviceStream(
+      SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+  if (!stream) {
+    fprintf(stderr, "Cannot open audio device: %s\n", SDL_GetError());
+    exit(1);
+  }
+  // SDL_ResumeAudioStream(stream);
+  printf("\n[AUDIO] Motore SDL3 avviato (%d canali @ %d Hz). Riproduzione in "
+         "corso...\n",
+         spec.channels, spec.freq);
+
+  // 7. IL CICLO DI DECODIFICA REALE (Loop infinito finché c'è musica nel Ring
+  // Buffer)
+  while (av_read_frame(fmt_ctx, pkt) >= 0) {
+    if (pkt->stream_index == audio_stream_idx) {
+
+      // Spingiamo il pacchetto compresso nel decoder
+      ret = avcodec_send_packet(c, pkt);
+      if (ret < 0) {
+        fprintf(stderr, "Error submitting the packet to the decoder\n");
+        break;
+      }
+
+      // Estraiamo tutti i frame decompressi disponibili
+      while (ret >= 0) {
+        ret = avcodec_receive_frame(c, decoded_frame);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+          break;
+        } else if (ret < 0) {
+          fprintf(stderr, "Error during decoding\n");
+          exit(1);
+        }
+
+        // --- GESTIONE INTERLEAVING (FLTP -> FLT) ---
+        int samples = decoded_frame->nb_samples;
+        int channels = c->ch_layout.nb_channels;
+
+        // Usiamo il pcm_buffer del tuo parser per riordinare i byte
+        int pcm_idx = 0;
+        if (decoded_frame->format == AV_SAMPLE_FMT_FLTP) {
+          // Se è Planar, intrecciamo i canali a mano (L, R, L, R...)
+          for (int s = 0; s < samples; s++) {
+            for (int ch = 0; ch < channels; ch++) {
+              float *channel_data = (float *)decoded_frame->data[ch];
+              ctx.parser.pcm_buffer[pcm_idx++] = channel_data[s];
+            }
+          }
+          // Spediamo il buffer intrecciato alle casse del tuo PC
+          SDL_PutAudioStreamData(stream, ctx.parser.pcm_buffer,
+                                 samples * channels * sizeof(float));
+        } else {
+          // Se fosse già packed (raro con l'AAC), lo inviamo direttamente
+          SDL_PutAudioStreamData(stream, decoded_frame->data[0],
+                                 samples * channels * sizeof(float));
+        }
+      }
+    }
+    // CRITICO: Liberiamo il pacchetto per il prossimo giro di vite del Ring
+    // Buffer
+    av_packet_unref(pkt);
+  }
+
+  // 8. PULIZIA FINALE DELLA MEMORIA
+  printf("\n[END] Riproduzione completata.\n");
+  SDL_DestroyAudioStream(stream);
+  av_frame_free(&decoded_frame);
+  av_packet_free(&pkt);
+  avcodec_free_context(&c);
+  avformat_close_input(&fmt_ctx);
+  avio_context_free(&avio_ctx);
+  av_free(avio_ctx_buffer);
+
   return 0;
 }
