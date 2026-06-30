@@ -32,9 +32,9 @@ pedia\r\n
 
 #define HOST "ilsole24ore-radio.akamaized.net"
 #define PORT "443"
-#define MAXDATASIZE 1
+#define MAXDATASIZE 8192
 #define MAXACCUMULATOR 8192
-#define MAXLINE 60
+#define MAXLINE 512
 #define ABSOLUTE_PATH "/hls/live/2035301/radio24/playlist.m3u8"
 #define BASE_PATH "/hls/live/2035301/radio24/"
 #define MAXHEADERKEY 128
@@ -42,7 +42,7 @@ pedia\r\n
 #define MAXSIZECHUNKED 128
 #define MASTER_PLAYLIST_STR "playlist.m3u8"
 #define MAXAUDIOBUFFER                                                         \
-  5667553 // 67171 bit/sec, chunk audio is 6.82667 sec, 99 audio chunks
+  15000000 // 67171 bit/sec, chunk audio is 6.82667 sec, 99 audio chunks
 
 typedef enum {
   INIT_CONNECTION = 0,
@@ -80,7 +80,7 @@ typedef struct Line {
 
 typedef struct ChunkUrl {
   int i;
-  char url[60];
+  char url[512];
 } chunkUrl;
 
 typedef enum { MASTER_PLAYLIST = 0, SUB_PLAYLIST, CHUNK_AUDIO } ResourceType;
@@ -98,7 +98,7 @@ typedef struct Parser {
   ResourceType resource;
   AudioBuffer audio_buf;
   chunkUrl urls_buf[99];
-  float pcm_buffer[4096];
+  float pcm_buffer[8192];
 } Parser;
 
 typedef struct Connection {
@@ -753,15 +753,19 @@ int fetch(Ctx *ctx) {
 
 int main(void) {
 
-  Ctx ctx;
-  memset(&ctx, 0, sizeof(Ctx));
+  Ctx *ctx = calloc(1, sizeof(Ctx));
+  if (!ctx) {
+    fprintf(stderr,
+            "Errore fatale: Impossibile allocare 15MB di memoria nell'Heap.\n");
+    return 1;
+  }
 
-  initCtx(&ctx);
-  ctx.parser.state = INIT_CONNECTION;
-  ctx.parser.resource = MASTER_PLAYLIST;
+  initCtx(ctx);
+  ctx->parser.state = INIT_CONNECTION;
+  ctx->parser.resource = MASTER_PLAYLIST;
 
   // 1. SCARICAMENTO DEI 99 CHUNK (Il tuo Network Engine)
-  fetch(&ctx);
+  fetch(ctx);
 
   // 2. INIZIALIZZAZIONE CONTESTI FFMPEG
   AVFormatContext *fmt_ctx = avformat_alloc_context();
@@ -770,7 +774,7 @@ int main(void) {
   uint8_t *avio_ctx_buffer = av_malloc(avio_ctx_buffer_size);
 
   AVIOContext *avio_ctx = avio_alloc_context(
-      avio_ctx_buffer, avio_ctx_buffer_size, 0, &ctx, &read_packet, NULL, NULL);
+      avio_ctx_buffer, avio_ctx_buffer_size, 0, ctx, &read_packet, NULL, NULL);
 
   fmt_ctx->pb = avio_ctx;
 
@@ -781,17 +785,20 @@ int main(void) {
 
   if (!pkt || !decoded_frame) {
     fprintf(stderr, "Errore: Impossibile allocare Packet o Frame\n");
+    free(ctx);
     exit(1);
   }
 
   // 4. APERTURA E AGGANCIO AL RING BUFFER
-  int ret = avformat_open_input(&fmt_ctx, NULL, NULL, NULL);
-  if (ret < 0) {
+  int decode_ret = avformat_open_input(&fmt_ctx, NULL, NULL, NULL);
+  if (decode_ret < 0) {
     fprintf(stderr, "Error: FFmpeg cannot read the Ring Buffer\n");
+    free(ctx);
     exit(1);
   }
   if (avformat_find_stream_info(fmt_ctx, NULL) < 0) {
     fprintf(stderr, "Error: Cannot find stream info\n");
+    free(ctx);
     exit(1);
   }
   printf("\n[SUCCESS] FFmpeg ha agganciato il Ring Buffer con successo!\n");
@@ -805,6 +812,7 @@ int main(void) {
       av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0);
   if (audio_stream_idx < 0) {
     fprintf(stderr, "Error: No audio stream found in the HLS chunks\n");
+    free(ctx);
     exit(1);
   }
   AVStream *audio_stream = fmt_ctx->streams[audio_stream_idx];
@@ -813,6 +821,7 @@ int main(void) {
 
   if (!c) {
     fprintf(stderr, "Could not allocate audio codec context\n");
+    free(ctx);
     exit(1);
   }
 
@@ -822,11 +831,13 @@ int main(void) {
 
   if (avcodec_open2(c, codec, NULL) < 0) {
     fprintf(stderr, "Could not open codec\n");
+    free(ctx);
     exit(1);
   }
   // 6. INIZIALIZZAZIONE HARDWARE AUDIO CON SDL3
   if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
     fprintf(stderr, "Error SDL_init: %s\n", SDL_GetError());
+    free(ctx);
     exit(1);
   }
   SDL_AudioSpec spec;
@@ -838,9 +849,10 @@ int main(void) {
       SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
   if (!stream) {
     fprintf(stderr, "Cannot open audio device: %s\n", SDL_GetError());
+    free(ctx);
     exit(1);
   }
-  // SDL_ResumeAudioStream(stream);
+  SDL_ResumeAudioStreamDevice(stream);
   printf("\n[AUDIO] Motore SDL3 avviato (%d canali @ %d Hz). Riproduzione in "
          "corso...\n",
          spec.channels, spec.freq);
@@ -851,19 +863,20 @@ int main(void) {
     if (pkt->stream_index == audio_stream_idx) {
 
       // Spingiamo il pacchetto compresso nel decoder
-      ret = avcodec_send_packet(c, pkt);
-      if (ret < 0) {
+      decode_ret = avcodec_send_packet(c, pkt);
+      if (decode_ret < 0) {
         fprintf(stderr, "Error submitting the packet to the decoder\n");
         break;
       }
 
       // Estraiamo tutti i frame decompressi disponibili
-      while (ret >= 0) {
-        ret = avcodec_receive_frame(c, decoded_frame);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+      while (decode_ret >= 0) {
+        decode_ret = avcodec_receive_frame(c, decoded_frame);
+        if (decode_ret == AVERROR(EAGAIN) || decode_ret == AVERROR_EOF) {
           break;
-        } else if (ret < 0) {
+        } else if (decode_ret < 0) {
           fprintf(stderr, "Error during decoding\n");
+          free(ctx);
           exit(1);
         }
 
@@ -878,11 +891,11 @@ int main(void) {
           for (int s = 0; s < samples; s++) {
             for (int ch = 0; ch < channels; ch++) {
               float *channel_data = (float *)decoded_frame->data[ch];
-              ctx.parser.pcm_buffer[pcm_idx++] = channel_data[s];
+              ctx->parser.pcm_buffer[pcm_idx++] = channel_data[s];
             }
           }
           // Spediamo il buffer intrecciato alle casse del tuo PC
-          SDL_PutAudioStreamData(stream, ctx.parser.pcm_buffer,
+          SDL_PutAudioStreamData(stream, ctx->parser.pcm_buffer,
                                  samples * channels * sizeof(float));
         } else {
           // Se fosse già packed (raro con l'AAC), lo inviamo direttamente
@@ -895,6 +908,15 @@ int main(void) {
     // Buffer
     av_packet_unref(pkt);
   }
+  // CORREZIONE 2: Il blocco di guardia temporale.
+  // Poiché la decodifica in RAM è istantanea, teniamo in vita il programma
+  // finché l'hardware non ha finito di consumare i byte decompressi.
+  printf("\n[AUDIO] Coda di decodifica completata. Riproduzione dei chunk in "
+         "corso...\n");
+  while (SDL_GetAudioStreamQueued(stream) > 0) {
+    SDL_Delay(100); // Mette in pausa il thread principale per 100ms prima del
+                    // prossimo controllo
+  }
 
   // 8. PULIZIA FINALE DELLA MEMORIA
   printf("\n[END] Riproduzione completata.\n");
@@ -903,8 +925,13 @@ int main(void) {
   av_packet_free(&pkt);
   avcodec_free_context(&c);
   avformat_close_input(&fmt_ctx);
-  avio_context_free(&avio_ctx);
-  av_free(avio_ctx_buffer);
+
+  if (avio_ctx) {
+    av_freep(&avio_ctx->buffer);
+    avio_context_free(&avio_ctx);
+  }
+
+  free(ctx);
 
   return 0;
 }
