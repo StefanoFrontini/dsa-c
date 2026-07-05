@@ -45,6 +45,7 @@ pedia\r\n
 #define MAXAUDIOBUFFER                                                         \
   15000000 // 67171 bit/sec, chunk audio is 6.82667 sec, 99 audio chunks
 #define SDLBUFFER 352800 * 3 // 3 seconds
+#define THRESHOLD 100000
 
 typedef enum {
   INIT_CONNECTION = 0,
@@ -347,10 +348,7 @@ static int read_packet(void *opaque, uint8_t *buf, int buf_size) {
          buf_size, bytes_to_read);
   return bytes_to_read;
 }
-
-void *fetch(void *arg) {
-
-  Ctx *ctx = (Ctx *)arg;
+void fetch(Ctx *ctx) {
 
   char key_buffer[MAXHEADERKEY] = {0};
   char value_buffer[MAXHEADERVALUE] = {0};
@@ -363,22 +361,6 @@ void *fetch(void *arg) {
   int status_i = 0, size_i = 0, url_count = 0;
   int audioCounter = 0;
   char num_buf[4] = {0};
-  /*
-  while(1){
-
-  int available =
-      (head >= tail) ? (head - tail) : (MAXAUDIOBUFFER - tail + head);
-      /---head---tail----/ MAXAUDIOBUFFER
-      if(available > threshold){
-      sleep(1)
-      } else {
-       fetch()
-      }
-
-  }
-
-
-  */
 
   while (ctx->parser.state != DONE) {
     switch (ctx->parser.state) {
@@ -480,7 +462,7 @@ void *fetch(void *arg) {
 
         // CASO CRITICO: Se la riga inizia con \r, gli header sono FINITI!
         if (k_idx == 0 && c == '\r') {
-          // Consumiamo il \n successivo per ripulire totalmente il flusso
+
           char next_c;
           if (getNextByte(ctx, &next_c) && next_c == '\n') {
             ctx->parser.state = HEADER_DONE;
@@ -758,6 +740,22 @@ void *fetch(void *arg) {
         break;
     }
   }
+}
+
+void *get_data(void *arg) {
+
+  Ctx *ctx = (Ctx *)arg;
+  while (1) {
+    int head = ctx->parser.audio_buf.head;
+    int tail = ctx->parser.audio_buf.tail;
+    int available =
+        (head >= tail) ? (head - tail) : (MAXAUDIOBUFFER - tail + head);
+    if (available > THRESHOLD) {
+      sleep(1);
+    } else {
+      fetch(ctx);
+    }
+  }
 
   SSL_shutdown(ctx->conn.ssl_handle);
   SSL_free(ctx->conn.ssl_handle);
@@ -965,7 +963,7 @@ int main(void) {
   /* For portability, explicitly create threads in a joinable state */
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-  pthread_create(&network_thread, &attr, fetch, (void *)&ctx);
+  pthread_create(&network_thread, &attr, get_data, (void *)&ctx);
   pthread_create(&audio_thread, &attr, decode, (void *)&ctx);
 
   // fetch(ctx); // network thread
