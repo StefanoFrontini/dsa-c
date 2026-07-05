@@ -97,8 +97,9 @@ typedef struct Parser {
   Line line;
   ResourceType resource;
   AudioBuffer audio_buf;
-  chunkUrl urls_buf[99];
+  chunkUrl urls_buf[100];
   float pcm_buffer[8192];
+  int last_sequence;
 } Parser;
 
 typedef struct Connection {
@@ -221,6 +222,7 @@ void initCtx(Ctx *ctx) {
   ctx->parser.line.l_idx = 0;
   ctx->parser.audio_buf.head = 0;
   ctx->parser.audio_buf.tail = 0;
+  ctx->parser.last_sequence = 0;
 
   memset(&ctx->conn.hints, 0, sizeof(ctx->conn.hints));
   ctx->conn.hints.ai_family = AF_UNSPEC;
@@ -375,6 +377,7 @@ int fetch(Ctx *ctx) {
   int status_i = 0, size_i = 0, url_count = 0;
   int audioCounter = 0;
   char num_buf[4] = {0};
+
 
   while (ctx->parser.state != DONE) {
     switch (ctx->parser.state) {
@@ -609,7 +612,7 @@ int fetch(Ctx *ctx) {
               int chunk_num =
                   atol(ctx->parser.line.line_buf + ctx->parser.line.l_idx - 10);
 
-              ctx->parser.urls_buf[i].i = chunk_num;
+              ctx->parser.urls_buf[url_count].i = chunk_num;
 
               strncpy(ctx->parser.urls_buf[url_count].url,
                       ctx->parser.line.line_buf,
@@ -619,10 +622,20 @@ int fetch(Ctx *ctx) {
               // memcpy(ctx->parser.urls_buf[i].url, ctx->parser.line.line_buf,
               //        strlen(ctx->parser.line.line_buf));
               //
+              printf("\nurl is: %s\n", ctx->parser.urls_buf[url_count].url);
               ctx->parser.line.l_idx = 0;
               url_count++;
+              // if (url_count == 98) {
+              //   printf("\nSequence is: %d\n", chunk_num);
+              // }
 
-              if (url_count == 99) {
+              if (url_count == 100) {
+                ctx->parser.last_sequence =
+                    ctx->parser.urls_buf[url_count - 1].i;
+                printf("\nLast sequence is: %d\n", chunk_num);
+                printf("url is: %s\n", ctx->parser.urls_buf[url_count - 1].url);
+                printf("i is: %d\n", ctx->parser.urls_buf[url_count - 1].i);
+                exit(1);
                 ctx->parser.state = RECONNECT;
                 ctx->parser.resource = CHUNK_AUDIO;
                 audioCounter = 0;
