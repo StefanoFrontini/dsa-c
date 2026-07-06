@@ -156,6 +156,8 @@ int initSSL(Ctx *ctx) {
     return -1;
   }
 
+  SSL_CTX_set_session_cache_mode(ctx->conn.ssl_ctx, SSL_SESS_CACHE_OFF);
+
   SSL_CTX_set_default_verify_paths(ctx->conn.ssl_ctx);
 
   return 0;
@@ -386,14 +388,19 @@ void fetch(Ctx *ctx) {
         break;
       }
       case RECONNECT: {
-        SSL_shutdown(ctx->conn.ssl_handle);
-        SSL_free(ctx->conn.ssl_handle);
-        // SSL_CTX_free(ctx->conn.ssl_ctx);
-        close(ctx->conn.sockfd);
+        if (ctx->conn.ssl_handle) {
+          SSL_shutdown(ctx->conn.ssl_handle);
+          SSL_free(ctx->conn.ssl_handle);
+          ctx->conn.ssl_handle =
+              NULL; // Mettiamo a NULL per evitare dangling pointers
+        }
+        if (ctx->conn.sockfd >= 0) {
+          close(ctx->conn.sockfd);
+          ctx->conn.sockfd = -1;
+        }
 
         resetParserForNextRequest(ctx);
 
-        ctx->conn.ssl_handle = NULL;
         ctx->parser.state = INIT_CONNECTION;
         break;
       }
@@ -784,6 +791,15 @@ void *get_data(void *arg) {
     ctx->parser.state = INIT_CONNECTION;
     ctx->parser.resource = MASTER_PLAYLIST;
     fetch(ctx);
+    if (ctx->conn.ssl_handle) {
+      SSL_shutdown(ctx->conn.ssl_handle);
+      SSL_free(ctx->conn.ssl_handle);
+      ctx->conn.ssl_handle = NULL; // Evita dangling pointers
+    }
+    if (ctx->conn.sockfd >= 0) {
+      close(ctx->conn.sockfd);
+      ctx->conn.sockfd = -1;
+    }
 
     pthread_mutex_lock(&audio_buffer_mutex);
     pthread_cond_signal(&audio_buffer_threshold_cv);
@@ -903,45 +919,49 @@ void *decode(void *arg) {
     } else {
       int ret = av_read_frame(fmt_ctx, pkt);
       if (ret >= 0) {
-        // Spingiamo il pacchetto compresso nel decoder
-        decode_ret = avcodec_send_packet(c, pkt);
-        if (decode_ret < 0) {
-          fprintf(stderr, "Error submitting the packet to the decoder\n");
-          break;
-        }
+        if (pkt->stream_index == audio_stream_idx) {
 
-        // Estraiamo tutti i frame decompressi disponibili
-        while (decode_ret >= 0) {
-          decode_ret = avcodec_receive_frame(c, decoded_frame);
-          if (decode_ret == AVERROR(EAGAIN) || decode_ret == AVERROR_EOF) {
+          // Spingiamo il pacchetto compresso nel decoder
+          decode_ret = avcodec_send_packet(c, pkt);
+          if (decode_ret < 0) {
+            fprintf(stderr, "Error submitting the packet to the decoder\n");
             break;
-          } else if (decode_ret < 0) {
-            fprintf(stderr, "Error during decoding\n");
-            free(ctx);
-            exit(1);
           }
 
-          // --- GESTIONE INTERLEAVING (FLTP -> FLT) ---
-          int samples = decoded_frame->nb_samples;
-          int channels = c->ch_layout.nb_channels;
-
-          // Usiamo il pcm_buffer del tuo parser per riordinare i byte
-          int pcm_idx = 0;
-          if (decoded_frame->format == AV_SAMPLE_FMT_FLTP) {
-            // Se è Planar, intrecciamo i canali a mano (L, R, L, R...)
-            for (int s = 0; s < samples; s++) {
-              for (int ch = 0; ch < channels; ch++) {
-                float *channel_data = (float *)decoded_frame->data[ch];
-                ctx->parser.pcm_buffer[pcm_idx++] = channel_data[s];
-              }
+          // Estraiamo tutti i frame decompressi disponibili
+          while (decode_ret >= 0) {
+            decode_ret = avcodec_receive_frame(c, decoded_frame);
+            if (decode_ret == AVERROR(EAGAIN) || decode_ret == AVERROR_EOF) {
+              break;
+            } else if (decode_ret < 0) {
+              fprintf(stderr, "Error during decoding\n");
+              free(ctx);
+              exit(1);
             }
-            // Spediamo il buffer intrecciato alle casse del tuo PC
-            SDL_PutAudioStreamData(stream, ctx->parser.pcm_buffer,
-                                   samples * channels * sizeof(float));
-          } else {
-            // Se fosse già packed (raro con l'AAC), lo inviamo direttamente
-            SDL_PutAudioStreamData(stream, decoded_frame->data[0],
-                                   samples * channels * sizeof(float));
+
+            // --- GESTIONE INTERLEAVING (FLTP -> FLT) ---
+            int samples = decoded_frame->nb_samples;
+            int channels = c->ch_layout.nb_channels;
+
+            // Usiamo il pcm_buffer del tuo parser per riordinare i byte
+            int pcm_idx = 0;
+            if (decoded_frame->format == AV_SAMPLE_FMT_FLTP) {
+              // Se è Planar, intrecciamo i canali a mano (L, R, L, R...)
+              for (int s = 0; s < samples; s++) {
+                for (int ch = 0; ch < channels; ch++) {
+                  float *channel_data = (float *)decoded_frame->data[ch];
+                  ctx->parser.pcm_buffer[pcm_idx++] = channel_data[s];
+                }
+              }
+              // Spediamo il buffer intrecciato alle casse del tuo PC
+              SDL_PutAudioStreamData(stream, ctx->parser.pcm_buffer,
+                                     samples * channels * sizeof(float));
+            } else {
+              // Se fosse già packed (raro con l'AAC), lo inviamo direttamente
+              SDL_PutAudioStreamData(stream, decoded_frame->data[0],
+                                     samples * channels * sizeof(float));
+            }
+            av_frame_unref(decoded_frame);
           }
         }
         av_packet_unref(pkt);
