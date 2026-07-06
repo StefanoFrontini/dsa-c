@@ -567,10 +567,7 @@ void fetch(Ctx *ctx) {
           }
 
           if (ctx->parser.resource == CHUNK_AUDIO) {
-            pthread_mutex_lock(&audio_buffer_mutex);
             enqueueAudioBuffer(ctx, &c);
-            pthread_cond_signal(&audio_buffer_threshold_cv);
-            pthread_mutex_unlock(&audio_buffer_mutex);
             ctx->parser.content_length--;
             break;
           }
@@ -604,9 +601,6 @@ void fetch(Ctx *ctx) {
                       sizeof(ctx->parser.urls_buf[url_count].url) - 1);
               ctx->parser.urls_buf[url_count]
                   .url[sizeof(ctx->parser.urls_buf[url_count].url) - 1] = '\0';
-              // memcpy(ctx->parser.urls_buf[i].url, ctx->parser.line.line_buf,
-              //        strlen(ctx->parser.line.line_buf));
-              //
               printf("\nurl is: %s\n", ctx->parser.urls_buf[url_count].url);
               ctx->parser.line.l_idx = 0;
               url_count++;
@@ -615,15 +609,27 @@ void fetch(Ctx *ctx) {
               // }
 
               if (url_count == 100) {
+                if (ctx->parser.last_sequence ==
+                    ctx->parser.urls_buf[url_count - 1].i) {
+                  printf("\n No new chunks to fetch\n");
+                  return;
+                }
+                int previous = ctx->parser.last_sequence;
                 ctx->parser.last_sequence =
                     ctx->parser.urls_buf[url_count - 1].i;
-                printf("\nLast sequence is: %d\n", chunk_num);
-                printf("url is: %s\n", ctx->parser.urls_buf[url_count - 1].url);
-                printf("i is: %d\n", ctx->parser.urls_buf[url_count - 1].i);
+                int chunks_to_fetch = ctx->parser.last_sequence - previous;
+                if (chunks_to_fetch > 4) {
+                  chunks_to_fetch = 4;
+                }
+                audioCounter = 100 - chunks_to_fetch;
+                printf("\nChunks to fetch: %d\n", chunks_to_fetch);
+                for (int i = 0; i < chunks_to_fetch; i++) {
+                  printf("\nurl to fetch is: %s\n",
+                         ctx->parser.urls_buf[audioCounter + i].url);
+                }
                 exit(1);
                 ctx->parser.state = RECONNECT;
                 ctx->parser.resource = CHUNK_AUDIO;
-                audioCounter = 97;
               }
               ctx->parser.content_length--;
               break;
@@ -718,7 +724,7 @@ void fetch(Ctx *ctx) {
         break;
 
       case DONE:
-        break;
+        return;
 
       case HEADER_ERROR:
         fprintf(stderr, "Errore fatale nel parsing dell'header HTTP.\n");
@@ -745,6 +751,7 @@ void fetch(Ctx *ctx) {
 void *get_data(void *arg) {
 
   Ctx *ctx = (Ctx *)arg;
+
   while (1) {
     int head = ctx->parser.audio_buf.head;
     int tail = ctx->parser.audio_buf.tail;
@@ -753,7 +760,10 @@ void *get_data(void *arg) {
     if (available > THRESHOLD) {
       sleep(1);
     } else {
+      pthread_mutex_lock(&audio_buffer_mutex);
       fetch(ctx);
+      pthread_cond_signal(&audio_buffer_threshold_cv);
+      pthread_mutex_unlock(&audio_buffer_mutex);
     }
   }
 
@@ -766,6 +776,12 @@ void *get_data(void *arg) {
 
 void *decode(void *arg) {
   Ctx *ctx = (Ctx *)arg;
+
+  if (ctx->parser.audio_buf.head == ctx->parser.audio_buf.tail) {
+    pthread_mutex_lock(&audio_buffer_mutex);
+    pthread_cond_wait(&audio_buffer_threshold_cv, &audio_buffer_mutex);
+    pthread_mutex_unlock(&audio_buffer_mutex);
+  }
 
   // 2. INIZIALIZZAZIONE CONTESTI FFMPEG
   AVFormatContext *fmt_ctx = avformat_alloc_context();
@@ -912,18 +928,6 @@ void *decode(void *arg) {
     }
   }
 
-  // CORREZIONE 2: Il blocco di guardia temporale.
-  // Poiché la decodifica in RAM è istantanea, teniamo in vita il programma
-  // finché l'hardware non ha finito di consumare i byte decompressi.
-  // printf("\n[AUDIO] Coda di decodifica completata. Riproduzione dei chunk in
-  // "
-  //        "corso...\n");
-  // while (SDL_GetAudioStreamQueued(stream) > 0) {
-  //   SDL_Delay(100); // Mette in pausa il thread principale per 100ms prima
-  //   del
-  //                   // prossimo controllo
-  // }
-
   // 8. PULIZIA FINALE DELLA MEMORIA
   printf("\n[END] Error.\n");
   SDL_DestroyAudioStream(stream);
@@ -963,11 +967,8 @@ int main(void) {
   /* For portability, explicitly create threads in a joinable state */
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-  pthread_create(&network_thread, &attr, get_data, (void *)&ctx);
-  pthread_create(&audio_thread, &attr, decode, (void *)&ctx);
-
-  // fetch(ctx); // network thread
-  // decode(ctx); // audio thread
+  pthread_create(&network_thread, &attr, get_data, (void *)ctx);
+  pthread_create(&audio_thread, &attr, decode, (void *)ctx);
 
   /* Wait for all threads to complete */
   pthread_join(network_thread, NULL);
