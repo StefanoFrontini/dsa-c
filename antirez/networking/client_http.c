@@ -627,7 +627,7 @@ void fetch(Ctx *ctx) {
                   printf("\nurl to fetch is: %s\n",
                          ctx->parser.urls_buf[audioCounter + i].url);
                 }
-                exit(1);
+                // exit(1);
                 ctx->parser.state = RECONNECT;
                 ctx->parser.resource = CHUNK_AUDIO;
               }
@@ -647,8 +647,9 @@ void fetch(Ctx *ctx) {
 
         if (ctx->parser.content_length == 0) {
           if (ctx->parser.resource == CHUNK_AUDIO) {
+            printf("AudioCounter is: %d\n", audioCounter);
 
-            if (audioCounter < 100) {
+            if (audioCounter < 99) {
               audioCounter++;
               ctx->parser.state = RECONNECT;
             } else {
@@ -721,7 +722,7 @@ void fetch(Ctx *ctx) {
       case BODY_DONE:
         printf("--- parsing BODY completato con successo ---\n");
         ctx->parser.state = DONE;
-        break;
+        return;
 
       case DONE:
         return;
@@ -757,6 +758,7 @@ void *get_data(void *arg) {
     int tail = ctx->parser.audio_buf.tail;
     int available =
         (head >= tail) ? (head - tail) : (MAXAUDIOBUFFER - tail + head);
+    printf("Available is: %d\n", available);
     if (available > THRESHOLD) {
       sleep(1);
     } else {
@@ -780,6 +782,7 @@ void *decode(void *arg) {
   if (ctx->parser.audio_buf.head == ctx->parser.audio_buf.tail) {
     pthread_mutex_lock(&audio_buffer_mutex);
     pthread_cond_wait(&audio_buffer_threshold_cv, &audio_buffer_mutex);
+    printf("\n Condition signal received\n");
     pthread_mutex_unlock(&audio_buffer_mutex);
   }
 
