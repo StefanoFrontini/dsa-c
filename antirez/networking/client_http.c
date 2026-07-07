@@ -106,7 +106,7 @@ typedef struct Parser {
 } Parser;
 
 typedef struct Connection {
-  char req_buf[512];
+  char req_buf[1024];
   int status;
   int sockfd;
   char ipstr[INET6_ADDRSTRLEN];
@@ -372,7 +372,7 @@ void fetch(Ctx *ctx) {
   char c;
 
   int i = 0;
-  int status_i = 0, size_i = 0, url_count = 0;
+  int status_i = 0, url_count = 0;
   int audioCounter = 0;
   char num_buf[4] = {0};
 
@@ -406,7 +406,7 @@ void fetch(Ctx *ctx) {
       }
 
       case SENDING_REQUEST: {
-        status_i = 0, size_i = 0;
+        status_i = 0;
 
         int len, bytes_sent;
         if (ctx->parser.resource == MASTER_PLAYLIST) {
@@ -608,12 +608,7 @@ void fetch(Ctx *ctx) {
 
               ctx->parser.urls_buf[url_count].i = chunk_num;
 
-              strncpy(ctx->parser.urls_buf[url_count].url,
-                      ctx->parser.line.line_buf,
-                      sizeof(ctx->parser.urls_buf[url_count].url) - 1);
-              ctx->parser.urls_buf[url_count]
-                  .url[sizeof(ctx->parser.urls_buf[url_count].url) - 1] = '\0';
-              // printf("\nurl is: %s\n", ctx->parser.urls_buf[url_count].url);
+              snprintf(ctx->parser.urls_buf[url_count].url, sizeof(ctx->parser.urls_buf[url_count].url), "%s", ctx->parser.line.line_buf);
               ctx->parser.line.l_idx = 0;
               url_count++;
 
