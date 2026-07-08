@@ -16,37 +16,42 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-// typedef enum {
-//     STATE_NETWORK_IDLE,
-//     STATE_NETWORK_DOWNLOADING
-// } NetworkActorState;
-
-// typedef enum {
-//     STATE_BUFFER_EMPTY,
-//     STATE_BUFFER_BELOW_THRESHOLD,
-//     STATE_BUFFER_FULL
-// } BufferActorState;
-
-// typedef enum {
-//     STATE_PLAYER_PLAYING,
-//     STATE_PLAYER_STOPPED,
-//     STATE_PLAYER_BUFFERING
-// } PlayerActorState;
-
 #define MAX_MAILBOX_SIZE 32
 
-typedef enum { ACTOR_NETWORK, ACTOR_BUFFER, ACTOR_PLAYER } ActorType;
+typedef enum {
+  ACTOR_NETWORK,
+  ACTOR_BUFFER,
+  ACTOR_PLAYER,
+  ACTOR_LIST
+} ActorType;
+
+// typedef enum {
+//   STATE_NETWORK_IDLE,
+//   STATE_NETWORK_DOWNLOADING,
+//   STATE_BUFFER_EMPTY,
+//   STATE_BUFFER_BELOW_THRESHOLD,
+//   STATE_BUFFER_FULL,
+//   STATE_PLAYER_PLAYING,
+//   STATE_PLAYER_STOPPED,
+//   STATE_PLAYER_BUFFERING
+// } ActorState;
 
 typedef enum {
   STATE_NETWORK_IDLE,
-  STATE_NETWORK_DOWNLOADING,
+  STATE_NETWORK_DOWNLOADING
+} NetworkActorState;
+
+typedef enum {
   STATE_BUFFER_EMPTY,
   STATE_BUFFER_BELOW_THRESHOLD,
-  STATE_BUFFER_FULL,
+  STATE_BUFFER_FULL
+} BufferActorState;
+
+typedef enum {
   STATE_PLAYER_PLAYING,
   STATE_PLAYER_STOPPED,
   STATE_PLAYER_BUFFERING
-} ActorState;
+} PlayerActorState;
 
 typedef enum {
   EV_CHUNK_DOWNLOAD,
@@ -73,10 +78,32 @@ typedef void (*TransitionFn)(struct Actor *self, Event ev);
 
 typedef struct Actor {
   ActorType type;
-  ActorState state;
-  TransitionFn receive;
-  Mailbox mailbox;
-  void *local_ctx;
+  union {
+    struct Actor *ele[3];
+    struct {
+      union {
+        struct {
+          NetworkActorState networkState;
+          BufferActorState bufferState;
+          PlayerActorState playerState;
+        };
+      };
+      // ActorState state;
+      TransitionFn receive;
+      Mailbox mailbox;
+      void *local_ctx;
+      // union {
+      //   struct {
+
+      //   }
+      //   // struct {
+      //   //   NetworkActorState networkState;
+      //   //   BufferActorState bufferState;
+      //   //   PlayerActorState playerState;
+      //   // } state;
+      // };
+    };
+  };
 } Actor;
 
 /* ------------------------ Allocation wrappers ----------------------------*/
@@ -102,10 +129,22 @@ void *xrealloc(void *old_ptr, size_t size) {
 void sendMessage(Actor *dest, Event ev) {
   dest->mailbox.events[dest->mailbox.head] = ev;
   dest->mailbox.head = (dest->mailbox.head + 1) % MAX_MAILBOX_SIZE;
+
 }
 
 void receiveMessage(Actor *self, Event ev) {
-  switch (self->state) {
+  switch (self->type) {
+    case ACTOR_NETWORK: {
+      break;
+    }
+    case ACTOR_BUFFER: {
+      break;
+    }
+    case ACTOR_PLAYER: {
+      break;
+    }
+    default:
+    break;
 
     case STATE_NETWORK_IDLE: {
       switch (ev.type) {
