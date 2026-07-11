@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #define MAX_MAILBOX_SIZE 32
+#define ACTOR_NUM 3
 
 typedef enum {
   ACTOR_NETWORK,
@@ -36,22 +37,19 @@ typedef enum {
 //   STATE_PLAYER_BUFFERING
 // } ActorState;
 
-typedef enum {
-  STATE_NETWORK_IDLE,
-  STATE_NETWORK_DOWNLOADING
-} NetworkActorState;
+typedef enum { STATE_NETWORK_IDLE, STATE_NETWORK_DOWNLOADING } NetworkState;
 
 typedef enum {
   STATE_BUFFER_EMPTY,
   STATE_BUFFER_BELOW_THRESHOLD,
   STATE_BUFFER_FULL
-} BufferActorState;
+} BufferState;
 
 typedef enum {
   STATE_PLAYER_PLAYING,
   STATE_PLAYER_STOPPED,
   STATE_PLAYER_BUFFERING
-} PlayerActorState;
+} PlayerState;
 
 typedef enum {
   EV_CHUNK_DOWNLOAD,
@@ -83,25 +81,14 @@ typedef struct Actor {
     struct {
       union {
         struct {
-          NetworkActorState networkState;
-          BufferActorState bufferState;
-          PlayerActorState playerState;
+          NetworkState networkState;
+          BufferState bufferState;
+          PlayerState playerState;
         };
       };
-      // ActorState state;
       TransitionFn receive;
       Mailbox mailbox;
       void *local_ctx;
-      // union {
-      //   struct {
-
-      //   }
-      //   // struct {
-      //   //   NetworkActorState networkState;
-      //   //   BufferActorState bufferState;
-      //   //   PlayerActorState playerState;
-      //   // } state;
-      // };
     };
   };
 } Actor;
@@ -125,86 +112,55 @@ void *xrealloc(void *old_ptr, size_t size) {
   }
   return ptr;
 }
+/* ---------------------- Actor related functions -------------------------*/
+
+Actor *createNetworkActor(void) {
+  Actor *actor = xmalloc(sizeof(Actor));
+  actor->type = ACTOR_NETWORK;
+  actor->networkState = STATE_NETWORK_IDLE;
+  actor->local_ctx = NULL;
+  actor->receive = transitionFnNetwork;
+  actor->mailbox.head = 0;
+  actor->mailbox.tail = 0;
+  return actor;
+}
+Actor *createBufferActor(void) {
+  Actor *actor = xmalloc(sizeof(Actor));
+  actor->type = ACTOR_BUFFER;
+  actor->bufferState = STATE_BUFFER_EMPTY;
+  actor->local_ctx = NULL;
+  actor->receive = transitionFnBuffer;
+  actor->mailbox.head = 0;
+  actor->mailbox.tail = 0;
+  return actor;
+}
+
+Actor *createPlayerActor(void) {
+  Actor *actor = xmalloc(sizeof(Actor));
+  actor->type = ACTOR_PLAYER;
+  actor->playerState = STATE_PLAYER_STOPPED;
+  actor->local_ctx = NULL;
+  actor->receive = transitionFnBuffer;
+  actor->mailbox.head = 0;
+  actor->mailbox.tail = 0;
+  return actor;
+}
+
+Actor *createActorList(Actor *a, Actor *b, Actor *c){
+   Actor *ActorList[ACTOR_NUM];
+   ActorList[0] = a;
+   ActorList[1] = b;
+   ActorList[2] = c;
+   return ActorList;
+}
 
 void sendMessage(Actor *dest, Event ev) {
   dest->mailbox.events[dest->mailbox.head] = ev;
   dest->mailbox.head = (dest->mailbox.head + 1) % MAX_MAILBOX_SIZE;
-
 }
 
-void receiveMessage(Actor *self, Event ev) {
-  switch (self->type) {
-    case ACTOR_NETWORK: {
-      break;
-    }
-    case ACTOR_BUFFER: {
-      break;
-    }
-    case ACTOR_PLAYER: {
-      break;
-    }
-    default:
-    break;
-
-    case STATE_NETWORK_IDLE: {
-      switch (ev.type) {
-        case EV_CHUNK_DOWNLOAD: {
-          break;
-        }
-        default:
-          break;
-      }
-      break;
-    }
-    case STATE_NETWORK_DOWNLOADING: {
-      switch (ev.type) {
-        case EV_CHUNK_DOWNLOAD: {
-          break;
-        }
-        default:
-          break;
-      }
-      break;
-    }
-    case STATE_BUFFER_EMPTY: {
-      switch (ev.type) {
-        case EV_CHUNK_READY: {
-          break;
-        }
-        case EV_CHUNK_REQUEST: {
-          break;
-        }
-        default:
-          break;
-      }
-      break;
-    }
-    case STATE_BUFFER_BELOW_THRESHOLD: {
-      switch (ev.type) {
-        case EV_CHUNK_READY: {
-          break;
-        }
-        case EV_CHUNK_REQUEST: {
-          break;
-        }
-        default:
-          break;
-      }
-      break;
-    }
-    case STATE_BUFFER_FULL: {
-      switch (ev.type) {
-        case EV_CHUNK_READY: {
-          break;
-        }
-        case EV_CHUNK_REQUEST: {
-          break;
-        }
-        default:
-          break;
-      }
-      break;
-    }
+void transitionFnPlayer(Actor *self, Event ev) {
+  switch (self->playerState) {
     case STATE_PLAYER_PLAYING: {
       switch (ev.type) {
         case EV_PLAY: {
@@ -251,23 +207,94 @@ void receiveMessage(Actor *self, Event ev) {
         default:
           break;
       }
+    }
+    default: {
+      fprintf(stderr, "Impossibile Player state\n");
+      exit(1);
+    }
+  }
+}
+void transitionFnBuffer(Actor *self, Event ev) {
+  switch (self->bufferState) {
+    case STATE_BUFFER_EMPTY: {
+      switch (ev.type) {
+        case EV_CHUNK_READY: {
+          break;
+        }
+        case EV_CHUNK_REQUEST: {
+          break;
+        }
+        default:
+          break;
+      }
       break;
     }
-    default:
+    case STATE_BUFFER_BELOW_THRESHOLD: {
+      switch (ev.type) {
+        case EV_CHUNK_READY: {
+          break;
+        }
+        case EV_CHUNK_REQUEST: {
+          break;
+        }
+        default:
+          break;
+      }
       break;
+    }
+    case STATE_BUFFER_FULL: {
+      switch (ev.type) {
+        case EV_CHUNK_READY: {
+          break;
+        }
+        case EV_CHUNK_REQUEST: {
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+    default: {
+      fprintf(stderr, "Impossibile Buffer state\n");
+      exit(1);
+    }
+  }
+}
+void transitionFnNetwork(Actor *self, Event ev) {
+  switch (self->networkState) {
+    case STATE_NETWORK_IDLE: {
+      switch (ev.type) {
+        case EV_CHUNK_DOWNLOAD: {
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+    case STATE_NETWORK_DOWNLOADING: {
+      switch (ev.type) {
+        case EV_CHUNK_DOWNLOAD: {
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+    default: {
+      fprintf(stderr, "Impossibile Network state\n");
+      exit(1);
+    }
   }
 }
 
 int main(void) {
-  Actor networkActor;
-  networkActor.type = ACTOR_NETWORK;
-  networkActor.state = STATE_NETWORK_IDLE;
-  networkActor.mailbox.head = 0;
-  networkActor.mailbox.tail = 0;
-  networkActor.local_ctx = NULL;
+  Actor *networkActor = createNetworkActor();
+  Actor *bufferActor = createBufferActor();
+  Actor *playerActor = createPlayerActor();
+  Actor *actorList = createActorList(networkActor, bufferActor, playerActor);
 
-  Actor bufferActor;
-  Actor playerActor;
-  Actor actors[3];
   return 0;
 }
