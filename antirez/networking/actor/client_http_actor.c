@@ -77,7 +77,7 @@ typedef void (*TransitionFn)(struct Actor *self, Event ev);
 typedef struct Actor {
   ActorType type;
   union {
-    struct Actor *ele[3];
+    struct Actor **ele;
     struct {
       union {
         struct {
@@ -113,51 +113,6 @@ void *xrealloc(void *old_ptr, size_t size) {
   return ptr;
 }
 /* ---------------------- Actor related functions -------------------------*/
-
-Actor *createNetworkActor(void) {
-  Actor *actor = xmalloc(sizeof(Actor));
-  actor->type = ACTOR_NETWORK;
-  actor->networkState = STATE_NETWORK_IDLE;
-  actor->local_ctx = NULL;
-  actor->receive = transitionFnNetwork;
-  actor->mailbox.head = 0;
-  actor->mailbox.tail = 0;
-  return actor;
-}
-Actor *createBufferActor(void) {
-  Actor *actor = xmalloc(sizeof(Actor));
-  actor->type = ACTOR_BUFFER;
-  actor->bufferState = STATE_BUFFER_EMPTY;
-  actor->local_ctx = NULL;
-  actor->receive = transitionFnBuffer;
-  actor->mailbox.head = 0;
-  actor->mailbox.tail = 0;
-  return actor;
-}
-
-Actor *createPlayerActor(void) {
-  Actor *actor = xmalloc(sizeof(Actor));
-  actor->type = ACTOR_PLAYER;
-  actor->playerState = STATE_PLAYER_STOPPED;
-  actor->local_ctx = NULL;
-  actor->receive = transitionFnBuffer;
-  actor->mailbox.head = 0;
-  actor->mailbox.tail = 0;
-  return actor;
-}
-
-Actor *createActorList(Actor *a, Actor *b, Actor *c){
-   Actor *ActorList[ACTOR_NUM];
-   ActorList[0] = a;
-   ActorList[1] = b;
-   ActorList[2] = c;
-   return ActorList;
-}
-
-void sendMessage(Actor *dest, Event ev) {
-  dest->mailbox.events[dest->mailbox.head] = ev;
-  dest->mailbox.head = (dest->mailbox.head + 1) % MAX_MAILBOX_SIZE;
-}
 
 void transitionFnPlayer(Actor *self, Event ev) {
   switch (self->playerState) {
@@ -288,6 +243,53 @@ void transitionFnNetwork(Actor *self, Event ev) {
       exit(1);
     }
   }
+}
+
+Actor *createNetworkActor(void) {
+  Actor *actor = xmalloc(sizeof(Actor));
+  actor->type = ACTOR_NETWORK;
+  actor->networkState = STATE_NETWORK_IDLE;
+  actor->local_ctx = NULL;
+  actor->receive = transitionFnNetwork;
+  actor->mailbox.head = 0;
+  actor->mailbox.tail = 0;
+  return actor;
+}
+Actor *createBufferActor(void) {
+  Actor *actor = xmalloc(sizeof(Actor));
+  actor->type = ACTOR_BUFFER;
+  actor->bufferState = STATE_BUFFER_EMPTY;
+  actor->local_ctx = NULL;
+  actor->receive = transitionFnBuffer;
+  actor->mailbox.head = 0;
+  actor->mailbox.tail = 0;
+  return actor;
+}
+
+Actor *createPlayerActor(void) {
+  Actor *actor = xmalloc(sizeof(Actor));
+  actor->type = ACTOR_PLAYER;
+  actor->playerState = STATE_PLAYER_STOPPED;
+  actor->local_ctx = NULL;
+  actor->receive = transitionFnBuffer;
+  actor->mailbox.head = 0;
+  actor->mailbox.tail = 0;
+  return actor;
+}
+
+Actor *createActorList(Actor *a, Actor *b, Actor *c){
+  Actor *actor = xmalloc(sizeof(Actor));
+   actor->type = ACTOR_LIST;
+   actor->ele = xmalloc(sizeof(Actor) * ACTOR_NUM);
+   actor->ele[0] = a;
+   actor->ele[1] = b;
+   actor->ele[2] = c;
+   return actor;
+}
+
+void sendMessage(Actor *dest, Event ev) {
+  dest->mailbox.events[dest->mailbox.head] = ev;
+  dest->mailbox.head = (dest->mailbox.head + 1) % MAX_MAILBOX_SIZE;
 }
 
 int main(void) {
