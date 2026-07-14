@@ -37,22 +37,28 @@
 #define THRESHOLD 50000
 
 typedef enum {
-  ACTOR_NETWORK,
+  ACTOR_NETWORK = 0,
   ACTOR_BUFFER,
   ACTOR_PLAYER,
   ACTOR_LIST
 } ActorType;
 
-typedef enum { STATE_NETWORK_IDLE, STATE_NETWORK_DOWNLOADING } NetworkState;
+typedef enum {
+  STATE_NETWORK_IDLE = 0,
+  STATE_NETWORK_DOWNLOADING,
+  STATE_NETWORK_DOWNLOADING_MASTER,
+  STATE_NETWORK_DOWNLOADING_SUB,
+  STATE_NETWORK_DOWNLOADING_CHUNK
+} NetworkState;
 
 typedef enum {
-  STATE_BUFFER_EMPTY,
+  STATE_BUFFER_EMPTY = 0,
   STATE_BUFFER_BELOW_THRESHOLD,
   STATE_BUFFER_FULL
 } BufferState;
 
 typedef enum {
-  STATE_PLAYER_PLAYING,
+  STATE_PLAYER_PLAYING = 0,
   STATE_PLAYER_STOPPED,
   STATE_PLAYER_BUFFERING
 } PlayerState;
@@ -79,7 +85,7 @@ typedef enum {
 } ParserState;
 
 typedef enum {
-  EV_CHUNK_DOWNLOAD,
+  EV_CHUNK_DOWNLOAD = 0,
   EV_CHUNK_READY,
   EV_CHUNK_REQUEST,
   EV_PLAY,
@@ -303,6 +309,7 @@ void transitionFnNetwork(Actor *self, Event ev) {
     case STATE_NETWORK_IDLE: {
       switch (ev.type) {
         case EV_CHUNK_DOWNLOAD: {
+          // check if a master playlist has been already downloaded. If yes start downloading SUB_PLAYLIST else MASTER_PLAYLIST
           break;
         }
         default:
