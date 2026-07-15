@@ -10,12 +10,14 @@
 #include <netinet/in.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <termios.h>
 
 #define MAX_MAILBOX_SIZE 32
 #define ACTOR_NUM 3
@@ -35,6 +37,11 @@
   15000000 // 67171 bit/sec, chunk audio is 6.82667 sec, 99 audio chunks
 #define SDLBUFFER 352800 * 3 // 3 seconds
 #define THRESHOLD 50000
+
+#define FPS 30
+
+// Time measured in microseconds(us)
+const int64_t FRAME_TIME = 1000000 / FPS; // ~16.666 us
 
 typedef enum {
   ACTOR_NETWORK = 0,
@@ -309,7 +316,8 @@ void transitionFnNetwork(Actor *self, Event ev) {
     case STATE_NETWORK_IDLE: {
       switch (ev.type) {
         case EV_CHUNK_DOWNLOAD: {
-          // check if a master playlist has been already downloaded. If yes start downloading SUB_PLAYLIST else MASTER_PLAYLIST
+          // check if a master playlist has been already downloaded. If yes
+          // start downloading SUB_PLAYLIST else MASTER_PLAYLIST
           break;
         }
         default:
@@ -454,6 +462,50 @@ int readChunk(Ctx *ctx) {
     }
     return -1;
   }
+
+  // int bytes_letti;
+  // int socket_vuoto = 0;
+  // while (!socket_vuoto) {
+  //   bytes_letti = SSL_read(ssl, buf, sizeof(buf));
+
+  //   if (bytes_letti > 0) {
+  //     // 1. Abbiamo dei byte decifrati pronti!
+  //     // Inviamo il messaggio con i byte decifrati all'Attore Decoder
+  //     printf("Decifrati %d bytes: %.*s\n", bytes_letti, bytes_letti, buf);
+
+  //   } else {
+  //     // 2. SSL_read ha ritornato <= 0. Dobbiamo capire perché usando
+  //     // SSL_get_error
+  //     int err = SSL_get_error(ssl, bytes_letti);
+
+  //     if (err == SSL_ERROR_WANT_READ) {
+  //       // Non ci sono più dati nel socket del kernel e il buffer interno di
+  //       // OpenSSL è vuoto. Possiamo finalmente uscire dal ciclo e tornare a
+  //       // chiamare poll().
+  //       socket_vuoto = 1;
+  //     } else if (err == SSL_ERROR_WANT_WRITE) {
+  //       // OpenSSL ha bisogno di scrivere sul socket per completare un
+  //       // handshake/renegotiation. In un vero event loop, qui dovremmo dire
+  //       a
+  //       // poll() di monitorare POLLOUT temporaneamente.
+  //       break;
+  //     } else {
+  //       // Errore grave di connessione o SSL
+  //       fprintf(stderr, "Errore SSL_read grave\n");
+  //       num_open_fds--;
+  //       break;
+  //     }
+  //   }
+
+  //   // 3. LA CHIAVE DI VOLTA: Se non ci sono più dati nel socket fisico del
+  //   // kernel, ma SSL_pending ci dice che OpenSSL ha ancora dati decifrati
+  //   nel
+  //   // suo buffer interno, continuiamo il ciclo forzatamente senza passare da
+  //   // poll()!
+  //   if (SSL_pending(ssl) == 0 && socket_vuoto) {
+  //     break;
+  //   }
+  // }
 
   ctx->parser.numbytes = res;
   ctx->parser.recv_len = ctx->parser.numbytes;
@@ -1192,6 +1244,43 @@ void initCtx(Ctx *ctx) {
   ctx->conn.hints.ai_socktype = SOCK_STREAM;
 }
 
+// time in microseconds
+uint64_t getCurrentTimeUs(void) {
+  struct timeval te;
+  gettimeofday(&te, NULL);
+  return te.tv_sec * 1000000LL + te.tv_usec;
+}
+const char caricamento[] = {'|', '/', '-', '\\'};
+int frame_attuale = 0;
+
+void drawAnimation(void) {
+  printf("\r[Riproduzione in corso... %c] Premi 'a' per Play/Pause, 'q' per "
+         "uscire: ",
+         caricamento[frame_attuale]);
+  fflush(stdout);
+
+  frame_attuale = (frame_attuale + 1) % 4;
+}
+struct termios original_terminal_settings;
+
+void disattiva_modalita_canonica(void) {
+    struct termios raw;
+    // Salva le impostazioni originali per ripristinarle alla fine
+    tcgetattr(STDIN_FILENO, &original_terminal_settings);
+
+    raw = original_terminal_settings;
+    // Disattiva il buffer di riga (ICANON) e la stampa a schermo (ECHO)
+    raw.c_lflag &= ~(ICANON | ECHO);
+
+    // Applica le nuove impostazioni all'istante
+    tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+}
+
+void ripristina_terminale(void) {
+    // FONDAMENTALE: altrimenti il terminale dell'utente rimarrà "rotto" alla chiusura del programma
+    tcsetattr(STDIN_FILENO, TCSANOW, &original_terminal_settings);
+}
+
 int main(void) {
   Actor *networkActor = createNetworkActor();
   Actor *bufferActor = createBufferActor();
@@ -1214,9 +1303,59 @@ int main(void) {
   ctx->parser.state = INIT_CONNECTION;
   ctx->parser.resource = MASTER_PLAYLIST;
 
+  int ready;
+  char buf[10];
+  nfds_t num_open_fds, nfds;
+  ssize_t s;
+  struct pollfd pfds[2];
+
+  disattiva_modalita_canonica();
+  // Assicurati che il terminale venga ripristinato anche in caso di uscita
+  // improvvisa
+  atexit(ripristina_terminale);
+
+  num_open_fds = nfds = 1;
+  pfds = calloc(nfds, sizeof(struct pollfd));
+  if (pfds == NULL) {
+    errExit("malloc");
+  }
+
+  for (nfds_t j = 0; j < nfds; j++) {
+  }
+  pfds[0].fd = STDIN_FILENO;
+  pfds[0].events = POLLIN;
+  pfds[1].fd = ctx->conn.sockfd;
+  pfds[1].events = POLLIN;
+  int isRunning = 1;
+  int64_t lastFrameRendered = getCurrentTimeUs();
+
   // Event Loop
-  while (1) {
-    handleNonBlockingIOnetwork(networkActor);
+  while (isRunning) {
+    int64_t now = getCurrentTimeUs();
+    int elapsedTime = now - lastFrameRendered;
+    int timeToNextFrame = FRAME_TIME - elapsedTime;
+    if (timeToNextFrame < 0) {
+      timeToNextFrame = 0;
+    }
+    int res = poll(pfds, 2, timeToNextFrame);
+    if (res > 0) {
+      if (pfds[0].revents & POLLIN) {
+        char key;
+        read(STDERR_FILENO, &key, 1);
+        if (key == 'q') isRunning = 0;
+        // ...
+      }
+      if (pfds[1].revents & POLLIN) {
+        // read from network
+      }
+    }
+    now = getCurrentTimeUs();
+    if (now - lastFrameRendered >= FRAME_TIME) {
+      drawAnimation();
+      lastFrameRendered = now;
+    }
+
+    // handleNonBlockingIOnetwork(networkActor);
     handleNonBlockingIOaudio(playerActor);
     for (int i = 0; i < ACTOR_NUM; i++) {
       Actor *actor = actorList->ele[i];
