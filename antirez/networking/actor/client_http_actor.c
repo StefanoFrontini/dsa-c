@@ -44,9 +44,10 @@
 const int64_t FRAME_TIME = 1000000 / FPS; // ~33.333 us
 
 typedef enum {
-  ACTOR_NETWORK = 0,
+  ACTOR_NETWORK_COORDINATOR = 0,
   ACTOR_BUFFER,
   ACTOR_PLAYER,
+  ACTOR_FETCHER,
   ACTOR_LIST
 } ActorType;
 
@@ -69,6 +70,8 @@ typedef enum {
   STATE_PLAYER_STOPPED,
   STATE_PLAYER_BUFFERING
 } PlayerState;
+
+typedef enum { STATE_FETCHER_IDLE = 0, STATE_FETCHER_DOWNLOADING } FetcherState;
 
 typedef enum {
   INIT_CONNECTION = 0,
@@ -98,6 +101,8 @@ typedef enum {
   EV_TOGGLE_PLAY_PAUSE,
   EV_BACK_TO_LIVE_STREAMING,
   EV_TIME_ELAPSED,
+  EV_START_RADIO,
+  EV_FETCHER_DOWNLOAD,
 } EventType;
 
 typedef struct Event {
@@ -125,6 +130,7 @@ typedef struct Actor {
           NetworkState networkState;
           BufferState bufferState;
           PlayerState playerState;
+          FetcherState fetcherState;
         };
       };
       TransitionFn receive;
@@ -310,7 +316,11 @@ void transitionFnNetwork(Actor *self, Event ev) {
   switch (self->networkState) {
     case STATE_NETWORK_IDLE: {
       switch (ev.type) {
-        case EV_CHUNK_DOWNLOAD: {
+        case EV_START_RADIO: {
+
+          // self->ele[3] -> fetcherActor
+          Event ev = {.type = EV_FETCHER_DOWNLOAD, .payload = NULL};
+          sendMessage(self->ele[3], ev);
           // check if a master playlist has been already downloaded. If yes
           // start downloading SUB_PLAYLIST else MASTER_PLAYLIST
           break;
@@ -337,9 +347,40 @@ void transitionFnNetwork(Actor *self, Event ev) {
   }
 }
 
+void transitionFnFetcher(Actor *self, Event ev) {
+  switch (self->fetcherState) {
+    case STATE_FETCHER_IDLE: {
+      switch (ev.type) {
+        case EV_CHUNK_DOWNLOAD: {
+          // check if a master playlist has been already downloaded. If yes
+          // start downloading SUB_PLAYLIST else MASTER_PLAYLIST
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+    case STATE_FETCHER_DOWNLOADING: {
+      switch (ev.type) {
+        case EV_CHUNK_DOWNLOAD: {
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+    default: {
+      fprintf(stderr, "Impossibile Fetcher state\n");
+      exit(1);
+    }
+  }
+}
+
 Actor *createNetworkActor(void) {
   Actor *actor = xmalloc(sizeof(Actor));
-  actor->type = ACTOR_NETWORK;
+  actor->type = ACTOR_NETWORK_COORDINATOR;
   actor->networkState = STATE_NETWORK_IDLE;
   actor->local_ctx = NULL;
   actor->receive = transitionFnNetwork;
@@ -368,14 +409,25 @@ Actor *createPlayerActor(void) {
   actor->mailbox.tail = 0;
   return actor;
 }
+Actor *createFetcherActor(void) {
+  Actor *actor = xmalloc(sizeof(Actor));
+  actor->type = ACTOR_FETCHER;
+  actor->fetcherState = STATE_FETCHER_IDLE;
+  actor->local_ctx = NULL;
+  actor->receive = transitionFnFetcher;
+  actor->mailbox.head = 0;
+  actor->mailbox.tail = 0;
+  return actor;
+}
 
-Actor *createActorList(Actor *a, Actor *b, Actor *c) {
+Actor *createActorList(Actor *a, Actor *b, Actor *c, Actor *d) {
   Actor *actor = xmalloc(sizeof(Actor));
   actor->type = ACTOR_LIST;
   actor->ele = xmalloc(sizeof(Actor) * ACTOR_NUM);
   actor->ele[0] = a;
   actor->ele[1] = b;
   actor->ele[2] = c;
+  actor->ele[3] = d;
   return actor;
 }
 
@@ -1287,7 +1339,9 @@ int main(void) {
   Actor *networkActor = createNetworkActor();
   Actor *bufferActor = createBufferActor();
   Actor *playerActor = createPlayerActor();
-  Actor *actorList = createActorList(networkActor, bufferActor, playerActor);
+  Actor *fetcherActor = createFetcherActor();
+  Actor *actorList =
+      createActorList(networkActor, bufferActor, playerActor, fetcherActor);
 
   Ctx *ctx = calloc(1, sizeof(Ctx));
   if (!ctx) {
