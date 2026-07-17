@@ -16,8 +16,8 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <unistd.h>
 #include <termios.h>
+#include <unistd.h>
 
 #define MAX_MAILBOX_SIZE 32
 #define ACTOR_NUM 3
@@ -41,7 +41,7 @@
 #define FPS 30
 
 // Time measured in microseconds(us)
-const int64_t FRAME_TIME = 1000000 / FPS; // ~16.666 us
+const int64_t FRAME_TIME = 1000000 / FPS; // ~33.333 us
 
 typedef enum {
   ACTOR_NETWORK = 0,
@@ -95,8 +95,9 @@ typedef enum {
   EV_CHUNK_DOWNLOAD = 0,
   EV_CHUNK_READY,
   EV_CHUNK_REQUEST,
-  EV_PLAY,
-  EV_PAUSE
+  EV_TOGGLE_PLAY_PAUSE,
+  EV_BACK_TO_LIVE_STREAMING,
+  EV_TIME_ELAPSED,
 } EventType;
 
 typedef struct Event {
@@ -132,6 +133,12 @@ typedef struct Actor {
     };
   };
 } Actor;
+
+typedef struct AsyncTimer {
+  int64_t expirationTime;
+  int active;
+  Actor *targetActor;
+} AsyncTimer;
 
 typedef struct Connection {
   char req_buf[1024];
@@ -213,10 +220,7 @@ void transitionFnPlayer(Actor *self, Event ev) {
   switch (self->playerState) {
     case STATE_PLAYER_PLAYING: {
       switch (ev.type) {
-        case EV_PLAY: {
-          break;
-        }
-        case EV_PAUSE: {
+        case EV_TOGGLE_PLAY_PAUSE: {
           break;
         }
         case EV_CHUNK_READY: {
@@ -229,10 +233,7 @@ void transitionFnPlayer(Actor *self, Event ev) {
     }
     case STATE_PLAYER_STOPPED: {
       switch (ev.type) {
-        case EV_PLAY: {
-          break;
-        }
-        case EV_PAUSE: {
+        case EV_TOGGLE_PLAY_PAUSE: {
           break;
         }
         case EV_CHUNK_READY: {
@@ -245,12 +246,6 @@ void transitionFnPlayer(Actor *self, Event ev) {
     }
     case STATE_PLAYER_BUFFERING: {
       switch (ev.type) {
-        case EV_PLAY: {
-          break;
-        }
-        case EV_PAUSE: {
-          break;
-        }
         case EV_CHUNK_READY: {
           break;
         }
@@ -1264,21 +1259,28 @@ void drawAnimation(void) {
 struct termios original_terminal_settings;
 
 void disattiva_modalita_canonica(void) {
-    struct termios raw;
-    // Salva le impostazioni originali per ripristinarle alla fine
-    tcgetattr(STDIN_FILENO, &original_terminal_settings);
+  struct termios raw;
+  // Salva le impostazioni originali per ripristinarle alla fine
+  tcgetattr(STDIN_FILENO, &original_terminal_settings);
 
-    raw = original_terminal_settings;
-    // Disattiva il buffer di riga (ICANON) e la stampa a schermo (ECHO)
-    raw.c_lflag &= ~(ICANON | ECHO);
+  raw = original_terminal_settings;
+  // Disattiva il buffer di riga (ICANON) e la stampa a schermo (ECHO)
+  raw.c_lflag &= ~(ICANON | ECHO);
 
-    // Applica le nuove impostazioni all'istante
-    tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+  // Applica le nuove impostazioni all'istante
+  tcsetattr(STDIN_FILENO, TCSANOW, &raw);
 }
 
 void ripristina_terminale(void) {
-    // FONDAMENTALE: altrimenti il terminale dell'utente rimarrà "rotto" alla chiusura del programma
-    tcsetattr(STDIN_FILENO, TCSANOW, &original_terminal_settings);
+  // FONDAMENTALE: altrimenti il terminale dell'utente rimarrà "rotto" alla
+  // chiusura del programma
+  tcsetattr(STDIN_FILENO, TCSANOW, &original_terminal_settings);
+}
+void startTimerRetry(AsyncTimer *timer, Actor *netWorkActor, int delayMs) {
+  timer->expirationTime = getCurrentTimeUs() + delayMs * 1000;
+  timer->targetActor = netWorkActor;
+  timer->active = 1;
+  printf("[TIMER] Programmato retry tra %d ms\n", delayMs);
 }
 
 int main(void) {
@@ -1303,25 +1305,29 @@ int main(void) {
   ctx->parser.state = INIT_CONNECTION;
   ctx->parser.resource = MASTER_PLAYLIST;
 
+  AsyncTimer *retryTimer = calloc(1, sizeof(AsyncTimer));
+  if (!retryTimer) {
+    fprintf(stderr, "Error allocating retryTimer.\n");
+    return 1;
+  }
+
   int ready;
   char buf[10];
   nfds_t num_open_fds, nfds;
   ssize_t s;
-  struct pollfd pfds[2];
+  struct pollfd *pfds;
 
   disattiva_modalita_canonica();
-  // Assicurati che il terminale venga ripristinato anche in caso di uscita
-  // improvvisa
   atexit(ripristina_terminale);
 
-  num_open_fds = nfds = 1;
+  num_open_fds = nfds = 2;
   pfds = calloc(nfds, sizeof(struct pollfd));
   if (pfds == NULL) {
     errExit("malloc");
   }
 
-  for (nfds_t j = 0; j < nfds; j++) {
-  }
+  // for (nfds_t j = 0; j < nfds; j++) {
+  // }
   pfds[0].fd = STDIN_FILENO;
   pfds[0].events = POLLIN;
   pfds[1].fd = ctx->conn.sockfd;
@@ -1342,10 +1348,22 @@ int main(void) {
       if (pfds[0].revents & POLLIN) {
         char key;
         read(STDERR_FILENO, &key, 1);
-        if (key == 'q') isRunning = 0;
+        if (key == 'q')
+          isRunning = 0;
+        else if (key == 'a') {
+          // Spediamo un evento di Start/Stop all'attore del Player
+          Event ev = {.type = EV_TOGGLE_PLAY_PAUSE, .payload = NULL};
+          sendMessage(playerActor, ev);
+        } else if (key == 'd') {
+          // Spediamo l'evento per tornare alla diretta
+          Event ev = {.type = EV_BACK_TO_LIVE_STREAMING, .payload = NULL};
+          sendMessage(networkActor, ev);
+        }
         // ...
       }
       if (pfds[1].revents & POLLIN) {
+        int bytes_read;
+        int empty_socket = 0;
         // read from network
       }
     }
@@ -1354,9 +1372,19 @@ int main(void) {
       drawAnimation();
       lastFrameRendered = now;
     }
+    // controlla_e_gestisci_timer_scaduti();
+    // 3. GESTIONE TIMER (Asincrona)
+    // Controlliamo se il nostro timer da 5 secondi è scaduto
+    if (retryTimer->active && now >= retryTimer->expirationTime) {
+      retryTimer->active = 0;
+      Event ev = {.type = EV_TIME_ELAPSED, .payload = NULL};
+      sendMessage(retryTimer->targetActor, ev);
+    }
 
-    // handleNonBlockingIOnetwork(networkActor);
+    // handleNonBlockingIOaudio(playerActor);
     handleNonBlockingIOaudio(playerActor);
+
+    // svuota mailbox attori
     for (int i = 0; i < ACTOR_NUM; i++) {
       Actor *actor = actorList->ele[i];
       while (actor->mailbox.head != actor->mailbox.tail) {
@@ -1365,7 +1393,7 @@ int main(void) {
         actor->receive(actor, ev);
       }
     }
-    SDL_Delay(1);
+    // SDL_Delay(1);
   }
 
   return 0;
