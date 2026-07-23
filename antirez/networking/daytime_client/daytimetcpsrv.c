@@ -38,7 +38,13 @@ void Listen(int fd, int backlog) {
 }
 
 void Write(int fd, void *ptr, ssize_t nbytes) {
-  if (write(fd, ptr, nbytes) != nbytes) perror("write error");
+  ssize_t bytes_written = 0;
+  for (int i = 0; i < nbytes; i++) {
+    write(fd, ptr + i, 1);
+    bytes_written++;
+  }
+  if (bytes_written != nbytes) perror("write error");
+  //   if (write(fd, ptr, nbytes) != nbytes) perror("write error");
 }
 
 int Accept(int fd, struct sockaddr *sa, socklen_t *salenptr) {
@@ -73,7 +79,7 @@ int main(void) {
   bzero(&servaddr, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
   servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-  servaddr.sin_port = htons(13);
+  servaddr.sin_port = htons(9999);
 
   Bind(listenfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
