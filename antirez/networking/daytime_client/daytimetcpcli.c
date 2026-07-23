@@ -19,6 +19,11 @@ int Socket(int family, int type, int protocol) {
   return n;
 }
 
+void Connect(int fd, const struct sockaddr *sa, socklen_t salen) {
+  if (connect(fd, sa, salen) < 0) perror("connect error");
+}
+
+
 int main(int argc, char **argv) {
   int sockfd, n;
   int counter = 0;
@@ -41,9 +46,11 @@ int main(int argc, char **argv) {
     fprintf(stderr, "inet_pton error for %s", argv[1]);
   }
 
-  if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
-    perror("connect error");
-  }
+  Connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+
+  // if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+  //   perror("connect error");
+  // }
 
   while ((n = read(sockfd, recvline, MAXLINE)) > 0) {
     recvline[n] = 0;

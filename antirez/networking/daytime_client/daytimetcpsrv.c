@@ -24,10 +24,6 @@ void Bind(int fd, const struct sockaddr *sa, socklen_t salen) {
   if (bind(fd, sa, salen) < 0) perror("bind error");
 }
 
-void Connect(int fd, const struct sockaddr *sa, socklen_t salen) {
-  if (connect(fd, sa, salen) < 0) perror("connect error");
-}
-
 void Listen(int fd, int backlog) {
   char *ptr;
 
