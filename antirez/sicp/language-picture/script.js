@@ -87,8 +87,11 @@ function for_each(fun, items) {
     fun(head(items));
     for_each(fun, tail(items));
 }
-const a = pair(list(1, 2), list(3, 4));
-print_list(len(list(a, a)));
-// for_each(print_list, list(10, 20, 30));
-// for_each((x:number) => x * 2, l);
-// print_list(map(((x:number) => x * x), l));
+function make_vector(x, y) {
+    return pair(x, y);
+}
+const xcor_vect = head;
+const ycor_vect = tail;
+const v = make_vector(1, 2);
+print_list(xcor_vect(v));
+print_list(ycor_vect(v));

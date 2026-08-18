@@ -122,10 +122,45 @@ function for_each<T extends number | Pair | null>(
   for_each(fun, tail(items));
 }
 
-const a = pair(list(1, 2), list(3, 4))
+// const a = pair(list(1, 2), list(3, 4))
 
-print_list(len(list(a, a)));
+// print_list(len(list(a, a)));
 
 // for_each(print_list, list(10, 20, 30));
 // for_each((x:number) => x * 2, l);
 // print_list(map(((x:number) => x * x), l));
+
+function make_vector(x: number, y: number): Pair {
+  return pair(x, y);
+}
+
+function xcor_vect(vector: Pair): number {
+  return head(vector) as number;
+}
+
+function ycor_vect(vector: Pair): number {
+  return tail(vector) as number;
+}
+
+function add_vect(vector1: Pair, vector2: Pair): Pair {
+  return make_vector(
+    xcor_vect(vector1) + xcor_vect(vector2),
+    ycor_vect(vector1) + ycor_vect(vector2),
+  );
+}
+
+function sub_vect(vector1: Pair, vector2: Pair): Pair {
+  return make_vector(
+    xcor_vect(vector1) - xcor_vect(vector2),
+    ycor_vect(vector1) - ycor_vect(vector2),
+  );
+}
+
+function scale_vect(f: number, vector: Pair): Pair {
+  return make_vector(f * xcor_vect(vector), f * ycor_vect(vector));
+}
+
+const v = make_vector(1, 2);
+
+print_list(xcor_vect(v));
+print_list(ycor_vect(v));
