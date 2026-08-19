@@ -87,11 +87,101 @@ function for_each(fun, items) {
     fun(head(items));
     for_each(fun, tail(items));
 }
+// const a = pair(list(1, 2), list(3, 4))
+// print_list(len(list(a, a)));
+// for_each(print_list, list(10, 20, 30));
+// for_each((x:number) => x * 2, l);
+// print_list(map(((x:number) => x * x), l));
 function make_vector(x, y) {
     return pair(x, y);
 }
-const xcor_vect = head;
-const ycor_vect = tail;
-const v = make_vector(1, 2);
-print_list(xcor_vect(v));
-print_list(ycor_vect(v));
+function xcor_vect(vector) {
+    return head(vector);
+}
+function ycor_vect(vector) {
+    return tail(vector);
+}
+function add_vect(vector1, vector2) {
+    return make_vector(xcor_vect(vector1) + xcor_vect(vector2), ycor_vect(vector1) + ycor_vect(vector2));
+}
+function sub_vect(vector1, vector2) {
+    return make_vector(xcor_vect(vector1) - xcor_vect(vector2), ycor_vect(vector1) - ycor_vect(vector2));
+}
+function scale_vect(f, vector) {
+    return make_vector(f * xcor_vect(vector), f * ycor_vect(vector));
+}
+function make_segment(vector1, vector2) {
+    return pair(vector1, vector2);
+}
+function start_segment(segment) {
+    return head(segment);
+}
+function end_segment(segment) {
+    return tail(segment);
+}
+function make_frame(origin, edge1, edge2) {
+    return list(origin, edge1, edge2);
+}
+function origin_frame(frame) {
+    return list_ref(frame, 0);
+}
+function edge1_frame(frame) {
+    return list_ref(frame, 1);
+}
+function edge2_frame(frame) {
+    return list_ref(frame, 2);
+}
+function draw_line(ctx, vector1, vector2) {
+    if (!ctx)
+        return;
+    ctx.beginPath(); // Start a new path
+    ctx.moveTo(xcor_vect(vector1), ycor_vect(vector1)); // Move the pen to vector1
+    ctx.lineTo(xcor_vect(vector2), ycor_vect(vector2)); // Draw a line to vector2
+    ctx.stroke(); // Render the path
+}
+function frame_coord_map(frame) {
+    return (v) => add_vect(origin_frame(frame), add_vect(scale_vect(xcor_vect(v), edge1_frame(frame)), scale_vect(ycor_vect(v), edge2_frame(frame))));
+}
+function segments_to_painter(segment_list) {
+    return (ctx, frame) => for_each((segment) => draw_line(ctx, frame_coord_map(frame)(start_segment(segment)), frame_coord_map(frame)(end_segment(segment))), segment_list);
+}
+const p1 = make_vector(0.25, 1 - 0);
+const p2 = make_vector(0.35, 1 - 0.5);
+const p3 = make_vector(0.3, 1 - 0.6);
+const p4 = make_vector(0.15, 1 - 0.4);
+const p5 = make_vector(0, 1 - 0.65);
+const p6 = make_vector(0.4, 1 - 0);
+const p7 = make_vector(0.5, 1 - 0.3);
+const p8 = make_vector(0.6, 1 - 0);
+const p9 = make_vector(0.75, 1 - 0);
+const p10 = make_vector(0.6, 1 - 0.45);
+const p11 = make_vector(1, 1 - 0.15);
+const p12 = make_vector(1, 1 - 0.35);
+const p13 = make_vector(0.75, 1 - 0.65);
+const p14 = make_vector(0.6, 1 - 0.65);
+const p15 = make_vector(0.65, 1 - 0.85);
+const p16 = make_vector(0.6, 1 - 1);
+const p17 = make_vector(0.4, 1 - 1);
+const p18 = make_vector(0.35, 1 - 0.85);
+const p19 = make_vector(0.4, 1 - 0.65);
+const p20 = make_vector(0.3, 1 - 0.65);
+const p21 = make_vector(0.15, 1 - 0.6);
+const p22 = make_vector(0, 1 - 0.85);
+// const p100 = make_vector(0,0)
+// const p101 = make_vector(0.5, 0.5)
+// const p102 = make_vector(1, 1)
+// const p103 = make_vector(1, 0)
+const george_lines = list(
+// make_segment(p100, p101),
+// make_segment(p101, p103),
+// make_segment(p101, p102)
+make_segment(p1, p2), make_segment(p2, p3), make_segment(p3, p4), make_segment(p4, p5), make_segment(p6, p7), make_segment(p7, p8), make_segment(p9, p10), make_segment(p10, p11), make_segment(p12, p13), make_segment(p13, p14), make_segment(p14, p15), make_segment(p15, p16), make_segment(p17, p18), make_segment(p18, p19), make_segment(p19, p20), make_segment(p20, p21), make_segment(p21, p22));
+const pic = segments_to_painter(george_lines);
+const frame1 = make_frame(make_vector(0, 0), make_vector(600, 0), make_vector(0, 600));
+pic(ctx, frame1);
+// const v1 = make_vector(0, 0);
+// const v2 = make_vector(100, 100);
+// draw_line(ctx, v1, v2);
+// const v = make_vector(1, 2);
+// print_list(xcor_vect(v));
+// print_list(ycor_vect(v));

@@ -160,7 +160,129 @@ function scale_vect(f: number, vector: Pair): Pair {
   return make_vector(f * xcor_vect(vector), f * ycor_vect(vector));
 }
 
-const v = make_vector(1, 2);
+function make_segment(vector1: Pair, vector2: Pair): Pair {
+  return pair(vector1, vector2);
+}
 
-print_list(xcor_vect(v));
-print_list(ycor_vect(v));
+function start_segment(segment: Pair): Pair {
+  return head(segment) as Pair;
+}
+
+function end_segment(segment: Pair): Pair {
+  return tail(segment) as Pair;
+}
+
+function make_frame(origin: Pair, edge1: Pair, edge2: Pair): Pair {
+  return list(origin, edge1, edge2) as Pair;
+}
+
+function origin_frame(frame: Pair): Pair {
+  return list_ref(frame, 0) as Pair;
+}
+
+function edge1_frame(frame: Pair): Pair {
+  return list_ref(frame, 1) as Pair;
+}
+
+function edge2_frame(frame: Pair): Pair {
+  return list_ref(frame, 2) as Pair;
+}
+
+function draw_line(
+  ctx: CanvasRenderingContext2D | null,
+  vector1: Pair,
+  vector2: Pair,
+): void {
+  if (!ctx) return;
+  ctx.beginPath(); // Start a new path
+  ctx.moveTo(xcor_vect(vector1), ycor_vect(vector1)); // Move the pen to vector1
+  ctx.lineTo(xcor_vect(vector2), ycor_vect(vector2)); // Draw a line to vector2
+  ctx.stroke(); // Render the path
+}
+
+function frame_coord_map(frame: Pair): (v: Pair) => Pair {
+  return (v: Pair) =>
+    add_vect(
+      origin_frame(frame),
+      add_vect(
+        scale_vect(xcor_vect(v), edge1_frame(frame)),
+        scale_vect(ycor_vect(v), edge2_frame(frame)),
+      ),
+    );
+}
+
+function segments_to_painter(segment_list: Pair | null) {
+  return (ctx: CanvasRenderingContext2D | null, frame: Pair) =>
+    for_each(
+      (segment: Pair) =>
+        draw_line(
+          ctx,
+          frame_coord_map(frame)(start_segment(segment)),
+          frame_coord_map(frame)(end_segment(segment)),
+        ),
+      segment_list,
+    );
+}
+
+const p1 = make_vector(0.25, 1 - 0);
+const p2 = make_vector(0.35, 1 - 0.5);
+const p3 = make_vector(0.3, 1 -0.6);
+const p4 = make_vector(0.15, 1-0.4);
+const p5 = make_vector(0, 1-0.65);
+const p6 = make_vector(0.4, 1-0);
+const p7 = make_vector(0.5, 1-0.3);
+const p8 = make_vector(0.6, 1-0);
+const p9 = make_vector(0.75, 1-0);
+const p10 = make_vector(0.6, 1-0.45);
+const p11 = make_vector(1, 1-0.15);
+const p12 = make_vector(1, 1-0.35);
+const p13 = make_vector(0.75, 1-0.65);
+const p14 = make_vector(0.6, 1-0.65);
+const p15 = make_vector(0.65, 1-0.85);
+const p16 = make_vector(0.6, 1-1);
+const p17 = make_vector(0.4, 1-1);
+const p18 = make_vector(0.35, 1-0.85);
+const p19 = make_vector(0.4, 1-0.65);
+const p20 = make_vector(0.3, 1-0.65);
+const p21 = make_vector(0.15, 1-0.6);
+const p22 = make_vector(0, 1-0.85);
+
+
+const george_lines = list(
+  make_segment(p1, p2),
+  make_segment(p2, p3),
+  make_segment(p3, p4),
+  make_segment(p4, p5),
+  make_segment(p6, p7),
+  make_segment(p7, p8),
+  make_segment(p9, p10),
+  make_segment(p10, p11),
+  make_segment(p12, p13),
+  make_segment(p13, p14),
+  make_segment(p14, p15),
+  make_segment(p15, p16),
+  make_segment(p17, p18),
+  make_segment(p18, p19),
+  make_segment(p19, p20),
+  make_segment(p20, p21),
+  make_segment(p21, p22),
+);
+
+const pic = segments_to_painter(george_lines);
+const frame1 = make_frame(
+  make_vector(0, 0),
+  make_vector(600, 0),
+  make_vector(0, 600),
+);
+
+pic(ctx, frame1);
+
+// const v1 = make_vector(0, 0);
+// const v2 = make_vector(100, 100);
+
+// draw_line(ctx, v1, v2);
+
+// const v = make_vector(1, 2);
+
+// print_list(xcor_vect(v));
+// print_list(ycor_vect(v));
