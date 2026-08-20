@@ -145,40 +145,71 @@ function frame_coord_map(frame) {
 function segments_to_painter(segment_list) {
     return (ctx, frame) => for_each((segment) => draw_line(ctx, frame_coord_map(frame)(start_segment(segment)), frame_coord_map(frame)(end_segment(segment))), segment_list);
 }
-const p1 = make_vector(0.25, 1 - 0);
-const p2 = make_vector(0.35, 1 - 0.5);
-const p3 = make_vector(0.3, 1 - 0.6);
-const p4 = make_vector(0.15, 1 - 0.4);
-const p5 = make_vector(0, 1 - 0.65);
-const p6 = make_vector(0.4, 1 - 0);
-const p7 = make_vector(0.5, 1 - 0.3);
-const p8 = make_vector(0.6, 1 - 0);
-const p9 = make_vector(0.75, 1 - 0);
-const p10 = make_vector(0.6, 1 - 0.45);
-const p11 = make_vector(1, 1 - 0.15);
-const p12 = make_vector(1, 1 - 0.35);
-const p13 = make_vector(0.75, 1 - 0.65);
-const p14 = make_vector(0.6, 1 - 0.65);
-const p15 = make_vector(0.65, 1 - 0.85);
-const p16 = make_vector(0.6, 1 - 1);
-const p17 = make_vector(0.4, 1 - 1);
-const p18 = make_vector(0.35, 1 - 0.85);
-const p19 = make_vector(0.4, 1 - 0.65);
-const p20 = make_vector(0.3, 1 - 0.65);
-const p21 = make_vector(0.15, 1 - 0.6);
-const p22 = make_vector(0, 1 - 0.85);
-// const p100 = make_vector(0,0)
-// const p101 = make_vector(0.5, 0.5)
-// const p102 = make_vector(1, 1)
-// const p103 = make_vector(1, 0)
-const george_lines = list(
-// make_segment(p100, p101),
-// make_segment(p101, p103),
-// make_segment(p101, p102)
-make_segment(p1, p2), make_segment(p2, p3), make_segment(p3, p4), make_segment(p4, p5), make_segment(p6, p7), make_segment(p7, p8), make_segment(p9, p10), make_segment(p10, p11), make_segment(p12, p13), make_segment(p13, p14), make_segment(p14, p15), make_segment(p15, p16), make_segment(p17, p18), make_segment(p18, p19), make_segment(p19, p20), make_segment(p20, p21), make_segment(p21, p22));
-const pic = segments_to_painter(george_lines);
-const frame1 = make_frame(make_vector(0, 0), make_vector(600, 0), make_vector(0, 600));
-pic(ctx, frame1);
+const p1 = make_vector(0.25, 0);
+const p2 = make_vector(0.35, 0.5);
+const p3 = make_vector(0.3, 0.6);
+const p4 = make_vector(0.15, 0.4);
+const p5 = make_vector(0, 0.65);
+const p6 = make_vector(0.4, 0);
+const p7 = make_vector(0.5, 0.3);
+const p8 = make_vector(0.6, 0);
+const p9 = make_vector(0.75, 0);
+const p10 = make_vector(0.6, 0.45);
+const p11 = make_vector(1, 0.15);
+const p12 = make_vector(1, 0.35);
+const p13 = make_vector(0.75, 0.65);
+const p14 = make_vector(0.6, 0.65);
+const p15 = make_vector(0.65, 0.85);
+const p16 = make_vector(0.6, 1);
+const p17 = make_vector(0.4, 1);
+const p18 = make_vector(0.35, 0.85);
+const p19 = make_vector(0.4, 0.65);
+const p20 = make_vector(0.3, 0.65);
+const p21 = make_vector(0.15, 0.6);
+const p22 = make_vector(0, 0.85);
+const george_lines = list(make_segment(p1, p2), make_segment(p2, p3), make_segment(p3, p4), make_segment(p4, p5), make_segment(p6, p7), make_segment(p7, p8), make_segment(p9, p10), make_segment(p10, p11), make_segment(p12, p13), make_segment(p13, p14), make_segment(p14, p15), make_segment(p15, p16), make_segment(p17, p18), make_segment(p18, p19), make_segment(p19, p20), make_segment(p20, p21), make_segment(p21, p22));
+const painter = segments_to_painter(george_lines);
+const frame1 = make_frame(make_vector(0, 600), // origine in basso a sinistra
+make_vector(600, 0), // edge1 punta a destra
+make_vector(0, -600));
+function transform_painter(painter, origin, corner1, corner2) {
+    return (ctx, frame) => {
+        const m = frame_coord_map(frame);
+        const new_origin = m(origin);
+        return painter(ctx, make_frame(new_origin, sub_vect(m(corner1), new_origin), sub_vect(m(corner2), new_origin)));
+    };
+}
+function flip_vert(painter) {
+    return transform_painter(painter, make_vector(0, 1), make_vector(1, 1), make_vector(0, 0));
+}
+function shrink_to_upper_right(painter) {
+    return transform_painter(painter, make_vector(0.5, 0.5), make_vector(1, 0.5), make_vector(0.5, 1));
+}
+function rotate90(painter) {
+    return transform_painter(painter, make_vector(1, 0), make_vector(1, 1), make_vector(0, 0));
+}
+function squash_inwards(painter) {
+    return transform_painter(painter, make_vector(0, 0), make_vector(0.65, 0.35), make_vector(0.35, 0.65));
+}
+function beside(painter1, painter2) {
+    const split_point = make_vector(0.5, 0);
+    const paint_left = transform_painter(painter1, make_vector(0, 0), split_point, make_vector(0, 1));
+    const paint_right = transform_painter(painter2, split_point, make_vector(1, 0), make_vector(0.5, 1));
+    return (ctx, frame) => {
+        paint_left(ctx, frame);
+        paint_right(ctx, frame);
+    };
+}
+const flip_painter = flip_vert(painter);
+const shrink_to_upper_right_painter = shrink_to_upper_right(painter);
+const rotate90_painter = rotate90(painter);
+const squash_inwards_painter = squash_inwards(painter);
+const beside_painter = beside(painter, painter);
+// flip_painter(ctx, frame1);
+// shrink_to_upper_right_painter(ctx, frame1);
+// rotate90_painter(ctx, frame1);
+// squash_inwards_painter(ctx, frame1);
+beside_painter(ctx, frame1);
 // const v1 = make_vector(0, 0);
 // const v2 = make_vector(100, 100);
 // draw_line(ctx, v1, v2);
