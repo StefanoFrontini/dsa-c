@@ -182,11 +182,23 @@ function transform_painter(painter, origin, corner1, corner2) {
 function flip_vert(painter) {
     return transform_painter(painter, make_vector(0, 1), make_vector(1, 1), make_vector(0, 0));
 }
+function flip_horiz(painter) {
+    return transform_painter(painter, make_vector(1, 0), make_vector(0, 0), make_vector(1, 1));
+}
 function shrink_to_upper_right(painter) {
     return transform_painter(painter, make_vector(0.5, 0.5), make_vector(1, 0.5), make_vector(0.5, 1));
 }
 function rotate90(painter) {
+    // counterclockwise
     return transform_painter(painter, make_vector(1, 0), make_vector(1, 1), make_vector(0, 0));
+}
+function rotate180(painter) {
+    // counterclockwise
+    return transform_painter(painter, make_vector(1, 1), make_vector(0, 1), make_vector(1, 0));
+}
+function rotate270(painter) {
+    // counterclockwise
+    return transform_painter(painter, make_vector(0, 1), make_vector(0, 0), make_vector(1, 1));
 }
 function squash_inwards(painter) {
     return transform_painter(painter, make_vector(0, 0), make_vector(0.65, 0.35), make_vector(0.35, 0.65));
@@ -200,14 +212,39 @@ function beside(painter1, painter2) {
         paint_right(frame);
     };
 }
-const flip_painter = flip_vert(painter);
+function below(painter1, painter2) {
+    const split_point = make_vector(0, 0.5);
+    const paint_bottom = transform_painter(painter1, make_vector(0, 0), make_vector(1, 0), split_point);
+    const paint_top = transform_painter(painter2, split_point, make_vector(1, 0.5), make_vector(0, 1));
+    return (frame) => {
+        paint_bottom(frame);
+        paint_top(frame);
+    };
+}
+function below2(painter1, painter2) {
+    return rotate270(beside(rotate90(painter1), rotate90(painter2)));
+}
+const flip_vert_painter = flip_vert(painter);
+const flip_horiz_painter = flip_horiz(painter);
 const shrink_to_upper_right_painter = shrink_to_upper_right(painter);
 const rotate90_painter = rotate90(painter);
+const rotate180_painter = rotate180(painter);
+const rotate270_painter = rotate270(painter);
 const squash_inwards_painter = squash_inwards(painter);
 const beside_painter = beside(painter, painter);
+const below_painter = below(painter, painter);
+const wave2 = beside(painter, flip_vert(painter));
+const wave4 = below(wave2, wave2);
+wave4(frame1);
+// === below_painter(painter, painter)
+// const beside_painter2 = rotate270(beside(rotate90(painter), rotate90(painter)));
+// const below_painter2 = below2(painter, painter)
+// painter(frame1)
+// flip_horiz_painter(frame1)
 // flip_painter(frame1);
-shrink_to_upper_right_painter(frame1);
-// rotate90_painter(frame1);
+// shrink_to_upper_right_painter(frame1);
+// painter(frame1);
+// rotate270_painter(frame1);
 // squash_inwards_painter(frame1);
 // beside_painter(frame1);
 // const v1 = make_vector(0, 0);
