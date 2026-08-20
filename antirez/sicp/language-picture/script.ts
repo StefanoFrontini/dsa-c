@@ -211,8 +211,11 @@ function frame_coord_map(frame: Pair): (v: Pair) => Pair {
     );
 }
 
-function segments_to_painter(segment_list: Pair | null) {
-  return (ctx: CanvasRenderingContext2D | null, frame: Pair) =>
+function segments_to_painter(
+  ctx: CanvasRenderingContext2D | null,
+  segment_list: Pair | null,
+): (frame: Pair) => void {
+  return (frame: Pair) =>
     for_each(
       (segment: Pair) =>
         draw_line(
@@ -267,7 +270,8 @@ const george_lines = list(
   make_segment(p21, p22),
 );
 
-const painter = segments_to_painter(george_lines);
+const painter = segments_to_painter(ctx, george_lines);
+
 const frame1 = make_frame(
   make_vector(0, 600), // origine in basso a sinistra
   make_vector(600, 0), // edge1 punta a destra
@@ -275,16 +279,15 @@ const frame1 = make_frame(
 );
 
 function transform_painter(
-  painter: (ctx: CanvasRenderingContext2D | null, frame: Pair) => void,
+  painter: (frame: Pair) => void,
   origin: Pair,
   corner1: Pair,
   corner2: Pair,
-): (ctx: CanvasRenderingContext2D | null, frame: Pair) => void {
-  return (ctx: CanvasRenderingContext2D | null, frame: Pair) => {
+): (frame: Pair) => void {
+  return (frame: Pair) => {
     const m = frame_coord_map(frame);
     const new_origin = m(origin);
     return painter(
-      ctx,
       make_frame(
         new_origin,
         sub_vect(m(corner1), new_origin),
@@ -293,9 +296,7 @@ function transform_painter(
     );
   };
 }
-function flip_vert(
-  painter: (ctx: CanvasRenderingContext2D | null, frame: Pair) => void,
-): (ctx: CanvasRenderingContext2D | null, frame: Pair) => void {
+function flip_vert(painter: (frame: Pair) => void): (frame: Pair) => void {
   return transform_painter(
     painter,
     make_vector(0, 1),
@@ -303,9 +304,7 @@ function flip_vert(
     make_vector(0, 0),
   );
 }
-function shrink_to_upper_right(
-  painter: (ctx: CanvasRenderingContext2D | null, frame: Pair) => void,
-) {
+function shrink_to_upper_right(painter: (frame: Pair) => void) {
   return transform_painter(
     painter,
     make_vector(0.5, 0.5),
@@ -313,9 +312,7 @@ function shrink_to_upper_right(
     make_vector(0.5, 1),
   );
 }
-function rotate90(
-  painter: (ctx: CanvasRenderingContext2D | null, frame: Pair) => void,
-) {
+function rotate90(painter: (frame: Pair) => void) {
   return transform_painter(
     painter,
     make_vector(1, 0),
@@ -323,9 +320,7 @@ function rotate90(
     make_vector(0, 0),
   );
 }
-function squash_inwards(
-  painter: (ctx: CanvasRenderingContext2D | null, frame: Pair) => void,
-) {
+function squash_inwards(painter: (frame: Pair) => void) {
   return transform_painter(
     painter,
     make_vector(0, 0),
@@ -334,8 +329,8 @@ function squash_inwards(
   );
 }
 function beside(
-  painter1: (ctx: CanvasRenderingContext2D | null, frame: Pair) => void,
-  painter2: (ctx: CanvasRenderingContext2D | null, frame: Pair) => void,
+  painter1: (frame: Pair) => void,
+  painter2: (frame: Pair) => void,
 ) {
   const split_point = make_vector(0.5, 0);
   const paint_left = transform_painter(
@@ -350,9 +345,9 @@ function beside(
     make_vector(1, 0),
     make_vector(0.5, 1),
   );
-  return (ctx: CanvasRenderingContext2D | null, frame: Pair) => {
-    paint_left(ctx, frame);
-    paint_right(ctx, frame);
+  return (frame: Pair) => {
+    paint_left(frame);
+    paint_right(frame);
   };
 }
 
@@ -360,12 +355,12 @@ const flip_painter = flip_vert(painter);
 const shrink_to_upper_right_painter = shrink_to_upper_right(painter);
 const rotate90_painter = rotate90(painter);
 const squash_inwards_painter = squash_inwards(painter);
-const beside_painter = beside(painter, painter)
-// flip_painter(ctx, frame1);
-// shrink_to_upper_right_painter(ctx, frame1);
-// rotate90_painter(ctx, frame1);
-// squash_inwards_painter(ctx, frame1);
-beside_painter(ctx, frame1);
+const beside_painter = beside(painter, painter);
+// flip_painter(frame1);
+shrink_to_upper_right_painter(frame1);
+// rotate90_painter(frame1);
+// squash_inwards_painter(frame1);
+// beside_painter(frame1);
 
 // const v1 = make_vector(0, 0);
 // const v2 = make_vector(100, 100);
