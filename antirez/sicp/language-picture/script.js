@@ -179,6 +179,9 @@ function transform_painter(painter, origin, corner1, corner2) {
         return painter(make_frame(new_origin, sub_vect(m(corner1), new_origin), sub_vect(m(corner2), new_origin)));
     };
 }
+function identity(painter) {
+    return painter;
+}
 function flip_vert(painter) {
     return transform_painter(painter, make_vector(0, 1), make_vector(1, 1), make_vector(0, 0));
 }
@@ -224,6 +227,53 @@ function below(painter1, painter2) {
 function below2(painter1, painter2) {
     return rotate270(beside(rotate90(painter1), rotate90(painter2)));
 }
+function right_split(painter, n) {
+    if (n === 0) {
+        return painter;
+    }
+    else {
+        const smaller = right_split(painter, n - 1);
+        return beside(painter, below(smaller, smaller));
+    }
+}
+function up_split(painter, n) {
+    if (n === 0) {
+        return painter;
+    }
+    else {
+        const smaller = up_split(painter, n - 1);
+        return below(painter, beside(smaller, smaller));
+    }
+}
+function corner_split(painter, n) {
+    if (n === 0) {
+        return painter;
+    }
+    else {
+        const up = up_split(painter, n - 1);
+        const right = right_split(painter, n - 1);
+        const top_left = beside(up, up);
+        const bottom_right = below(right, right);
+        const corner = corner_split(painter, n - 1);
+        return beside(below(painter, top_left), below(bottom_right, corner));
+    }
+}
+function square_split(painter, n) {
+    const quarter = corner_split(painter, n);
+    const half = beside(flip_horiz(quarter), quarter);
+    return below(flip_vert(half), half);
+}
+function square_of_four(tl, tr, bl, br) {
+    return (painter) => {
+        const top = beside(tl(painter), tr(painter));
+        const bottom = beside(bl(painter), br(painter));
+        return below(bottom, top);
+    };
+}
+function square_limit(painter, n) {
+    const combine4 = square_of_four(flip_horiz, identity, rotate180, flip_vert);
+    return combine4(corner_split(painter, n));
+}
 const flip_vert_painter = flip_vert(painter);
 const flip_horiz_painter = flip_horiz(painter);
 const shrink_to_upper_right_painter = shrink_to_upper_right(painter);
@@ -235,7 +285,17 @@ const beside_painter = beside(painter, painter);
 const below_painter = below(painter, painter);
 const wave2 = beside(painter, flip_vert(painter));
 const wave4 = below(wave2, wave2);
-wave4(frame1);
+const r_split = right_split(painter, 3);
+const u_split = up_split(painter, 1);
+const c_split = corner_split(painter, 4);
+const s_split = square_split(painter, 4);
+const s_limit = square_limit(painter, 2);
+s_limit(frame1);
+// s_split(frame1);
+// c_split(frame1)
+// u_split(frame1);
+// r_split(frame1);
+// wave4(frame1);
 // === below_painter(painter, painter)
 // const beside_painter2 = rotate270(beside(rotate90(painter), rotate90(painter)));
 // const below_painter2 = below2(painter, painter)
