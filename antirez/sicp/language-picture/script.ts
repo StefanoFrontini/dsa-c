@@ -226,7 +226,47 @@ function segments_to_painter(
       segment_list,
     );
 }
+function image_to_painter(
+  ctx: CanvasRenderingContext2D | null,
+  img: HTMLImageElement,
+): (frame: Pair) => void {
+  return (frame: Pair) => {
+    if (!ctx) return;
 
+    const o = origin_frame(frame);
+    const e1 = edge1_frame(frame);
+    const e2 = edge2_frame(frame);
+
+    ctx.save();
+
+    ctx.transform(
+      xcor_vect(e1),
+      ycor_vect(e1),
+      xcor_vect(e2),
+      ycor_vect(e2),
+      xcor_vect(o),
+      ycor_vect(o),
+    );
+
+    // Ribalta l'asse Y nativo dell'immagine per allinearlo al sistema cartesiano
+    ctx.translate(0, 1);
+    ctx.scale(1, -1);
+
+    ctx.drawImage(img, 0, 0, 1, 1);
+    ctx.restore();
+  };
+}
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = (err) => reject(err);
+    img.src = url;
+  });
+}
+
+// george points
 const p1 = make_vector(0.25, 0);
 const p2 = make_vector(0.35, 0.5);
 const p3 = make_vector(0.3, 0.6);
@@ -469,7 +509,10 @@ function square_of_four(
     return below(bottom, top);
   };
 }
-function square_limit(painter: (frame: Pair) => void, n: number) {
+function square_limit(
+  painter: (frame: Pair) => void,
+  n: number,
+): (frame: Pair) => void {
   const combine4 = square_of_four(flip_horiz, identity, rotate180, flip_vert);
   return combine4(corner_split(painter, n));
 }
@@ -490,8 +533,8 @@ const r_split = right_split(painter, 3);
 const u_split = up_split(painter, 1);
 const c_split = corner_split(painter, 4);
 const s_split = square_split(painter, 4);
-const s_limit = square_limit(painter, 2)
-s_limit(frame1)
+const s_limit = square_limit(painter, 2);
+// s_limit(frame1);
 
 // s_split(frame1);
 // c_split(frame1)
@@ -521,3 +564,15 @@ s_limit(frame1)
 
 // print_list(xcor_vect(v));
 // print_list(ycor_vect(v));
+
+async function run() {
+  const img = await loadImage("./foto.jpeg");
+  const imgPainter = image_to_painter(ctx, img);
+
+  // const wave2 = beside(painter, flip_vert(painter));
+  const wave2 = below(painter, flip_horiz(imgPainter));
+  wave2(frame1);
+  // const escher_style = square_limit(imgPainter, 2);
+  // escher_style(frame1);
+}
+run();
