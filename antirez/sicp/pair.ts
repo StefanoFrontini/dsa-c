@@ -1,9 +1,9 @@
-export function pair(x: number, y: number) {
-  function dispatch(m: number) {
-    return m === 0 ? x : m === 1 ? y : 1;
-  }
-  return dispatch;
-}
+// export function pair(x: number, y: number) {
+//   function dispatch(m: number) {
+//     return m === 0 ? x : m === 1 ? y : 1;
+//   }
+//   return dispatch;
+// }
 
 // function head(z: (m: number) => number) {
 //   return z(0);
