@@ -1,4 +1,77 @@
 "use strict";
+/*
+Bluebird Bxyz = x(yz)
+*/
+// const B = x => y => z => x(y(z))
+// Un tipo di utilità per estrarre il tipo dell'argomento e del ritorno di una funzione
+// type Func = (arg: any) => any;
+// Tipo ricorsivo che convalida la catena di funzioni
+// type Pipeline<Fns extends Func[], FirstArg> =
+//   Fns extends [infer First extends Func, ...infer Rest extends Func[]]
+//     ? [ (arg: FirstArg) => ReturnType<First>, ...Pipeline<Rest, ReturnType<First>> ]
+//     : [];
+// function pipe<T, Fns extends Func[]>(
+//   initialValue: T,
+//   ...fns: Pipeline<Fns, T> & Fns
+// ): any {
+//   return fns.reduce((acc, fn) => fn(acc), initialValue);
+// }
+// const incrementa = (n: number): number => n + 1;
+// const raddoppia  = (n: number): number => n * 2;
+// const quadrato   = (n: number): number => n * n;
+// const inStringa  = (n: number): string => `Risultato finale: ${n}`;
+// Funziona perfettamente! TypeScript deduce tutti i tipi lungo la catena.
+// const risultato = pipe(
+//   2,
+//   incrementa, // 2 -> 3
+//   raddoppia,  // 3 -> 6
+//   quadrato,   // 6 -> 36
+//   inStringa   // 36 -> "Risultato finale: 36"
+// );
+// console.log("res: ", risultato)
+// const trasformaInStringa = (n: number): string => `Numero: ${n}`;
+// const richiedeArray = (arr: any[]): number => arr.length; // Si aspetta un Array, non una stringa!
+// const erroreCompilazione = pipe(
+//   5,
+//   incrementa,
+//   trasformaInStringa,
+// );
+const B = (x) => (y) => (z) => x(y(z));
+// const Becard = B(B(B))(B);
+// function B<U, V>(x: (arg: U) => V) {
+//   return function first<T>(y: (arg: T) => U) {
+//     return function second(z: T): V {
+//       return x(y(z));
+//     };
+//   };
+// }
+// z: La funzione di partenza. Prende un testo e lo stampa.
+// const logBase = (messaggio: string): void => {
+//   console.log(`[LOG]: ${messaggio}`);
+// };
+// y: Prende una funzione e restituisce una nuova funzione che aggiunge un timestamp prima di eseguirla
+// const conTimestamp = (fn: (msg: string) => void) => {
+//   return (messaggio: string): void => {
+//     const data = new Date().toLocaleTimeString();
+//     fn(`[${data}] ${messaggio}`);
+//   };
+// };
+// x: Prende una funzione e restituisce una nuova funzione che aggiunge dei separatori grafici visivi
+// const conSeparatore = (fn: (msg: string) => void) => {
+//   return (messaggio: string): void => {
+//     console.log("--- INIZIO LOG ---");
+//     fn(messaggio);
+//     console.log("--- FINE LOG ---");
+//   };
+// };
+// const addOne = (n: number): number => n + 1;
+// const intToString = (n: number): string => `Result: ${n}`
+// const pipeline = B(intToString)(addOne)
+// const output = B(conSeparatore)(conTimestamp)(logBase)
+// console.log(conSeparatore(output))
+// const K = x => y => x
+const K = (x) => (y) => x;
+// const pipeline = K("ciao")(5);
 const canvas = document.getElementById("canvas");
 if (!canvas)
     throw new Error("canvas is null");
@@ -316,6 +389,12 @@ const u_split = up_split(painter, 1);
 const c_split = corner_split(painter, 4);
 const s_split = square_split(painter, 4);
 const s_limit = square_limit(painter, 2);
+// flip_vert_painter(frame1)
+const rotate_180 = B(flip_horiz)(flip_vert);
+const rotate_270 = B(B(flip_horiz)(flip_vert))(rotate90);
+beside(rotate_180(painter), rotate_270(painter))(frame1);
+// rotate_270(painter)(frame1)
+// rotate180_painter(frame1)
 // s_limit(frame1);
 // s_split(frame1);
 // c_split(frame1)
@@ -339,13 +418,13 @@ const s_limit = square_limit(painter, 2);
 // const v = make_vector(1, 2);
 // print_list(xcor_vect(v));
 // print_list(ycor_vect(v));
-async function run() {
-    const img = await loadImage("./foto.jpeg");
-    const imgPainter = image_to_painter(ctx, img);
-    // const wave2 = beside(painter, flip_vert(painter));
-    const wave2 = below((painter), flip_horiz((imgPainter)));
-    wave2(frame1);
-    // const escher_style = square_limit(imgPainter, 2);
-    // escher_style(frame1);
-}
-run();
+// async function run() {
+//   const img = await loadImage("./foto.jpeg");
+//   const imgPainter = image_to_painter(ctx, img);
+//   // const wave2 = beside(painter, flip_vert(painter));
+//   const wave2 = below(painter, flip_horiz(imgPainter));
+//   wave2(frame1);
+//   // const escher_style = square_limit(imgPainter, 2);
+//   // escher_style(frame1);
+// }
+// run();

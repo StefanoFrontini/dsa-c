@@ -1,3 +1,96 @@
+/*
+Bluebird Bxyz = x(yz)
+*/
+// const B = x => y => z => x(y(z))
+// Un tipo di utilità per estrarre il tipo dell'argomento e del ritorno di una funzione
+// type Func = (arg: any) => any;
+
+// Tipo ricorsivo che convalida la catena di funzioni
+// type Pipeline<Fns extends Func[], FirstArg> =
+//   Fns extends [infer First extends Func, ...infer Rest extends Func[]]
+//     ? [ (arg: FirstArg) => ReturnType<First>, ...Pipeline<Rest, ReturnType<First>> ]
+//     : [];
+
+// function pipe<T, Fns extends Func[]>(
+//   initialValue: T,
+//   ...fns: Pipeline<Fns, T> & Fns
+// ): any {
+//   return fns.reduce((acc, fn) => fn(acc), initialValue);
+// }
+// const incrementa = (n: number): number => n + 1;
+// const raddoppia  = (n: number): number => n * 2;
+// const quadrato   = (n: number): number => n * n;
+// const inStringa  = (n: number): string => `Risultato finale: ${n}`;
+
+// Funziona perfettamente! TypeScript deduce tutti i tipi lungo la catena.
+// const risultato = pipe(
+//   2,
+//   incrementa, // 2 -> 3
+//   raddoppia,  // 3 -> 6
+//   quadrato,   // 6 -> 36
+//   inStringa   // 36 -> "Risultato finale: 36"
+// );
+// console.log("res: ", risultato)
+// const trasformaInStringa = (n: number): string => `Numero: ${n}`;
+// const richiedeArray = (arr: any[]): number => arr.length; // Si aspetta un Array, non una stringa!
+
+// const erroreCompilazione = pipe(
+//   5,
+//   incrementa,
+//   trasformaInStringa,
+// );
+
+const B =
+  <U, V>(x: (arg: U) => V) =>
+  <T>(y: (arg: T) => U) =>
+  (z: T): V =>
+    x(y(z));
+
+// const Becard = B(B(B))(B);
+
+// function B<U, V>(x: (arg: U) => V) {
+//   return function first<T>(y: (arg: T) => U) {
+//     return function second(z: T): V {
+//       return x(y(z));
+//     };
+//   };
+// }
+// z: La funzione di partenza. Prende un testo e lo stampa.
+// const logBase = (messaggio: string): void => {
+//   console.log(`[LOG]: ${messaggio}`);
+// };
+
+// y: Prende una funzione e restituisce una nuova funzione che aggiunge un timestamp prima di eseguirla
+// const conTimestamp = (fn: (msg: string) => void) => {
+//   return (messaggio: string): void => {
+//     const data = new Date().toLocaleTimeString();
+//     fn(`[${data}] ${messaggio}`);
+//   };
+// };
+
+// x: Prende una funzione e restituisce una nuova funzione che aggiunge dei separatori grafici visivi
+// const conSeparatore = (fn: (msg: string) => void) => {
+//   return (messaggio: string): void => {
+//     console.log("--- INIZIO LOG ---");
+//     fn(messaggio);
+//     console.log("--- FINE LOG ---");
+//   };
+// };
+
+// const addOne = (n: number): number => n + 1;
+// const intToString = (n: number): string => `Result: ${n}`
+// const pipeline = B(intToString)(addOne)
+// const output = B(conSeparatore)(conTimestamp)(logBase)
+// console.log(conSeparatore(output))
+
+// const K = x => y => x
+const K =
+  <T>(x: T) =>
+  <U>(y: U): T =>
+    x;
+
+// const pipeline = K("ciao")(5);
+
 const canvas = document.getElementById("canvas") as HTMLCanvasElement | null;
 if (!canvas) throw new Error("canvas is null");
 
@@ -13,6 +106,7 @@ type Pair = {
   head: number | Pair | null;
   tail: number | Pair | null;
 };
+type Painter = (frame: Pair) => void;
 
 // cons
 function pair(a: Pair["head"], b: Pair["tail"]): Pair {
@@ -401,57 +495,101 @@ function squash_inwards(painter: (frame: Pair) => void) {
     make_vector(0.35, 0.65),
   );
 }
-function beside(
-  painter1: (frame: Pair) => void,
-  painter2: (frame: Pair) => void,
-): (frame: Pair) => void {
+const beside = (p1: Painter) => {
   const split_point = make_vector(0.5, 0);
   const paint_left = transform_painter(
-    painter1,
+    p1,
     make_vector(0, 0),
     split_point,
     make_vector(0, 1),
   );
-  const paint_right = transform_painter(
-    painter2,
-    split_point,
-    make_vector(1, 0),
-    make_vector(0.5, 1),
-  );
-  return (frame: Pair) => {
-    paint_left(frame);
-    paint_right(frame);
-  };
-}
 
-function below(
-  painter1: (frame: Pair) => void,
-  painter2: (frame: Pair) => void,
-): (frame: Pair) => void {
+  return (p2: Painter): Painter => {
+    const paint_right = transform_painter(
+      p2,
+      split_point,
+      make_vector(1, 0),
+      make_vector(0.5, 1),
+    );
+
+    return (frame: Pair) => {
+      paint_left(frame);
+      paint_right(frame);
+    };
+  };
+};
+// function beside(
+//   painter1: (frame: Pair) => void,
+//   painter2: (frame: Pair) => void,
+// ): (frame: Pair) => void {
+//   const split_point = make_vector(0.5, 0);
+//   const paint_left = transform_painter(
+//     painter1,
+//     make_vector(0, 0),
+//     split_point,
+//     make_vector(0, 1),
+//   );
+//   const paint_right = transform_painter(
+//     painter2,
+//     split_point,
+//     make_vector(1, 0),
+//     make_vector(0.5, 1),
+//   );
+//   return (frame: Pair) => {
+//     paint_left(frame);
+//     paint_right(frame);
+//   };
+// }
+const below = (p1: Painter) => {
   const split_point = make_vector(0, 0.5);
   const paint_bottom = transform_painter(
-    painter1,
+    p1,
     make_vector(0, 0),
     make_vector(1, 0),
     split_point,
   );
-  const paint_top = transform_painter(
-    painter2,
-    split_point,
-    make_vector(1, 0.5),
-    make_vector(0, 1),
-  );
-  return (frame: Pair) => {
-    paint_bottom(frame);
-    paint_top(frame);
+  return (p2: Painter) => {
+    const paint_top = transform_painter(
+      p2,
+      split_point,
+      make_vector(1, 0.5),
+      make_vector(0, 1),
+    );
+    return (frame: Pair) => {
+      paint_bottom(frame);
+      paint_top(frame);
+    };
   };
-}
-function below2(
-  painter1: (frame: Pair) => void,
-  painter2: (frame: Pair) => void,
-): (frame: Pair) => void {
-  return rotate270(beside(rotate90(painter1), rotate90(painter2)));
-}
+};
+
+// function below(
+//   painter1: (frame: Pair) => void,
+//   painter2: (frame: Pair) => void,
+// ): (frame: Pair) => void {
+//   const split_point = make_vector(0, 0.5);
+//   const paint_bottom = transform_painter(
+//     painter1,
+//     make_vector(0, 0),
+//     make_vector(1, 0),
+//     split_point,
+//   );
+//   const paint_top = transform_painter(
+//     painter2,
+//     split_point,
+//     make_vector(1, 0.5),
+//     make_vector(0, 1),
+//   );
+//   return (frame: Pair) => {
+//     paint_bottom(frame);
+//     paint_top(frame);
+//   };
+// }
+// function below2(
+//   painter1: (frame: Pair) => void,
+//   painter2: (frame: Pair) => void,
+// ): (frame: Pair) => void {
+//   return rotate270(beside(rotate90(painter1))(rotate90(painter2)));
+// }
 function right_split(
   painter: (frame: Pair) => void,
   n: number,
@@ -460,7 +598,7 @@ function right_split(
     return painter;
   } else {
     const smaller = right_split(painter, n - 1);
-    return beside(painter, below(smaller, smaller));
+    return beside(painter)(below(smaller)(smaller));
   }
 }
 function up_split(
@@ -471,7 +609,7 @@ function up_split(
     return painter;
   } else {
     const smaller = up_split(painter, n - 1);
-    return below(painter, beside(smaller, smaller));
+    return below(painter)(beside(smaller)(smaller));
   }
 }
 function corner_split(
@@ -483,10 +621,10 @@ function corner_split(
   } else {
     const up = up_split(painter, n - 1);
     const right = right_split(painter, n - 1);
-    const top_left = beside(up, up);
-    const bottom_right = below(right, right);
+    const top_left = beside(up)(up);
+    const bottom_right = below(right)(right);
     const corner = corner_split(painter, n - 1);
-    return beside(below(painter, top_left), below(bottom_right, corner));
+    return beside(below(painter)(top_left))(below(bottom_right)(corner));
   }
 }
 function square_split(
@@ -494,8 +632,8 @@ function square_split(
   n: number,
 ): (frame: Pair) => void {
   const quarter = corner_split(painter, n);
-  const half = beside(flip_horiz(quarter), quarter);
-  return below(flip_vert(half), half);
+  const half = beside(flip_horiz(quarter))(quarter);
+  return below(flip_vert(half))(half);
 }
 function square_of_four(
   tl: (p: (frame: Pair) => void) => (frame: Pair) => void,
@@ -504,9 +642,9 @@ function square_of_four(
   br: (p: (frame: Pair) => void) => (frame: Pair) => void,
 ): (p: (frame: Pair) => void) => (frame: Pair) => void {
   return (painter) => {
-    const top = beside(tl(painter), tr(painter));
-    const bottom = beside(bl(painter), br(painter));
-    return below(bottom, top);
+    const top = beside(tl(painter))(tr(painter));
+    const bottom = beside(bl(painter))(br(painter));
+    return below(bottom)(top);
   };
 }
 function square_limit(
@@ -524,16 +662,24 @@ const rotate90_painter = rotate90(painter);
 const rotate180_painter = rotate180(painter);
 const rotate270_painter = rotate270(painter);
 const squash_inwards_painter = squash_inwards(painter);
-const beside_painter = beside(painter, painter);
-const below_painter = below(painter, painter);
+const beside_painter = beside(painter)(painter);
+const below_painter = below(painter)(painter);
 
-const wave2 = beside(painter, flip_vert(painter));
-const wave4 = below(wave2, wave2);
+const wave2 = beside(painter)(flip_vert(painter));
+const wave4 = below(wave2)(wave2);
 const r_split = right_split(painter, 3);
 const u_split = up_split(painter, 1);
 const c_split = corner_split(painter, 4);
 const s_split = square_split(painter, 4);
 const s_limit = square_limit(painter, 2);
+// flip_vert_painter(frame1)
+const rotate_180 = B(flip_horiz)(flip_vert);
+const rotate_270 = B(B(flip_horiz)(flip_vert))(rotate90);
+// const new_transform = B(rotate90)(beside(painter)(painter));
+// beside(rotate_180(painter), rotate_270(painter))(frame1)
+// rotate_270(painter)(frame1)
+
+// rotate180_painter(frame1)
 // s_limit(frame1);
 
 // s_split(frame1);
@@ -565,14 +711,14 @@ const s_limit = square_limit(painter, 2);
 // print_list(xcor_vect(v));
 // print_list(ycor_vect(v));
 
-async function run() {
-  const img = await loadImage("./foto.jpeg");
-  const imgPainter = image_to_painter(ctx, img);
+// async function run() {
+//   const img = await loadImage("./foto.jpeg");
+//   const imgPainter = image_to_painter(ctx, img);
 
-  // const wave2 = beside(painter, flip_vert(painter));
-  const wave2 = below(painter, flip_horiz(imgPainter));
-  wave2(frame1);
-  // const escher_style = square_limit(imgPainter, 2);
-  // escher_style(frame1);
-}
-run();
+//   // const wave2 = beside(painter, flip_vert(painter));
+//   const wave2 = below(painter, flip_horiz(imgPainter));
+//   wave2(frame1);
+//   // const escher_style = square_limit(imgPainter, 2);
+//   // escher_style(frame1);
+// }
+// run();
