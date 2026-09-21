@@ -46,6 +46,23 @@ const B =
   (z: T): V =>
     x(y(z));
 
+const K =
+  <T>(x: T) =>
+  <U>(y: U): T =>
+    x;
+
+// Cardinal Cxyz = xzy
+// const C =
+//   <U, T, V>(x: (arg: T) => (arg: U) => V) =>
+//   (y: (arg: U) => V) =>
+//   (z: T): V =>
+//     x(z)(y);
+const C =
+  <T, U, V>(x: (arg: T) => (arg: U) => V) =>
+  (y: U) =>
+  (z: T): V =>
+    x(z)(y);
+
 // const Becard = B(B(B))(B);
 
 // function B<U, V>(x: (arg: U) => V) {
@@ -84,10 +101,6 @@ const B =
 // console.log(conSeparatore(output))
 
 // const K = x => y => x
-const K =
-  <T>(x: T) =>
-  <U>(y: U): T =>
-    x;
 
 // const pipeline = K("ciao")(5);
 
@@ -658,8 +671,12 @@ const c_split = corner_split(painter, 4);
 const s_split = square_split(painter, 4);
 const s_limit = square_limit(painter, 2);
 // flip_vert_painter(frame1)
-const rotate_180 = B(flip_horiz)(flip_vert);
-const rotate_270 = B(B(flip_horiz)(flip_vert))(rotate90);
+const besideFlipped = C(beside)
+beside(painter)(right_split(painter, 2))(frame1)
+// besideFlipped(painter)(right_split(painter, 2))(frame1)
+// const result = C(B)(rotate90)(flip_vert);
+// result(painter)(frame1);
+// const rotate_270 = B(B(flip_horiz)(flip_vert))(rotate90);
 // const new_transform = B(rotate90)(beside(painter)(painter));
 // beside(rotate_180(painter), rotate_270(painter))(frame1)
 // rotate_270(painter)(frame1)
