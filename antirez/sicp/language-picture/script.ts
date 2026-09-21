@@ -308,7 +308,7 @@ function frame_coord_map(frame: Pair): (v: Pair) => Pair {
 function segments_to_painter(
   ctx: CanvasRenderingContext2D | null,
   segment_list: Pair | null,
-): (frame: Pair) => void {
+): Painter {
   return (frame: Pair) =>
     for_each(
       (segment: Pair) =>
@@ -323,7 +323,7 @@ function segments_to_painter(
 function image_to_painter(
   ctx: CanvasRenderingContext2D | null,
   img: HTMLImageElement,
-): (frame: Pair) => void {
+): Painter {
   return (frame: Pair) => {
     if (!ctx) return;
 
@@ -413,11 +413,11 @@ const frame1 = make_frame(
 );
 
 function transform_painter(
-  painter: (frame: Pair) => void,
+  painter: Painter,
   origin: Pair,
   corner1: Pair,
   corner2: Pair,
-): (frame: Pair) => void {
+): Painter {
   return (frame: Pair) => {
     const m = frame_coord_map(frame);
     const new_origin = m(origin);
@@ -430,10 +430,10 @@ function transform_painter(
     );
   };
 }
-function identity(painter: (frame: Pair) => void): (frame: Pair) => void {
+function identity(painter: Painter): Painter {
   return painter;
 }
-function flip_vert(painter: (frame: Pair) => void): (frame: Pair) => void {
+function flip_vert(painter: Painter): Painter {
   return transform_painter(
     painter,
     make_vector(0, 1),
@@ -442,7 +442,7 @@ function flip_vert(painter: (frame: Pair) => void): (frame: Pair) => void {
   );
 }
 
-function flip_horiz(painter: (frame: Pair) => void): (frame: Pair) => void {
+function flip_horiz(painter: Painter): Painter {
   return transform_painter(
     painter,
     make_vector(1, 0),
@@ -450,7 +450,7 @@ function flip_horiz(painter: (frame: Pair) => void): (frame: Pair) => void {
     make_vector(1, 1),
   );
 }
-function shrink_to_upper_right(painter: (frame: Pair) => void) {
+function shrink_to_upper_right(painter: Painter) {
   return transform_painter(
     painter,
     make_vector(0.5, 0.5),
@@ -458,7 +458,7 @@ function shrink_to_upper_right(painter: (frame: Pair) => void) {
     make_vector(0.5, 1),
   );
 }
-function rotate90(painter: (frame: Pair) => void) {
+function rotate90(painter: Painter) {
   // counterclockwise
   return transform_painter(
     painter,
@@ -468,7 +468,7 @@ function rotate90(painter: (frame: Pair) => void) {
   );
 }
 
-function rotate180(painter: (frame: Pair) => void) {
+function rotate180(painter: Painter) {
   // counterclockwise
   return transform_painter(
     painter,
@@ -478,7 +478,7 @@ function rotate180(painter: (frame: Pair) => void) {
   );
 }
 
-function rotate270(painter: (frame: Pair) => void) {
+function rotate270(painter: Painter) {
   // counterclockwise
   return transform_painter(
     painter,
@@ -487,7 +487,7 @@ function rotate270(painter: (frame: Pair) => void) {
     make_vector(1, 1),
   );
 }
-function squash_inwards(painter: (frame: Pair) => void) {
+function squash_inwards(painter: Painter) {
   return transform_painter(
     painter,
     make_vector(0, 0),
@@ -519,9 +519,9 @@ const beside = (p1: Painter) => {
   };
 };
 // function beside(
-//   painter1: (frame: Pair) => void,
-//   painter2: (frame: Pair) => void,
-// ): (frame: Pair) => void {
+//   painter1: Painter,
+//   painter2: Painter,
+// ): Painter {
 //   const split_point = make_vector(0.5, 0);
 //   const paint_left = transform_painter(
 //     painter1,
@@ -563,9 +563,9 @@ const below = (p1: Painter) => {
 };
 
 // function below(
-//   painter1: (frame: Pair) => void,
-//   painter2: (frame: Pair) => void,
-// ): (frame: Pair) => void {
+//   painter1: Painter,
+//   painter2: Painter,
+// ): Painter {
 //   const split_point = make_vector(0, 0.5);
 //   const paint_bottom = transform_painter(
 //     painter1,
@@ -585,15 +585,12 @@ const below = (p1: Painter) => {
 //   };
 // }
 // function below2(
-//   painter1: (frame: Pair) => void,
-//   painter2: (frame: Pair) => void,
-// ): (frame: Pair) => void {
+//   painter1: Painter,
+//   painter2: Painter,
+// ): Painter {
 //   return rotate270(beside(rotate90(painter1))(rotate90(painter2)));
 // }
-function right_split(
-  painter: (frame: Pair) => void,
-  n: number,
-): (frame: Pair) => void {
+function right_split(painter: Painter, n: number): Painter {
   if (n === 0) {
     return painter;
   } else {
@@ -601,10 +598,7 @@ function right_split(
     return beside(painter)(below(smaller)(smaller));
   }
 }
-function up_split(
-  painter: (frame: Pair) => void,
-  n: number,
-): (frame: Pair) => void {
+function up_split(painter: Painter, n: number): Painter {
   if (n === 0) {
     return painter;
   } else {
@@ -612,10 +606,7 @@ function up_split(
     return below(painter)(beside(smaller)(smaller));
   }
 }
-function corner_split(
-  painter: (frame: Pair) => void,
-  n: number,
-): (frame: Pair) => void {
+function corner_split(painter: Painter, n: number): Painter {
   if (n === 0) {
     return painter;
   } else {
@@ -627,30 +618,24 @@ function corner_split(
     return beside(below(painter)(top_left))(below(bottom_right)(corner));
   }
 }
-function square_split(
-  painter: (frame: Pair) => void,
-  n: number,
-): (frame: Pair) => void {
+function square_split(painter: Painter, n: number): Painter {
   const quarter = corner_split(painter, n);
   const half = beside(flip_horiz(quarter))(quarter);
   return below(flip_vert(half))(half);
 }
 function square_of_four(
-  tl: (p: (frame: Pair) => void) => (frame: Pair) => void,
-  tr: (p: (frame: Pair) => void) => (frame: Pair) => void,
-  bl: (p: (frame: Pair) => void) => (frame: Pair) => void,
-  br: (p: (frame: Pair) => void) => (frame: Pair) => void,
-): (p: (frame: Pair) => void) => (frame: Pair) => void {
+  tl: (p: Painter) => Painter,
+  tr: (p: Painter) => Painter,
+  bl: (p: Painter) => Painter,
+  br: (p: Painter) => Painter,
+): (p: Painter) => Painter {
   return (painter) => {
     const top = beside(tl(painter))(tr(painter));
     const bottom = beside(bl(painter))(br(painter));
     return below(bottom)(top);
   };
 }
-function square_limit(
-  painter: (frame: Pair) => void,
-  n: number,
-): (frame: Pair) => void {
+function square_limit(painter: Painter, n: number): Painter {
   const combine4 = square_of_four(flip_horiz, identity, rotate180, flip_vert);
   return combine4(corner_split(painter, n));
 }
