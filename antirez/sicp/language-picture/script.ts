@@ -42,14 +42,14 @@ Bluebird Bxyz = x(yz)
 
 const B =
   <U, V>(x: (arg: U) => V) =>
-  <T>(y: (arg: T) => U) =>
-  (z: T): V =>
-    x(y(z));
+    <T>(y: (arg: T) => U) =>
+      (z: T): V =>
+        x(y(z));
 
 const K =
   <T>(x: T) =>
-  <U>(y: U): T =>
-    x;
+    <U>(y: U): T =>
+      x;
 
 // Cardinal Cxyz = xzy
 // const C =
@@ -59,9 +59,31 @@ const K =
 //     x(z)(y);
 const C =
   <T, U, V>(x: (arg: T) => (arg: U) => V) =>
-  (y: U) =>
-  (z: T): V =>
-    x(z)(y);
+    (y: U) =>
+      (z: T): V =>
+        x(z)(y);
+
+// Mocking Bird Mx=xx
+// const M = x => x(x)
+// Un tipo di funzione che accetta come argomento se stessa
+type SelfApplicable<R = unknown> = (x: SelfApplicable<R>) => R;
+// Il Mockingbird fortemente tipizzato
+const M = <R>(x: SelfApplicable<R>): R => x(x);
+
+// Warbler Wxy = xyy 
+const W = <T, V>(x: (arg: T) => (arg: T) => V) => (y: T): V => x(y)(y)
+
+// Robin Rxyz = yzx
+const R =
+  <U>(x: U) => <T, V>(y: (arg: T) => (arg: U) => V) => (z: T): V => y(z)(x)
+
+// Thrush Txy = yx
+const T =
+  <T>(x: T) => <V>(y: (arg: T) => V): V => y(x)
+
+// Finch Fxyz = zyx
+const F =
+  <U>(x: U) => <T>(y: T) => <V>(z: (arg: T) => (arg: U) => V) => z(y)(x)
 
 // const Becard = B(B(B))(B);
 
@@ -642,7 +664,7 @@ function square_of_four(
   bl: (p: Painter) => Painter,
   br: (p: Painter) => Painter,
 ): (p: Painter) => Painter {
-  return (painter) => {
+  return (painter: Painter): Painter => {
     const top = beside(tl(painter))(tr(painter));
     const bottom = beside(bl(painter))(br(painter));
     return below(bottom)(top);
@@ -661,7 +683,8 @@ const rotate180_painter = rotate180(painter);
 const rotate270_painter = rotate270(painter);
 const squash_inwards_painter = squash_inwards(painter);
 const beside_painter = beside(painter)(painter);
-const below_painter = below(painter)(painter);
+// const below_painter = below(painter)(painter);
+const below_painter = W(below)(painter)
 
 const wave2 = beside(painter)(flip_vert(painter));
 const wave4 = below(wave2)(wave2);
@@ -670,9 +693,34 @@ const u_split = up_split(painter, 1);
 const c_split = corner_split(painter, 4);
 const s_split = square_split(painter, 4);
 const s_limit = square_limit(painter, 2);
-// flip_vert_painter(frame1)
-const besideFlipped = C(beside)
-beside(painter)(right_split(painter, 2))(frame1)
+
+type Step = (p: Painter) => (depth: number) => Painter;
+const make_fractal = (self: SelfApplicable<Step>): Step => (p: Painter) => (depth: number): Painter => {
+  if (depth === 0) return p;
+
+  // 🪄 IL TRUCCO DEL MOCKINGBIRD:
+  // M(self) rigenera la funzione ricorsiva al volo!
+  const smaller = M(self)(p)(depth - 1)
+
+  // Mettiamo il pittore p a sinistra, e a destra mettiamo p sotto il livello ricorsivo
+  return beside(p)(below(p)(smaller))
+}
+
+// const fractal = M(make_fractal)
+// fractal(painter)(2)(frame1)
+
+
+// beside(painter)(flip_vert(painter))
+// R(flip_vert(painter))(beside)(painter)(frame1)
+//
+// flip_vert(painter)(frame1)
+// T(painter)(flip_vert)(frame1)
+
+F(flip_horiz(painter))(rotate90(painter))(beside)(frame1)
+
+// flip_vert_painter(w)
+// const besideFlipped = C(beside)
+// beside(painter)(right_split(painter, 2))(frame1)
 // besideFlipped(painter)(right_split(painter, 2))(frame1)
 // const result = C(B)(rotate90)(flip_vert);
 // result(painter)(frame1);
