@@ -47,7 +47,7 @@ const K = (x) => (y) => x;
 const C = (x) => (y) => (z) => x(z)(y);
 // Il Mockingbird fortemente tipizzato
 const M = (x) => x(x);
-// Warbler Wxy = xyy 
+// Warbler Wxy = xyy
 const W = (x) => (y) => x(y)(y);
 // Robin Rxyz = yzx
 const R = (x) => (y) => (z) => y(z)(x);
@@ -55,6 +55,12 @@ const R = (x) => (y) => (z) => y(z)(x);
 const T = (x) => (y) => y(x);
 // Finch Fxyz = zyx
 const F = (x) => (y) => (z) => z(y)(x);
+// Lark Lxy = x(yy)
+const L = (x) => (y) => x(y(y));
+// Dove Dxyzw = xy(zw)
+const D = (x) => (y) => (z) => (w) => x(y)(z(w));
+// Blackbird B1xyzw = x(yzw)
+const B1 = (x) => (y) => (z) => (w) => x(y(z)(w));
 // const Becard = B(B(B))(B);
 // function B<U, V>(x: (arg: U) => V) {
 //   return function first<T>(y: (arg: T) => U) {
@@ -366,34 +372,6 @@ const below = (p1) => {
         };
     };
 };
-// function below(
-//   painter1: Painter,
-//   painter2: Painter,
-// ): Painter {
-//   const split_point = make_vector(0, 0.5);
-//   const paint_bottom = transform_painter(
-//     painter1,
-//     make_vector(0, 0),
-//     make_vector(1, 0),
-//     split_point,
-//   );
-//   const paint_top = transform_painter(
-//     painter2,
-//     split_point,
-//     make_vector(1, 0.5),
-//     make_vector(0, 1),
-//   );
-//   return (frame: Pair) => {
-//     paint_bottom(frame);
-//     paint_top(frame);
-//   };
-// }
-// function below2(
-//   painter1: Painter,
-//   painter2: Painter,
-// ): Painter {
-//   return rotate270(beside(rotate90(painter1))(rotate90(painter2)));
-// }
 function right_split(painter, n) {
     if (n === 0) {
         return painter;
@@ -474,7 +452,25 @@ const make_fractal = (self) => (p) => (depth) => {
 //
 // flip_vert(painter)(frame1)
 // T(painter)(flip_vert)(frame1)
-F(flip_horiz(painter))(rotate90(painter))(beside)(frame1);
+// F(flip_horiz(painter))(rotate90(painter))(beside)(frame1);
+// const flipFractalStep = (step: Step): Painter => {
+//   const finalPainter = step(painter)(2);
+//   return flip_vert(finalPainter);
+// };
+// L(flipFractalStep)(make_fractal)(frame1);
+// Dove
+// x = beside   (unisce due pittori affiancati)
+// y = wave     (pittore di sinistra, non modificato)
+// z = rotate90 (trasformazione da applicare al secondo)
+// w = wave  (pittore di destra)
+// D(beside)(painter)(rotate90)(painter)(frame1);
+// Blackbird
+// Impostiamo:
+// x = rotate90    (trasformazione unaria da applicare alla fine)
+// y = beside      (combinatore binario)
+// z = wavePainter
+// w = roosterPainter
+B1(rotate90)(beside)(painter)(painter)(frame1);
 // flip_vert_painter(w)
 // const besideFlipped = C(beside)
 // beside(painter)(right_split(painter, 2))(frame1)
