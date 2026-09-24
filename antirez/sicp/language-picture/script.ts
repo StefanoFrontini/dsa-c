@@ -118,6 +118,87 @@ const B1 =
   (w: U) =>
     x(y(z)(w));
 
+// Eagle Exyzwv = xy(zwv)
+const E =
+  <R, U, Q>(x: (arg: R) => (arg: U) => Q) =>
+  (y: R) =>
+  <T, Z>(z: (arg: T) => (arg: Z) => U) =>
+  (w: T) =>
+  (v: Z): Q =>
+    x(y)(z(w)(v));
+
+// Dovekies D2xyzwv = x(yz)(wv)
+const D2 =
+  <V, U, Q>(x: (arg: V) => (arg: U) => Q) =>
+  <R>(y: (arg: R) => V) =>
+  (z: R) =>
+  <T>(w: (arg: T) => U) =>
+  (v: T): Q =>
+    x(y(z))(w(v));
+
+// Starling Sxyz = xz(yz)
+const S =
+  <T, U, V>(x: (arg: T) => (arg: U) => V) =>
+  (y: (arg: T) => U) =>
+  (z: T): V =>
+    x(z)(y(z));
+
+// Violet Starling VSxyz = x(yz)z
+const VS =
+  <U, T, V>(x: (arg: U) => (arg: T) => V) =>
+  (y: (arg: T) => U) =>
+  (z: T): V =>
+    x(y(z))(z);
+
+// Zebra Dove ZDxyzw = x(yz)w x(y(z))(w)
+const ZD =
+  <U, R, V>(x: (arg: U) => (arg: R) => V) =>
+  <T>(y: (arg: T) => U) =>
+  (z: T) =>
+  (w: R): V =>
+    x(y(z))(w);
+
+// Psi xyzw = x(yz)(yw)
+const PSI =
+  <U, V>(x: (arg: U) => (arg: U) => V) =>
+  <T>(y: (arg: T) => U) =>
+  (z: T) =>
+  (w: T): V =>
+    x(y(z))(y(w));
+
+// Phoenix xyzw = x(yw)(zw)
+const Phoenix =
+  <U, V, R>(x: (arg: R) => (arg: U) => V) =>
+  <T>(y: (arg: T) => R) =>
+  (z: (arg: T) => U) =>
+  (w: T): V =>
+    x(y(w))(z(w));
+
+// Pheasant xyzwv = x(ywv)(zwv)
+const Pheasant =
+  <R, U, V>(x: (arg: R) => (arg: U) => V) =>
+  <T, Z>(y: (arg: T) => (arg: Z) => R) =>
+  (z: (arg: T) => (arg: Z) => U) =>
+  (w: T) =>
+  (v: Z): V =>
+    x(y(w)(v))(z(w)(v));
+
+// Eastern Nicator xyzw = xy(zyw)
+
+const EasternNic =
+  <T, U, V>(x: (arg: T) => (arg: U) => V) =>
+  (y: T) =>
+  <Z>(z: (arg: T) => (arg: Z) => U) =>
+  (w: Z): V =>
+    x(y)(z(y)(w));
+
+// Western Nicator xyzw = x(yzw)w  x(y(z)(w))(w)
+const WesternNic =
+  <U, Z, V>(x: (arg: U) => (arg: Z) => V) =>
+  <T>(y: (arg: T) => (arg: Z) => U) =>
+  (z: T) =>
+  (w: Z): V =>
+    x(y(z)(w))(w);
 // const Becard = B(B(B))(B);
 
 // function B<U, V>(x: (arg: U) => V) {
@@ -744,8 +825,91 @@ const make_fractal =
 // z = wavePainter
 // w = roosterPainter
 
+// Eagle
+// Impostiamo:
+// x = beside         (unisce sinistra e destra)
+// y = wavePainter    (pittore di sinistra)
+// z = below          (unisce sopra e sotto)
+// w = roosterPainter (pittore in alto a destra)
+// v = escherPainter  (pittore in basso a destra)
+
+// Dovekie
+// Impostiamo:
+// x = beside      (unisce i due risultati affiancandoli)
+// y = rotate90    (trasformazione per il pittore di sinistra)
+// z = wavePainter (pittore di sinistra)
+// w = flip_vert   (trasformazione per il pittore di destra)
+// v = roosterPainter (pittore di destra)
+
+// Impostiamo:
+// x = beside         (funzione binaria: riceve p1, poi p2)
+// y = rotate90       (trasformazione da applicare alla seconda copia)
+// z = wavePainter    (l'UNICO pittore fornito in ingresso)
+
+// Impostiamo:
+// x = beside         (unisce i due risultati affiancandoli)
+// y = rotate90       (trasformazione da applicare al PRIMO ramo)
+// z = wavePainter    (l'unico pittore fornito in ingresso)
+
+// Impostiamo:
+// x = beside         (unisce due pittori affiancandoli)
+// y = rotate90       (trasformazione da applicare al primo pittore)
+// z = wavePainter    (primo pittore)
+// w = roosterPainter (secondo pittore, invariato)
+
+// Impostiamo:
+// x = beside         (unisce due pittori affiancandoli)
+// y = rotate90       (trasformazione da applicare ad ENTRAMBI)
+// z = wavePainter    (primo pittore)
+// w = roosterPainter (secondo pittore)
+
+// PSI(beside)(rotate90)(painter)(painter)(frame1);
+
+// ZD(beside)(rotate90)(painter)(painter)(frame1);
+
+// VS(beside)(rotate90)(painter)(frame1);
+
+// S(beside)(rotate90)(painter)(frame1);
+
+// D2(beside)(rotate90)(painter)(flip_vert)(painter)(frame1);
+
+// E(beside)(painter)(below)(painter)(painter)(frame1);
+
 // B1(rotate90)(beside)(painter)(painter)(frame1);
 
+// Impostiamo:
+// x = beside         (unisce i due pittori)
+// y = rotate90       (prima trasformazione)
+// z = flip_vert      (seconda trasformazione)
+// w = wavePainter    (l'unico pittore fornito in ingresso)
+
+// Phoenix(beside)(rotate90)(flip_vert)(painter)(frame1);
+
+// Impostiamo:
+// x = below           (unisce la composizione superiore con quella inferiore)
+// y = beside          (prima combinazione dei due pittori)
+// z = C(beside)       (seconda combinazione: beside con pittori invertiti)
+// w = wavePainter     (primo pittore)
+// v = roosterPainter  (secondo pittore)
+
+// const gridComposition = Pheasant(below)(beside)(C(beside))(painter)(painter)(
+//   frame1,
+// );
+// Impostiamo:
+// x = beside          (unisce la parte sinistra con la parte destra)
+// y = wavePainter     (pittore principale)
+// z = below           (combina y e w mettendoli uno sopra l'altro)
+// w = roosterPainter  (secondo pittore)
+
+// EasternNic(beside)(painter)(below)(painter)(frame1);
+
+// Impostiamo:
+// x = beside          (unisce la parte sinistra con la parte destra)
+// y = below           (combina z e w mettendoli uno sopra l'altro)
+// z = wavePainter     (primo pittore)
+// w = roosterPainter  (pittore secondario/ricorrente)
+
+// WesternNic(beside)(below)(painter)(painter)(frame1);
 // flip_vert_painter(w)
 // const besideFlipped = C(beside)
 // beside(painter)(right_split(painter, 2))(frame1)
