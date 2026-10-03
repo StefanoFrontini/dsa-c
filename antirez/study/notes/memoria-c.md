@@ -34,7 +34,7 @@ Periodo: 2026-03-14 → 2026-06-30 · Turni: 1-2, 24-26, 31, 37, 48, 74-83, 96-9
 - Decisioni: nel turno 24 nel main facevi `release(popped)` + enqueue senza retain. Così il refcount non contava la coda e si arrivava a un double free. La correzione è spostare senza toccare il contatore.
 - Errori/lezione:
   - Turno 116: unire `result2` dentro `result1` senza `retain` dà *doppia proprietà non contata*. Se poi rilasci entrambi gli alberi, hai un double free; se non rilasci `ctx2.ast`, hai un leak dei nodi INFIX (turno 117).
-  - Regola pratica: fai sempre **retain prima di release** quando sposti. Il tuo `release(popped); ...; retain(popped)` del turno 24 funzionava solo perché `parsed` teneva un'altra referenza.
+  - Regola pratica: se sposti un oggetto e il contatore non deve cambiare, non toccarlo affatto. Se per qualche motivo devi fare sia `retain` sia `release`, fai **prima il `retain`**: con l'ordine inverso il contatore può arrivare a 0 nel mezzo e l'oggetto viene liberato mentre lo stai ancora usando. Il tuo `release(popped); ...; retain(popped)` del turno 24 funzionava solo perché `parsed` teneva un'altra referenza.
 - Turni: 2, 24, 26, 114, 116, 117, 118
 
 ### Convenzione "retain fuori dalle utility"
@@ -80,7 +80,7 @@ Periodo: 2026-03-14 → 2026-06-30 · Turni: 1-2, 24-26, 31, 37, 48, 74-83, 96-9
 ### La trappola della copia per valore
 - Cos'è: `Token t = ctx->lexer.curToken;` copia l'intera struct. Se poi modifichi `t`, l'originale resta uguale. Per modificare l'originale ti serve un puntatore (`Token *t = &ctx->lexer.curToken;`) o l'accesso diretto ai campi.
 - Nel tuo codice: bug del turno 77 in `readSymbol`. Ora è corretto, con assegnazione diretta (`math-pratt/math-pratt.c:146-171`).
-- Errori/lezione: in TypeScript gli oggetti si passano per riferimento, in C le struct si copiano. Il bug si vede solo per i simboli perché `readNumber` scriveva già direttamente nei campi.
+- Errori/lezione: in TypeScript `const t = ctx.lexer.curToken` crea un secondo nome per **lo stesso** oggetto (si copia il riferimento), in C `Token t = ...` copia **tutti i campi** della struct. Il bug si vede solo per i simboli perché `readNumber` scriveva già direttamente nei campi.
 - Turni: 77
 
 ### Tabelle statiche (lookup O(1))
@@ -131,7 +131,7 @@ Periodo: 2026-03-14 → 2026-06-30 · Turni: 1-2, 24-26, 31, 37, 48, 74-83, 96-9
 - Turni: 96, 97, 98, 99
 
 ### Buffer grandi sullo stack → stack overflow
-- Cos'è: lo stack del main è 8 MB (`ulimit -s` = 8192). Una struct con `char data[15000000]` dichiarata come variabile locale fa crashare il programma prima della prima istruzione. Nei thread secondari il limite di default è **512 KB**: un array locale di 1 MB in un pthread fa crashare il programma (verificato).
+- Cos'è: lo stack del main è 8 MB (`ulimit -s` = 8192). Una struct con `char data[15000000]` dichiarata come variabile locale fa crashare il programma appena entra in `main`, prima di stampare qualsiasi cosa: il frame della funzione non entra nello stack. Nei thread secondari il limite di default è **512 KB**: un array locale di 1 MB in un pthread fa crashare il programma (verificato).
 - Nel tuo codice: `networking/client_http.c:72-76` `AudioBuffer { char data[MAXAUDIOBUFFER]; }` dentro `Ctx`. Ora `Ctx *ctx = calloc(1, sizeof(Ctx))` (`networking/client_http.c:984`). Nello snake, `GameContext` (5.9 KB) è sullo stack del main (`snake/snake.c:693`) e `a_star` mette `minHeap` (7.2 KB) + `g_score` (1.8 KB) sullo stack (`snake/snake.c:443-446`): ok su Mac, troppo per uno stack da 2 KB sul Pico.
 - Decisioni: turno 209, i 7 MB sullo stack "funzionano" ma sono una bomba a orologeria. Turno 210, nell'heap con `calloc`: l'accesso costa uguale (stessa RAM e cache), l'allocazione è più lenta ma avviene una volta sola.
 - Errori/lezione: il segfault del turno 208 l'ha causato il consiglio del turno 207 (portare il buffer a 15 MB senza notare che `Ctx` era sullo stack).

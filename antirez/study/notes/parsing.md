@@ -165,8 +165,10 @@ memoria; il Pratt in C (`math-pratt`, `chord-pratt`), gli alberi e i thread stan
 - Turni: 104-105
 
 ### Generatori JavaScript come state machine
-- Cos'è: una `function*` è compilata come una macchina a stati (lo stato locale vive in un oggetto, `next()`
-  riprende dallo `yield`). Pausa gratuita dell'algoritmo.
+- Cos'è: una `function*` è concettualmente una macchina a stati: le variabili locali sopravvivono tra una chiamata
+  e l'altra e `next()` riprende dall'ultimo `yield`. I transpiler (Babel/regenerator) la trasformano letteralmente
+  in uno `switch` sugli stati; V8 invece sospende e riprende il frame della funzione. In pratica: pausa
+  gratuita dell'algoritmo, senza dover scrivere a mano gli stati.
 - Nel tuo codice: non ancora implementato.
 - Decisioni: buona idea per un lexer lazy (`yield token`) e soprattutto per un parser "didattico" passo-passo per
   le animazioni del talk; sconsigliato nel parser di produzione (`yield*` a ogni ricorsione, overhead).

@@ -9,6 +9,9 @@ Sistematizzazione della conversazione con Gemini (`../Gemini-Reference Counting 
 
 I riferimenti "turno N" puntano ai turni della conversazione Gemini.
 
+Revisione del 03/10/2026: ogni nota è stata riletta e le affermazioni principali confrontate con il codice;
+le poche imprecisioni trovate (spiegazioni semplificate in modo scorretto) sono state corrette direttamente nel testo.
+
 ## Aree
 
 | Area | Periodo | Turni | Note | Concetti |

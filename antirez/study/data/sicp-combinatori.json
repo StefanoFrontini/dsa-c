@@ -579,7 +579,7 @@
     {
       "turn": 333,
       "claim": "Un sistema con S e K (o M e L) è Turing-completo.",
-      "correction": "{M, L} non è completo: manca la cancellazione (K). S e K sì."
+      "correction": "{S, K} sì. {M, L} non è una base completa: non si ottiene K, perché nessuno dei due scarta argomenti. Questo da solo non dimostra che non sia Turing-completo (vedi il λI-calcolo, turno 336)."
     },
     {
       "turn": 336,
