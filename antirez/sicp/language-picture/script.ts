@@ -52,11 +52,6 @@ const K =
     x;
 
 // Cardinal Cxyz = xzy
-// const C =
-//   <U, T, V>(x: (arg: T) => (arg: U) => V) =>
-//   (y: (arg: U) => V) =>
-//   (z: T): V =>
-//     x(z)(y);
 const C =
   <T, U, V>(x: (arg: T) => (arg: U) => V) =>
   (y: U) =>
@@ -72,9 +67,9 @@ const M = <R>(x: SelfApplicable<R>): R => x(x);
 
 // Warbler Wxy = xyy
 const W =
-  <T, V>(x: (arg: T) => (arg: T) => V) =>
-  (y: T): V =>
-    x(y)(y);
+  <A, B>(f: (a: A) => (b: A) => B) =>
+  (x: A): B =>
+    f(x)(x);
 
 // Robin Rxyz = yzx
 const R =
