@@ -45,6 +45,48 @@ function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
+// --- formule LaTeX ($...$ e $$...$$) con KaTeX ---
+// Le formule vanno tolte dal sorgente PRIMA di marked (che altrimenti trasforma `_` in
+// corsivo e mangia i `\`), sostituite da un segnaposto e rimesse come HTML di KaTeX dopo.
+// Il codice (blocchi ``` e `inline`) non viene toccato: lì `$` è quasi sempre shell.
+// Regole per `$...$` come Pandoc: niente spazio subito dopo il `$` di apertura né subito
+// prima di quello di chiusura, che non deve essere seguito da una cifra ("da $5 a $10" resta testo).
+const MATH_INLINE = /\$(?!\s)((?:\\\$|[^$\n])+?)(?<!\s)\$(?!\d)/g;
+const MATH_DISPLAY = /\$\$([\s\S]+?)\$\$/g;
+const CODE_SPAN = /(`+)[\s\S]*?\1/g;
+
+function protectMath(src) {
+  const math = [];
+  const stash = (tex, display) => `\uE000M${math.push({ tex, display }) - 1}\uE000`;
+  const outsideCode = (text) =>
+    text.replace(CODE_SPAN, (m) => `\u0001${m}\u0001`).split('\u0001').map((part, i) =>
+      i % 2 ? part : part.replace(MATH_DISPLAY, (_, t) => stash(t, true)).replace(MATH_INLINE, (_, t) => stash(t, false)),
+    ).join('');
+  // le formule display possono andare a capo: lavoro a blocchi separati dai fence
+  const blocks = [];
+  let buf = [];
+  let inFence = false;
+  for (const line of src.split('\n')) {
+    const fence = /^\s*(```|~~~)/.test(line);
+    if (fence && !inFence) { blocks.push({ code: false, text: buf.join('\n') }); buf = [line]; inFence = true; continue; }
+    if (fence && inFence) { buf.push(line); blocks.push({ code: true, text: buf.join('\n') }); buf = []; inFence = false; continue; }
+    buf.push(line);
+  }
+  blocks.push({ code: inFence, text: buf.join('\n') });
+  const text = blocks.map((b) => (b.code ? b.text : outsideCode(b.text))).join('\n');
+  return { text, math };
+}
+
+function restoreMath(html, math) {
+  if (!math.length) return html;
+  const katex = window.katex;
+  return html.replace(/\uE000M(\d+)\uE000/g, (_, i) => {
+    const { tex, display } = math[Number(i)];
+    if (!katex) return escapeHtml(display ? `$$${tex}$$` : `$${tex}$`);
+    return katex.renderToString(tex, { displayMode: display, throwOnError: false, output: 'html' });
+  });
+}
+
 // Markdown -> frammento DOM.
 export function renderMarkdown(src) {
   const div = document.createElement('div');
@@ -55,7 +97,8 @@ export function renderMarkdown(src) {
     div.append(pre);
     return div;
   }
-  div.innerHTML = marked.parse(src);
+  const { text, math } = protectMath(src);
+  div.innerHTML = restoreMath(marked.parse(text), math);
   return div;
 }
 
@@ -65,7 +108,8 @@ export function renderInline(src) {
     span.textContent = src;
     return span;
   }
-  span.innerHTML = marked.parseInline(src);
+  const { text, math } = protectMath(src);
+  span.innerHTML = restoreMath(marked.parseInline(text), math);
   return span;
 }
 

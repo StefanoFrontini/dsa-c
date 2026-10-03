@@ -11,8 +11,12 @@ python3 -m http.server 8000
 ```
 
 Poi apri <http://localhost:8000/>. Da `file://` non funziona: il browser blocca moduli JS e `fetch`
-(la pagina lo spiega). Le librerie (`marked`, `highlight.js`) e i font arrivano da cdnjs / Google Fonts:
+(la pagina lo spiega). Le librerie (`marked`, `highlight.js`, `KaTeX`) e i font arrivano da cdnjs / Google Fonts:
 senza rete le note si vedono come testo semplice.
+
+Formule: `$...$` e `$$...$$` fuori dal codice vengono rese con KaTeX (`assets/md.js`, `protectMath`), con le regole
+di Pandoc per `$...$` (niente spazio dopo il `$` di apertura né prima di quello di chiusura, che non deve essere
+seguito da una cifra), così i `$` della shell e dei prezzi restano testo. Le usano soprattutto le risposte di Gemini.
 
 Pagine (routing hash, nessun redirect necessario):
 
