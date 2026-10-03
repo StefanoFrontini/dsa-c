@@ -153,7 +153,9 @@ paralleli, event loop, versione ad attori `networking/actor/client_http_actor.c`
 - Errori/lezione, in ordine: (228) `pthread_create(..., (void *)&ctx)` con `ctx` già puntatore → `Ctx**` → segfault;
   (229) `fetch` dentro il mutex (audio bloccato durante il download) e `AVERROR_EOF`; (230) `tail` modificata fuori
   lock, check `head == tail` fuori lock (segnale perso), `signal` a ogni byte; (231) `sleep(1)` al posto di una condvar;
-  (232) `wait` invece di `signal` in `read_packet`, `available` calcolata prima della wait, unlock doppio;
+  (232) `wait` invece di `signal` in `read_packet` (gli altri due problemi indicati da Gemini, "unlock doppio" e
+  `available` vecchia dopo la wait, nel tuo codice non c'erano: lock e unlock sono bilanciati e il `while(1)` ricalcola
+  `available` a ogni giro);
   (233) `pthread_cond_wait(&cv, &audio_buffer_mutex)` tenendo `network_mutex`, cond non inizializzata.
   Residuo: l'attesa iniziale di `decode` usa `if` invece di `while` (`:815`).
 - Turni: 214, 216, 217, 227, 228, 229, 230, 231, 232, 233, 234

@@ -17,7 +17,9 @@
     Content-Type = "text/markdown; charset=utf-8"
 
 # Turni della conversazione con Gemini (tools/split_turns.py): markdown, come le note.
-# Vale anche per turns/index.json: il sito lo legge come testo e lo analizza da sé.
+# Vale anche per turns/index.json e turns/corrections.json: il sito li legge come testo
+# (fetch + JSON.parse), quindi il Content-Type markdown non dà problemi, e max-age=0 fa
+# vedere subito un corrections.json rigenerato.
 [[headers]]
   for = "/turns/*"
   [headers.values]

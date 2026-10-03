@@ -4,10 +4,11 @@
 
 import { AREAS, STATUSES, REVIEW_AFTER_DAYS, REVIEW_LIMIT } from './areas.js';
 import * as store from './store.js';
-import { loadAllAreas, loadNote, loadProjectNote, loadRepoFiles, loadTurnIndex, loadTurn, LoadError } from './data.js';
+import { loadAllAreas, loadNote, loadProjectNote, loadRepoFiles, loadTurnIndex, loadTurn, loadCorrections, LoadError } from './data.js';
 import { configure, codeRefElement, resolveRef, linkCodeRefs } from './codelinks.js';
 import { renderDocument, renderMarkdown, renderInline, libsReady } from './md.js';
 import { configureTurns, linkTurnRefs, turnLink, turnInfo, turnCount, turnHref, validTurn } from './turns.js';
+import * as corr from './corrections.js';
 
 const main = document.getElementById('main');
 let site = null; // dati di tutte le aree, caricati una volta
@@ -209,11 +210,13 @@ function storageWarning() {
 
 async function ensureSite() {
   if (site) return site;
-  const [repoFiles, { areas, errors }, turnIndex] = await Promise.all([
+  const [repoFiles, { areas, errors }, turnIndex, corrections] = await Promise.all([
     loadRepoFiles(),
     loadAllAreas(),
     // l'indice dei turni è facoltativo: senza, i link ai turni non hanno anteprima
     loadTurnIndex().catch((e) => (console.warn(e.message), null)),
+    // anche le correzioni: senza, ogni turno resta "non rivisto"
+    loadCorrections(),
   ]);
   if (!areas.length && errors.length) throw errors[0];
   const byId = new Map(areas.map((a) => [a.id, a]));
@@ -230,6 +233,7 @@ async function ensureSite() {
     codeRefs: areas.flatMap((a) => a.concepts.flatMap((c) => c.code_refs)),
   });
   configureTurns(turnIndex);
+  corr.configureCorrections(corrections);
   site = { areas, errors, byId, projects, concepts, turnIndex };
   return site;
 }
@@ -777,6 +781,10 @@ function viewErrors(filterArea) {
       h('p', { class: 'eyebrow' }, h('a', { href: '#/' }, 'Percorso'), ' › pagina secondaria'),
       h('h1', { tabindex: '-1' }, 'Errori e imprecisioni di Gemini'),
       h('p', { class: 'lead' }, 'Tutte le voci "Possibili errori o imprecisioni di Gemini" dei file ', h('code', null, 'data/*.json'), ', verificate sul codice o su server reali. Il turno è quello della ', h('a', { href: '#/turni' }, 'conversazione originale'), ': il numero apre il testo di Gemini.'),
+      corr.correctionsLoaded()
+        ? h('p', { class: 'errors-corr-link' }, h('a', { href: '#/turni/correzioni' }, 'Turni con correzioni puntuali →'),
+          h('span', { class: 'muted small' }, ' ogni correzione evidenziata nel testo originale di Gemini'))
+        : null,
     ),
     h('div', { class: 'filters' },
       h('div', { class: 'field' }, h('label', { for: 'f-area' }, 'Area'), select),
@@ -871,6 +879,137 @@ function replaceNav(e) {
   location.replace(e.currentTarget.getAttribute('href'));
 }
 
+// ---------------------------------------------------------------------------
+// Correzioni puntuali ai turni (turns/corrections.json, vedi assets/corrections.js)
+
+const SEVERITY = { errore: 'Errore', imprecisione: 'Imprecisione' };
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const plainClick = (e) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+
+function reviewSummary(r) {
+  const { total, errors, imprecisions } = corr.reviewCounts(r);
+  const when = r.date ? ` il ${fmtDate(r.date)}` : '';
+  if (!total && r.verdict === 'senza-risposta') return `Rivisto${when}: non c'è una risposta di Gemini da verificare.`;
+  if (!total) return `Rivisto${when}: nessun errore rilevante.`;
+  const parts = [errors ? plural(errors, 'errore', 'errori') : null, imprecisions ? plural(imprecisions, 'imprecisione', 'imprecisioni') : null];
+  return `Rivisto${when}: ${plural(total, 'correzione', 'correzioni')} (${parts.filter(Boolean).join(', ')}).`;
+}
+
+// Il marcatore va alla fine del passaggio, ma fuori da link e codice inline (resta
+// cliccabile e non sembra parte del codice).
+function insertMarker(range, marker, root) {
+  let host = null;
+  const end = range.endContainer;
+  for (let el = end.nodeType === Node.TEXT_NODE ? end.parentElement : end; el && el !== root; el = el.parentElement) {
+    if (el.matches('a, code, mark') && !el.closest('pre')) host = el;
+  }
+  if (host) host.after(marker);
+  else {
+    const r = range.cloneRange();
+    r.collapse(false);
+    r.insertNode(marker);
+  }
+}
+
+// Cerca ogni citazione nella risposta, la evidenzia (Highlight API, altrimenti <mark>)
+// e mette un marcatore numerato che rimanda alla voce del riquadro.
+function markCorrections(root, n, items) {
+  const api = corr.hasHighlightApi();
+  return items.map((item, i) => {
+    const k = i + 1;
+    let range = item.quote ? corr.locateQuote(root, item.quote) : null;
+    let marks = [];
+    if (range && !api) ({ range, marks } = corr.wrapRange(range, item.severity));
+    let marker = null;
+    if (range) {
+      marker = h('a', {
+        class: `corr-marker corr-marker-${item.severity}`, id: `corr-punto-${k}`, href: `#/turno/${n}/corr-${k}`,
+        title: `${SEVERITY[item.severity]} ${k}: ${item.claim || item.correction}`,
+        'aria-label': `Correzione ${k} (${SEVERITY[item.severity].toLowerCase()}): vai alla voce`,
+        onclick: (e) => {
+          if (!plainClick(e)) return;
+          e.preventDefault();
+          const li = document.getElementById(`corr-${k}`);
+          if (!li) return;
+          li.scrollIntoView({ block: 'start', behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+          li.focus({ preventScroll: true });
+          history.replaceState(history.state, '', e.currentTarget.getAttribute('href'));
+        },
+      }, String(k));
+      insertMarker(range, marker, root);
+    }
+    return { item, k, range, marks, marker };
+  });
+}
+
+// "Vai al punto": apre le parti compresse che contengono il passaggio, ci scorre e lo
+// mette in risalto.
+function gotoCorrection(e, entry, entries) {
+  if (!plainClick(e)) return;
+  e.preventDefault();
+  const { range, marks, marker } = entry;
+  const start = range.startContainer;
+  for (let el = start.nodeType === Node.TEXT_NODE ? start.parentElement : start; el; el = el.parentElement) {
+    if (el.tagName === 'DETAILS' && !el.open) el.open = true;
+    if (el.classList.contains('is-collapsed')) {
+      const btn = el.id && document.querySelector(`[aria-controls="${CSS.escape(el.id)}"]`);
+      if (btn) btn.click();
+      else el.classList.remove('is-collapsed');
+    }
+  }
+  const rect = range.getBoundingClientRect();
+  const header = document.querySelector('.site-header');
+  const offset = Math.max((header ? header.offsetHeight : 0) + 16, (window.innerHeight - rect.height) / 3);
+  window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+  if (marks.length) {
+    for (const x of entries) for (const m of x.marks) m.classList.toggle('is-active', x === entry);
+  } else corr.setActiveHighlight(range);
+  if (marker) marker.focus({ preventScroll: true });
+  history.replaceState(history.state, '', e.currentTarget.getAttribute('href'));
+}
+
+// Testi delle correzioni: sempre markdown inline (anche *corsivo*), con link a codice e turni.
+function inlineMd(str, ctx) {
+  const span = renderInline(str);
+  linkCodeRefs(span, ctx);
+  linkTurnRefs(span);
+  return span;
+}
+
+function correctionsBox(n, entries) {
+  return h('section', { class: 'corrections', id: 'correzioni', 'aria-labelledby': 'h-corr' },
+    h('h2', { id: 'h-corr' }, 'Correzioni a questo turno'),
+    h('ol', { class: 'corr-list' }, entries.map((entry) => {
+      const { item, k, range } = entry;
+      const c = item.concept ? site.concepts.get(item.concept) : null;
+      const ctx = c ? areaCtx(c.area) : null;
+      return h('li', { class: `corr-item corr-item-${item.severity}`, id: `corr-${k}`, tabindex: '-1' },
+        h('div', { class: 'corr-head' },
+          h('span', { class: `corr-num corr-marker-${item.severity}`, 'aria-hidden': 'true' }, String(k)),
+          h('span', { class: `badge badge-${item.severity}` }, SEVERITY[item.severity]),
+          range
+            ? h('a', { href: `#/turno/${n}/corr-punto-${k}`, class: 'corr-goto', onclick: (e) => gotoCorrection(e, entry, entries) }, 'vai al punto ↓')
+            : h('span', { class: 'corr-missing' }, 'passaggio non localizzato'),
+        ),
+        item.claim ? h('p', null, h('span', { class: 'corr-label' }, 'Gemini dice:'), ' ', inlineMd(item.claim, ctx)) : null,
+        item.correction ? h('p', null, h('span', { class: 'corr-label' }, 'Corretto:'), ' ', inlineMd(item.correction, ctx)) : null,
+        item.evidence ? h('p', { class: 'corr-evidence' }, h('span', { class: 'corr-label' }, 'Verifica:'), ' ', inlineMd(item.evidence, ctx)) : null,
+        c ? h('p', { class: 'corr-concept' }, 'Concetto: ', h('a', { href: conceptHref(item.concept) }, c.concept.title), h('span', { class: 'muted' }, ` — ${c.area.title}`)) : null,
+      );
+    })),
+  );
+}
+
+// Indicatore per l'indice dei turni (solo se corrections.json c'è).
+function reviewStatus(n) {
+  const r = corr.turnReview(n);
+  if (!r) return h('span', { class: 'turn-status is-none' }, 'non rivisto');
+  const { total, errors } = corr.reviewCounts(r);
+  if (!total) return h('span', { class: 'turn-status is-ok' }, r.verdict === 'senza-risposta' ? 'rivisto, senza risposta' : 'rivisto ✓');
+  return h('span', { class: `turn-status ${errors ? 'is-errore' : 'is-imprecisione'}`, title: `${plural(errors, 'errore', 'errori')}, ${plural(total - errors, 'imprecisione', 'imprecisioni')}` },
+    plural(total, 'correzione', 'correzioni'));
+}
+
 async function viewTurn(raw) {
   const n = /^\d+$/.test(raw || '') ? Number(raw) : NaN;
   const total = turnCount();
@@ -905,7 +1044,14 @@ async function viewTurn(raw) {
   if (gemini && gemini.text) {
     answer = renderDocument(gemini.text, { docPath: `turns/${String(n).padStart(3, '0')}.md`, route: `turno/${n}`, ctx: null, turns: false });
     demoteHeadings(answer);
+    answer = h('div', { class: 'turn-answer' }, ...answer.childNodes);
   } else answer = h('p', { class: 'muted' }, "Nell'export non c'è la risposta di Gemini a questo turno.");
+
+  // Correzioni: le citazioni si cercano solo nella risposta di Gemini, già nel suo
+  // contenitore definitivo (spostare i nodi dopo invaliderebbe i Range).
+  const review = corr.turnReview(n);
+  const entries = review ? markCorrections(answer, n, review.items) : [];
+  const notes = cites.areas.length ? [' (', areaLinks(cites.areas), ')'] : [' del ', h('a', { href: '#/' }, 'percorso')];
 
   const prev = n > 1 ? n - 1 : null;
   const next = !total || n < total ? n + 1 : null;
@@ -923,7 +1069,7 @@ async function viewTurn(raw) {
   }
 
   document.title = `Turno ${n} — Study`;
-  return h('div', { class: 'page page-turn' },
+  const view = h('div', { class: 'page page-turn' },
     h('article', { class: 'doc doc-single' },
       h('header', { class: 'page-head' },
         h('p', { class: 'eyebrow' }, h('a', { href: '#/' }, 'Percorso'), ' › ', h('a', { href: '#/turni' }, 'Conversazione con Gemini')),
@@ -938,9 +1084,12 @@ async function viewTurn(raw) {
             prev ? h('a', { href: turnHref(prev), onclick: replaceNav, title: `Turno ${prev}` }, '‹ precedente') : null,
             next ? h('a', { href: turnHref(next), onclick: replaceNav, title: `Turno ${next}` }, 'successivo ›') : null),
         ),
-        h('div', { class: 'callout callout-source', role: 'note' },
-          h('p', null, h('strong', null, 'Testo originale di Gemini, non rivisto:'), ' può contenere errori. Per i concetti corretti valgono le note',
-            cites.areas.length ? [' (', areaLinks(cites.areas), ')'] : [' del ', h('a', { href: '#/' }, 'percorso')], '.')),
+        review
+          ? h('div', { class: `callout callout-source${entries.length ? '' : ' is-clean'}`, role: 'note' },
+            h('p', null, h('strong', null, 'Testo originale di Gemini.'), ' ', reviewSummary(review), ' Per i concetti corretti valgono le note', notes, '.'))
+          : h('div', { class: 'callout callout-source', role: 'note' },
+            h('p', null, h('strong', null, 'Testo originale di Gemini, non rivisto:'), ' può contenere errori. Per i concetti corretti valgono le note', notes, '.')),
+        entries.length ? correctionsBox(n, entries) : null,
         cited.length
           ? h('section', { class: 'cited', 'aria-labelledby': 'h-cited' },
             h('h2', { id: 'h-cited' }, 'Citato in'),
@@ -951,7 +1100,7 @@ async function viewTurn(raw) {
         h('h2', { class: 'turn-role', id: 'domanda' }, 'Domanda di Stefano'),
         user.text ? turnQuestion(user.text) : h('p', { class: 'muted' }, '(domanda vuota)'),
         h('h2', { class: 'turn-role', id: 'risposta' }, 'Risposta di Gemini', gemini && gemini.time ? h('span', { class: 'muted small' }, ` · ${gemini.time}`) : null),
-        ...answer.childNodes,
+        answer,
       ),
       h('nav', { class: 'prev-next', 'aria-label': 'Turni vicini' },
         prev ? pnLink(prev, 'pn-prev', '← Turno precedente') : h('span'),
@@ -959,15 +1108,19 @@ async function viewTurn(raw) {
       ),
     ),
   );
+  // Gli highlight sono globali (CSS.highlights): si registrano solo quando la pagina
+  // viene davvero mostrata (vedi render).
+  view.onMount = () => corr.registerHighlights(entries.filter((x) => x.range && !x.marks.length).map((x) => ({ range: x.range, severity: x.item.severity })));
+  return view;
 }
 
-function viewTurnIndex() {
+function viewTurnIndex(filter) {
   const turns = site.turnIndex && Array.isArray(site.turnIndex.turns) ? site.turnIndex.turns : null;
   document.title = 'Conversazione con Gemini — Study';
   const head = h('header', { class: 'page-head' },
     h('p', { class: 'eyebrow' }, h('a', { href: '#/' }, 'Percorso'), ' › pagina secondaria'),
     h('h1', { tabindex: '-1' }, 'Conversazione con Gemini'),
-    h('p', { class: 'lead' }, 'I turni originali, uno per pagina: la domanda e la risposta di Gemini così come sono state esportate, senza correzioni. Le note sono la versione rivista.'),
+    h('p', { class: 'lead' }, 'I turni originali, uno per pagina: la domanda e la risposta di Gemini così come sono state esportate. Dove il turno è stato rivisto, le correzioni sono mostrate a parte ed evidenziate nel testo; le note sono la versione rivista.'),
   );
   if (!turns) {
     return h('div', { class: 'page page-turns' }, head,
@@ -977,35 +1130,50 @@ function viewTurnIndex() {
   const areasOf = new Map();
   for (const a of site.areas) for (const t of a.turns) areasOf.set(t, [...(areasOf.get(t) || []), a]);
 
+  const reviewed = corr.correctionsLoaded();
   const items = turns.map((t) => {
     const areas = areasOf.get(t.n) || [];
+    const r = corr.turnReview(t.n);
     const li = h('li', { class: 'turn-item' },
       h('a', { href: turnHref(t.n), class: 'turn-item-link' },
         h('span', { class: 'turn-n' }, `Turno ${t.n}`),
         h('span', { class: 'turn-date' }, t.date ? fmtDate(t.date) : ''),
+        reviewed ? reviewStatus(t.n) : null,
         areas.length ? h('span', { class: 'turn-areas' }, areas.map((a) => a.title).join(' · ')) : null,
         h('span', { class: 'turn-preview' }, t.preview || ''),
       ),
     );
-    return { li, text: norm(`turno ${t.n} ${t.date || ''} ${fmtDate(t.date)} ${areas.map((a) => a.title).join(' ')} ${t.preview || ''}`) };
+    return { li, corrected: Boolean(r && r.items.length), text: norm(`turno ${t.n} ${t.date || ''} ${fmtDate(t.date)} ${areas.map((a) => a.title).join(' ')} ${t.preview || ''}`) };
   });
   const list = h('ol', { class: 'turn-list' }, items.map((x) => x.li));
   const search = h('input', { type: 'search', id: 'f-turn', placeholder: 'es. refcount, pthread, 111, giu', autocomplete: 'off' });
   const count = h('p', { class: 'muted', role: 'status', 'aria-live': 'polite' });
+  const nCorrected = items.filter((x) => x.corrected).length;
+  const only = h('input', { type: 'checkbox', id: 'f-corr', checked: reviewed && filter === 'correzioni' });
   function update() {
     const q = norm(search.value);
     let shown = 0;
     for (const x of items) {
-      const on = !q || x.text.includes(q);
+      const on = (!q || x.text.includes(q)) && (!only.checked || x.corrected);
       x.li.hidden = !on;
       if (on) shown++;
     }
     count.textContent = `${plural(shown, 'turno', 'turni')} su ${items.length}`;
+    const target = only.checked ? '#/turni/correzioni' : '#/turni';
+    if (location.hash !== target) {
+      history.replaceState(history.state, '', target);
+      current.key = routeKey(parseRoute());
+    }
   }
   search.addEventListener('input', update);
+  only.addEventListener('change', update);
   update();
+  const nReviewed = corr.reviewedTurns().length;
   return h('div', { class: 'page page-turns' }, head,
-    h('div', { class: 'filters' }, h('div', { class: 'field' }, h('label', { for: 'f-turn' }, 'Cerca nelle domande'), search)),
+    h('div', { class: 'filters' },
+      h('div', { class: 'field' }, h('label', { for: 'f-turn' }, 'Cerca nelle domande'), search),
+      reviewed ? h('div', { class: 'field field-check' }, h('label', { for: 'f-corr' }, only, ` Solo turni con correzioni (${nCorrected})`)) : null),
+    reviewed ? h('p', { class: 'muted small' }, `Rivisti ${nReviewed} turni su ${items.length}: ${plural(nCorrected, 'turno', 'turni')} con correzioni.`) : null,
     count,
     list,
   );
@@ -1031,7 +1199,7 @@ function parseRoute() {
   if (page === 'area' && id) return { page: 'area', id, anchor: rest.join('/') };
   if (page === 'project' && id) return { page: 'project', id };
   if (page === 'errori') return { page: 'errori', id };
-  if (page === 'turni' && !id) return { page: 'turni' };
+  if (page === 'turni' && (!id || id === 'correzioni')) return { page: 'turni', id };
   if (page === 'turno' && id) return { page: 'turno', id, anchor: rest.join('/') };
   return { page: 'notfound' };
 }
@@ -1067,7 +1235,7 @@ async function render() {
     else scrollToAnchor(route.anchor) || window.scrollTo(0, 0);
     return;
   }
-  if (key === current.key && route.page === 'errori') return;
+  if (key === current.key && (route.page === 'errori' || route.page === 'turni')) return;
   current.key = key;
   const token = Symbol('render');
   current.token = token;
@@ -1079,7 +1247,7 @@ async function render() {
     else if (route.page === 'area') view = await viewArea(route.id);
     else if (route.page === 'project') view = await viewProject(route.id);
     else if (route.page === 'errori') view = viewErrors(route.id);
-    else if (route.page === 'turni') view = viewTurnIndex();
+    else if (route.page === 'turni') view = viewTurnIndex(route.id);
     else if (route.page === 'turno') view = await viewTurn(route.id);
     else view = viewNotFound();
   } catch (e) {
@@ -1089,6 +1257,8 @@ async function render() {
   }
   if (current.token !== token) return; // nel frattempo è cambiata pagina
   main.replaceChildren(...[libsWarning(), view].filter(Boolean));
+  corr.clearHighlights();
+  if (view.onMount) view.onMount();
   main.removeAttribute('aria-busy');
   setupToc();
   if (savedScroll !== undefined) window.scrollTo(0, savedScroll);

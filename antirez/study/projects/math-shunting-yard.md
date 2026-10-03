@@ -37,6 +37,9 @@ leaks --atExit -- $BUILD/msy math-shunting-yard/test.txt
   `Error` e ritorna -1, poi `evalPostfix` dereferenzia `entry == NULL` (`:399-400`) → crash.
 - `:403-407`: nel ramo `LIST` l'esito di `evalPostfix` sugli elementi è ignorato → errori di sintassi (`2 +`)
   danno un risultato sbagliato senza messaggio. Nessun controllo che a fine valutazione resti esattamente 1 numero.
+- `:264`: `if (next_o != NULL)` (copiato da Gemini al turno 35) fa saltare in silenzio un token che `parseNumber`
+  non riesce a leggere: con un numero troppo lungo esce solo "Number literal too long" e il calcolo continua senza quel
+  numero (verificato: `2 + <200 cifre>` stampa 2). Un errore del parser dovrebbe interrompere il parsing.
 - `:294-308`: `)` senza `(` corrispondente non viene segnalata.
 - `:212`: `atoi` senza controllo overflow; operazioni su `int` possono andare in overflow.
 - `printf("symbol: ...")` / `printf("result: ...")` di debug durante la valutazione (`:398`, `:470`).

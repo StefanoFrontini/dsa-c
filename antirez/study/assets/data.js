@@ -50,6 +50,12 @@ export const loadNote = (id) => cached(`notes/${id}.md`, 'text');
 export const loadProjectNote = (id) => cached(`projects/${id}.md`, 'text');
 // Turni della conversazione con Gemini (generati da tools/split_turns.py).
 export const loadTurnIndex = () => cached('turns/index.json', 'json');
+// Correzioni puntuali ai turni (facoltativo): un 404 vale "nessun turno rivisto".
+export const loadCorrections = () =>
+  get('turns/corrections.json', 'json').catch((e) => {
+    if (!(e instanceof LoadError && /404/.test(e.detail))) console.warn(e.message);
+    return null;
+  });
 export const loadTurn = (n) => cached(`turns/${String(n).padStart(3, '0')}.md`, 'text');
 
 // Carica tutti i JSON delle aree. Le aree che non si caricano compaiono in `errors`

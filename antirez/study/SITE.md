@@ -21,10 +21,12 @@ Pagine (routing hash, nessun redirect necessario):
   (`#/area/<id>/<ancora>` porta a un titolo o a un concetto, es. `#/area/parsing/recursive-descent`)
 - `#/project/<id>` scheda del progetto
 - `#/errori` (o `#/errori/<area>`) tabella degli errori di Gemini, filtrabile
-- `#/turni` indice dei turni della conversazione con Gemini (data, aree, inizio della domanda), filtrabile;
-  link "Conversazione con Gemini" nel footer
-- `#/turno/<n>` testo originale di un turno: avviso "non rivisto", "Citato in" (concetti ed errori dei JSON che
-  citano il turno), turno precedente/successivo, "Indietro" (torna alla pagina di partenza, alla stessa altezza)
+- `#/turni` indice dei turni della conversazione con Gemini (data, aree, inizio della domanda, stato della
+  revisione), filtrabile; `#/turni/correzioni` solo i turni con correzioni; link "Conversazione con Gemini" nel footer
+- `#/turno/<n>` testo originale di un turno: avviso "non rivisto" (o l'esito della revisione), riquadro
+  "Correzioni a questo turno", "Citato in" (concetti ed errori dei JSON che citano il turno), turno
+  precedente/successivo, "Indietro" (torna alla pagina di partenza, alla stessa altezza).
+  `#/turno/<n>/corr-<k>` porta alla voce k del riquadro, `#/turno/<n>/corr-punto-<k>` al passaggio evidenziato
 
 ## Deploy su Netlify
 
@@ -44,6 +46,7 @@ Pagine (routing hash, nessun redirect necessario):
 | Dati strutturati | `data/<area>.json` | concetti, progetti, errori, `self_check` (se aggiungi `a` la risposta compare a scomparsa) |
 | Elenco dei file del repo | `assets/repo-files.json` | rigeneralo con `tools/update-repo-files.sh` dopo aver aggiunto file |
 | Turni della conversazione | `turns/NNN.md`, `turns/index.json` | generati dall'export, vedi sotto |
+| Correzioni ai turni | `turns/corrections.json` | facoltativo, vedi "Correzioni ai turni" |
 
 I concetti della nota vengono abbinati a quelli del JSON per titolo; se i titoli differiscono, per posizione
 (funziona finché il numero di `###` coincide con `concepts`).
@@ -80,6 +83,37 @@ python3 antirez/study/tools/split_turns.py
 - Dai JSON: la riga "Turni" in "Progetti, collegamenti e codice" sotto ogni concetto (`concepts[].turns`) e la
   colonna "Turno" della pagina errori (`gemini_errors[].turn`) sono link.
 - Senza `turns/index.json` il sito funziona lo stesso: i link non hanno anteprima e `#/turni` mostra un errore.
+
+## Correzioni ai turni (`turns/corrections.json`)
+
+File facoltativo (codice in `assets/corrections.js`), letto come testo e analizzato con `JSON.parse` come `index.json`:
+
+```
+{ "generated": "AAAA-MM-GG",
+  "turns": { "<n>": { "verdict": "corretto" | "ok" | "senza-risposta", "date"?: "AAAA-MM-GG",
+                      "items"?: [ { "quote", "severity": "errore" | "imprecisione", "claim", "correction",
+                                    "evidence"?, "concept"? } ] } } }
+```
+
+- Un turno presente nel file è "rivisto" (data: `date` del turno, altrimenti `generated`); senza voci l'avviso dice
+  "nessun errore rilevante" (o, con `senza-risposta`, che non c'è una risposta da verificare). Un turno assente, o
+  il file mancante, resta "Testo originale di Gemini, non rivisto" come prima; senza file l'indice non mostra
+  indicatori né filtro, e la pagina errori non mostra il link ai turni con correzioni.
+- Riquadro "Correzioni a questo turno": numero, badge (errore = rosso `--bad`, imprecisione = ambra `--warn`),
+  "Gemini dice:" `claim`, "Corretto:" `correction`, "Verifica:" `evidence`; i tre testi sono markdown inline
+  (`code`, **grassetto**, *corsivo*, link a codice e "turno N"). `concept` diventa un link se è l'id di un concetto
+  dei `data/*.json`, altrimenti non compare.
+- `quote` è il testo *renderizzato* della risposta (senza simboli markdown) e viene cercato solo nella risposta di
+  Gemini, prima nel blocco più piccolo che lo contiene (`p`, `li`, `td`, `pre`, `blockquote`, titoli) e poi in tutta
+  la risposta. Maiuscole, spazi (anche a capo) e spazi a larghezza zero non contano, le virgolette tipografiche
+  valgono come quelle dritte; se non lo trova riprova confrontando solo lettere e cifre (punteggiatura diversa,
+  `$D_4$` vs `D4`, citazione a cavallo di due blocchi). La citazione può attraversare grassetto, codice e link.
+  Se non si trova, la voce resta nel riquadro con "passaggio non localizzato".
+- Evidenziazione con la CSS Custom Highlight API (`::highlight(corr-errore)`, `corr-imprecisione`, `corr-active`
+  per il passaggio appena raggiunto); senza API il testo viene avvolto in `<mark class="corr-mark">`. Alla fine del
+  passaggio un marcatore numerato (fuori da link e codice inline) porta alla voce del riquadro; "vai al punto" fa il
+  contrario, apre le eventuali parti compresse che contengono il passaggio e lo mette in risalto. Entrambi
+  aggiornano l'indirizzo con `replaceState`, quindi "Indietro" continua a tornare alla pagina di partenza.
 
 ## Progressi (localStorage)
 
