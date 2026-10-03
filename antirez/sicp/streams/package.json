@@ -1,0 +1,10 @@
+{
+  "name": "sicp-streams",
+  "private": true,
+  "type": "module",
+  "description": "SICP JS 3.5: stream in TypeScript, esercizi con test",
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "npx -y -p typescript@5.9 tsc -p ."
+  }
+}

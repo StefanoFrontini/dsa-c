@@ -513,7 +513,7 @@
       "status": "stub",
       "last_modified": "2026-09-21",
       "build": "tsc --noEmit --strict streams/streams.ts pair.ts → exit 0 (tutto commentato)",
-      "run": "nessun codice attivo",
+      "run": "cd sicp/streams && node --test",
       "works": [
         "idea di tail come funzione e stream_ref ricorsivo (bozza commentata)",
         "esperimenti di coppia procedurale (SICP 2.1.3, es. 2.4) in pair.ts"
@@ -523,7 +523,7 @@
         "nessuna memoizzazione, stream_map/filter, stream infiniti",
         "pair.ts:53 head2 restituisce p inesistente"
       ],
-      "next_step": "Stream<T> generico con cons_stream(h, () => coda), memo per delay/force, poi stream_map/filter, integers, crivello, partial_sums e integral con integrando ritardato (percorso nella scheda).",
+      "next_step": "Seguire il percorso in sicp/streams/README.md: 7 tappe con test (node --test), dalla coda ritardata e memo fino a integral/solve e ai segnali.",
       "concepts": [
         "sicp-combinatori/pair-liste",
         "sicp-combinatori/mockingbird-ricorsione"

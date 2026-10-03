@@ -29,11 +29,8 @@ Nella conversazione con Gemini gli stream non sono mai stati discussi (solo cita
 - Valutazione ritardata / thunk: collegata alla discussione su eager vs lazy di M e Y in [Mockingbird e ricorsione anonima](../notes/sicp-combinatori.md#mockingbird-e-ricorsione-anonima-make_fractal-selfapplicable)
 
 ## Prossimo passo consigliato
-Percorso concreto per SICP 3.5 (JS edition), un commit per passo. L'ho provato in un prototipo nella build dir (`build/sicp/streams_proto.ts`, compila con `--strict` e stampa i risultati attesi); qui sotto solo la traccia, il codice scrivilo tu.
-1. **Tipo e costruttore (3.5.1)**: parti dalla pair del picture language ma rendila generica: `type Stream<T> = null | { head: T; tail: () => Stream<T> }`. Scrivi `cons_stream(h, t: () => Stream<T>)`: il chiamante passa sempre una lambda (`() => integers_from(n + 1)`). Test: `integers_from(1)` non deve più andare in stack overflow.
-2. **delay/force con memoizzazione**: `memo(f)` restituisce un thunk che calcola `f()` solo la prima volta (flag `done` + valore in closure); `cons_stream` avvolge la coda con `memo`. Test: un contatore dentro `integers_from` deve restare a 10 dopo due letture dei primi 10 elementi (senza memo raddoppia).
-3. **Operazioni di base**: `stream_ref`, `take(s, n)` (in array, per stampare), `stream_map(f, s)`, `stream_map2(f, s1, s2)`, `stream_filter(p, s)`. Test: `take(stream_filter(even, integers), 5)` → `2,4,6,8,10`.
-4. **Stream infiniti (3.5.2)**: `integers`, crivello di Eratostene `sieve(s) = cons_stream(head, () => sieve(filter(non multiplo di head, tail)))` → primi 10 primi `2,3,5,…,29`; definizioni implicite `ones = cons_stream(1, () => ones)` e `integers = cons_stream(1, () => add_streams(ones, integers))` (qui la memo evita lavoro esponenziale).
-5. **Esercizi 3.5.2-3.5.3**: `partial_sums(integers)` → `1,3,6,10,15,…` (es. 3.55), `scale_stream`, poi le approssimazioni di π con `partial_sums` e l'accelerazione di Eulero.
-6. **Integrali e ritardo esplicito (3.5.4)**: `integral(integrand: () => Stream<number>, initial, dt)` con l'integrando **ritardato** (thunk), poi `solve(f, y0, dt)` con `y` e `dy` che si riferiscono a vicenda. Test: `stream_ref(solve(y => y, 1, 0.001), 1000)` ≈ 2.7169 (approssima e).
-Collegamento utile: `cons_stream` con thunk è la stessa idea che fa funzionare `make_fractal` (la chiamata ricorsiva è dentro una funzione e parte solo quando serve).
+Percorso a tappe con test automatici in `sicp/streams/README.md` (dal 2026-10-03):
+le firme sono in `sicp/streams/src/stream.ts`, i test in `sicp/streams/test/` (`node --test test/01-basi.test.ts`).
+Tappe: 1 basi e coda ritardata · 2 memo · 3 map/filter e pigrizia · 4 stream infiniti e definizioni implicite ·
+5 somme parziali, Eulero, serie · 6 ritardo esplicito (`integral`, `solve`) · 7 segnali (zero crossing, ponte verso l'audio).
+Il punto di partenza è il bug della tua bozza: `make_stream(h, t)` riceve la coda già calcolata, quindi va in stack overflow.
