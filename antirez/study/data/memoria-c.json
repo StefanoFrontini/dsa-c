@@ -1,0 +1,849 @@
+{
+  "area": {
+    "id": "memoria-c",
+    "title": "Memoria in C: ownership e reference counting",
+    "summary": "Dove vive un dato (stack, heap, statico, .rodata), quanto deve vivere e chi lo possiede: refcount retain/release in toyforth e nei parser, token per valore e contesto sullo stack nel Pratt, buffer enormi nell'heap nel player audio.",
+    "period": "2026-03-14/2026-06-30",
+    "turns": [
+      1,
+      2,
+      24,
+      25,
+      26,
+      29,
+      31,
+      37,
+      48,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      96,
+      97,
+      98,
+      99,
+      110,
+      111,
+      114,
+      115,
+      116,
+      117,
+      118,
+      137,
+      168,
+      170,
+      207,
+      208,
+      209,
+      210,
+      211,
+      212
+    ]
+  },
+  "concepts": [
+    {
+      "id": "memoria-c/puntatore-stack-oggetto-heap",
+      "title": "Puntatore sullo stack, oggetto nell'heap",
+      "summary": "Quando la funzione ritorna sparisce il puntatore locale, non l'oggetto nell'heap: senza release/free resta un leak.",
+      "turns": [
+        1,
+        111
+      ],
+      "projects": [
+        "toyforth",
+        "chord-pratt"
+      ],
+      "code_refs": [
+        "toyforth/toyforth.c:426",
+        "chord-pratt/chord-pratt.c:740"
+      ],
+      "related": [
+        "memoria-c/refcount-retain-release",
+        "memoria-c/owner-vs-osservatore"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "memoria-c/refcount-retain-release",
+      "title": "Reference counting: retain/release",
+      "summary": "Ogni oggetto conta i suoi proprietari: nasce a 1, retain +1, release -1 e a zero freeObject libera a cascata chiamando release (non freeObject) sui figli.",
+      "turns": [
+        1,
+        2,
+        24,
+        74,
+        77
+      ],
+      "projects": [
+        "toyforth",
+        "math-shunting-yard",
+        "chord-pratt",
+        "esercizi-c-base"
+      ],
+      "code_refs": [
+        "toyforth/toyforth.c:93",
+        "toyforth/toyforth.c:113",
+        "toyforth/toyforth.c:129",
+        "pls.c:60",
+        "chord-pratt/chord-pratt.c:396"
+      ],
+      "related": [
+        "memoria-c/trasferimento-vs-condivisione",
+        "memoria-c/arena-allocator"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "memoria-c/trasferimento-vs-condivisione",
+      "title": "Trasferimento vs condivisione dell'ownership",
+      "summary": "Spostare un puntatore tra strutture senza che il vecchio proprietario lo tenga non tocca il refcount; se entrambi lo tengono serve retain (prima di qualsiasi release).",
+      "turns": [
+        2,
+        24,
+        26,
+        114,
+        116,
+        117,
+        118
+      ],
+      "projects": [
+        "toyforth",
+        "math-shunting-yard",
+        "chord-pratt"
+      ],
+      "code_refs": [
+        "toyforth/toyforth.c:413",
+        "toyforth/toyforth.c:442",
+        "math-shunting-yard/math-shunting-yard.c:566",
+        "chord-pratt/chord-pratt-threads.c:862"
+      ],
+      "related": [
+        "memoria-c/retain-fuori-dalle-utility",
+        "memoria-c/owner-vs-osservatore"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/retain-fuori-dalle-utility",
+      "title": "Convenzione: retain fuori dalle utility",
+      "summary": "Le funzioni push/enqueue muovono solo puntatori; è il chiamante a scrivere retain esplicito quando condivide, così l'ownership è leggibile ad alto livello.",
+      "turns": [
+        24,
+        25,
+        26
+      ],
+      "projects": [
+        "toyforth",
+        "math-shunting-yard"
+      ],
+      "code_refs": [
+        "toyforth/toyforth.c:213",
+        "math-shunting-yard/math-shunting-yard.c:136",
+        "math-shunting-yard/math-shunting-yard.c:359"
+      ],
+      "related": [
+        "memoria-c/trasferimento-vs-condivisione"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/xmalloc-wrapper",
+      "title": "Wrapper xmalloc/xrealloc",
+      "summary": "Wrapper che controllano NULL e terminano il programma: il resto del codice non deve gestire il fallimento di malloc (stile antirez).",
+      "turns": [
+        1
+      ],
+      "projects": [
+        "toyforth",
+        "math-shunting-yard",
+        "math-pratt",
+        "chord-pratt"
+      ],
+      "code_refs": [
+        "toyforth/toyforth.c:71",
+        "toyforth/toyforth.c:80",
+        "networking/client_http.c:984"
+      ],
+      "related": [],
+      "difficulty": 1
+    },
+    {
+      "id": "memoria-c/owner-vs-osservatore",
+      "title": "Chi possiede e chi osserva (borrowing)",
+      "summary": "Un puntatore osservatore usa un oggetto posseduto da altri e non deve fare release; retain serve solo per farlo sopravvivere al proprietario.",
+      "turns": [
+        111,
+        116,
+        117
+      ],
+      "projects": [
+        "chord-pratt"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt.c:671",
+        "chord-pratt/chord-pratt.c:748"
+      ],
+      "related": [
+        "memoria-c/puntatore-stack-oggetto-heap",
+        "memoria-c/trasferimento-vs-condivisione"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/regola-stack-heap",
+      "title": "Regola di scelta stack vs heap",
+      "summary": "Heap se il dato deve sopravvivere alla funzione o è grande/di dimensione ignota; altrimenti stack (token per valore, contesto piccolo).",
+      "turns": [
+        75,
+        82,
+        209,
+        210
+      ],
+      "projects": [
+        "math-pratt",
+        "chord-pratt",
+        "audio-player",
+        "snake",
+        "game-of-life",
+        "esercizi-c-base"
+      ],
+      "code_refs": [
+        "math-pratt/math-pratt.c:58",
+        "math-pratt/math-pratt.c:646",
+        "networking/client_http.c:984"
+      ],
+      "related": [
+        "memoria-c/dangling-pointer-stack",
+        "memoria-c/buffer-grandi-stack-overflow"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "memoria-c/dangling-pointer-stack",
+      "title": "Dangling pointer verso lo stack",
+      "summary": "Salvare o restituire l'indirizzo di una variabile locale produce un puntatore a memoria riusata dopo il return (tabella in createContext, stringa locale nel lexer).",
+      "turns": [
+        75,
+        78,
+        110
+      ],
+      "projects": [
+        "math-pratt",
+        "chord-pratt"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt.c:182"
+      ],
+      "related": [
+        "memoria-c/regola-stack-heap",
+        "memoria-c/tabelle-statiche"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/copia-per-valore",
+      "title": "La trappola della copia per valore",
+      "summary": "Token t = ctx->lexer.curToken copia la struct: modificare t non tocca l'originale; serve un puntatore o l'accesso diretto ai campi.",
+      "turns": [
+        77
+      ],
+      "projects": [
+        "math-pratt"
+      ],
+      "code_refs": [
+        "math-pratt/math-pratt.c:146"
+      ],
+      "related": [
+        "memoria-c/regola-stack-heap"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "memoria-c/tabelle-statiche",
+      "title": "Tabelle statiche con designated initializers",
+      "summary": "La grammatica costante va in un array static globale indicizzato dall'enum: zero malloc, lookup O(1); prototipi prima della tabella, tabella prima dei getter.",
+      "turns": [
+        74,
+        78,
+        79,
+        80,
+        81
+      ],
+      "projects": [
+        "math-pratt",
+        "chord-pratt"
+      ],
+      "code_refs": [
+        "math-pratt/math-pratt.c:103",
+        "chord-pratt/chord-pratt.c:165"
+      ],
+      "related": [
+        "memoria-c/dangling-pointer-stack"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "memoria-c/contesto-stack-initcontext",
+      "title": "Contesto sullo stack + initContext",
+      "summary": "Il chiamante alloca il contesto sullo stack e una funzione lo inizializza (memset + campi); si libera solo ciò che il contesto possiede nell'heap.",
+      "turns": [
+        82,
+        83
+      ],
+      "projects": [
+        "math-pratt",
+        "chord-pratt",
+        "snake"
+      ],
+      "code_refs": [
+        "math-pratt/math-pratt.c:569",
+        "math-pratt/math-pratt.c:646",
+        "chord-pratt/chord-pratt.c:383",
+        "chord-pratt/chord-pratt-threads.c:843",
+        "snake/snake.c:693"
+      ],
+      "related": [
+        "memoria-c/regola-stack-heap",
+        "memoria-c/buffer-grandi-stack-overflow"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "memoria-c/string-literal-rodata",
+      "title": "String literal in memoria read-only",
+      "summary": "I literal vivono in .rodata: scriverci crasha (SIGBUS), farne free è UB (abort dell'allocatore); per stringhe sempre liberabili si usa xmalloc(1) o strdup.",
+      "turns": [
+        37
+      ],
+      "projects": [
+        "chord-shunting-yard",
+        "chord-pratt"
+      ],
+      "code_refs": [
+        "chord-shunting-yard/chord-shunting-yard.c:162",
+        "chord-pratt/chord-pratt.c:478"
+      ],
+      "related": [
+        "memoria-c/malloc-non-azzera"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "memoria-c/malloc-non-azzera",
+      "title": "malloc non azzera e il terminatore \\0",
+      "summary": "malloc restituisce byte casuali: copiando con memcpy bisogna includere o scrivere il \\0; calloc azzera.",
+      "turns": [
+        114,
+        115
+      ],
+      "projects": [
+        "chord-pratt",
+        "esercizi-c-base"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt-threads.c:777",
+        "issue1.c:43"
+      ],
+      "related": [
+        "memoria-c/string-literal-rodata"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "memoria-c/zero-copy-string-view",
+      "title": "Zero-copy / string view",
+      "summary": "Il token salva ptr+len dentro il buffer del file invece di copiare; si stampa con %.*s. Non adottato: chord-pratt copia due volte.",
+      "turns": [
+        110
+      ],
+      "projects": [
+        "chord-pratt"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt.c:182",
+        "chord-pratt/chord-pratt.c:290",
+        "chord-pratt/chord-pratt.c:485"
+      ],
+      "related": [
+        "memoria-c/arena-allocator"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/arena-allocator",
+      "title": "Arena allocator",
+      "summary": "Una malloc grande, allocazioni come spostamento di offset (O(1)) e una sola free finale; adatta a oggetti con lo stesso lifetime, richiede allineamento. Mai implementata.",
+      "turns": [
+        75,
+        76
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "memoria-c/refcount-retain-release",
+        "memoria-c/zero-copy-string-view"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "memoria-c/buffer-ricorsione-backtracking",
+      "title": "Buffer sullo stack nella ricorsione",
+      "summary": "Un char[1024] per livello di ricorsione moltiplica lo stack; meglio un buffer condiviso con backtracking (salva len, appendi, ricorri, ripristina \\0).",
+      "turns": [
+        96,
+        97,
+        98,
+        99
+      ],
+      "projects": [
+        "math-pratt"
+      ],
+      "code_refs": [
+        "math-pratt/math-pratt.c:284",
+        "math-pratt/math-pratt.c:359"
+      ],
+      "related": [
+        "memoria-c/buffer-grandi-stack-overflow"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/buffer-grandi-stack-overflow",
+      "title": "Buffer grandi sullo stack: stack overflow",
+      "summary": "Stack del main 8 MB, dei pthread 512 KB: una struct da 15 MB locale crasha subito; va nell'heap con calloc (accesso altrettanto veloce).",
+      "turns": [
+        207,
+        208,
+        209,
+        210
+      ],
+      "projects": [
+        "audio-player",
+        "snake"
+      ],
+      "code_refs": [
+        "networking/client_http.c:72",
+        "networking/client_http.c:984",
+        "snake/snake.c:443"
+      ],
+      "related": [
+        "memoria-c/regola-stack-heap",
+        "memoria-c/dimensionare-buffer"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/dimensionare-buffer",
+      "title": "Dimensionare i buffer",
+      "summary": "Buffer di ricezione piccolo e fisso riusato; destinazione nell'heap (realloc o ring buffer); righe/URL abbondanti (512) per non troncare.",
+      "turns": [
+        168,
+        170,
+        211
+      ],
+      "projects": [
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http.c:36",
+        "networking/client_http.c:86",
+        "networking/client_http_3.c:29"
+      ],
+      "related": [
+        "memoria-c/buffer-grandi-stack-overflow"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/cache-locality-prefetch",
+      "title": "Cache locality e prefetch",
+      "summary": "La località è una proprietà del tuo accesso ai dati (contiguo/ripetuto), il prefetch è l'hardware che anticipa i caricamenti: array e ring buffer sì, linked list no.",
+      "turns": [
+        210,
+        212
+      ],
+      "projects": [
+        "audio-player",
+        "snake",
+        "game-of-life"
+      ],
+      "code_refs": [
+        "networking/client_http.c:72",
+        "snake/snake.c:43",
+        "snake/snake.c:87"
+      ],
+      "related": [
+        "memoria-c/regola-stack-heap"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/generics-macro-void",
+      "title": "Generics in C: macro vs void*",
+      "summary": "Per non duplicare listPush: macro do{}while(0) con sizeof(*ele) (tipi controllati, ma solo warning) oppure lista void** (una funzione, niente type safety).",
+      "turns": [
+        48
+      ],
+      "projects": [
+        "chord-pratt"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt.c:499"
+      ],
+      "related": [],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/chi-alloca-dealloca",
+      "title": "Chi alloca, dealloca (anche in wasm)",
+      "summary": "La memoria va liberata dal modulo che l'ha allocata e con la sua logica: da JS si chiama la release esportata, non _free sulla radice.",
+      "turns": [
+        29,
+        31
+      ],
+      "projects": [
+        "chord-pratt"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt.c:748"
+      ],
+      "related": [
+        "memoria-c/refcount-retain-release"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "memoria-c/mmap",
+      "title": "mmap: file come memoria",
+      "summary": "mmap proietta un file nello spazio di indirizzi caricando pagine su richiesta; con MAP_SHARED+PROT_WRITE scrivere nell'array scrive nel file.",
+      "turns": [
+        137
+      ],
+      "projects": [
+        "esercizi-c-base"
+      ],
+      "code_refs": [
+        "mmap_test.c:39",
+        "stdio3.c:8"
+      ],
+      "related": [
+        "memoria-c/dimensionare-buffer"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "memoria-c/run-id-generazione",
+      "title": "run_id al posto di memset",
+      "summary": "Un contatore di generazione rende 'visitato' solo visited[i]==run_id: reset O(1) invece di memset O(N); un solo contatore per array condiviso.",
+      "turns": [],
+      "projects": [
+        "snake"
+      ],
+      "code_refs": [
+        "snake/snake.c:268",
+        "snake/snake.c:440",
+        "snake/snake.c:487"
+      ],
+      "related": [
+        "memoria-c/cache-locality-prefetch"
+      ],
+      "difficulty": 2
+    }
+  ],
+  "projects": [
+    {
+      "id": "toyforth",
+      "title": "Toy Forth",
+      "path": "toyforth/toyforth.c",
+      "status": "in-progress",
+      "last_modified": "2026-03-16",
+      "build": "cc -W -Wall -g toyforth/toyforth.c -o $BUILD/toyforth",
+      "run": "$BUILD/toyforth toyforth/test.txt",
+      "works": [
+        "parsing di interi e simboli",
+        "esecuzione di + sullo stack (10 10 + -> [20])",
+        "ownership corretta in exec, basicMathFunctions e registerFunction"
+      ],
+      "missing": [
+        "freeObject non libera list.ele (toyforth.c:115) - leak confermato",
+        "nessuna pulizia nel main: 15 leak / 400 B",
+        "segfault se parse fallisce (printObject(NULL), toyforth.c:469)",
+        "solo + registrato (toyforth.c:381); niente stringhe, liste, dup, if, funzioni utente"
+      ],
+      "next_step": "Aggiungere free(o->list.ele) in freeObject e una freeContext nel main, poi verificare 0 leak con leaks --atExit.",
+      "concepts": [
+        "memoria-c/puntatore-stack-oggetto-heap",
+        "memoria-c/refcount-retain-release",
+        "memoria-c/trasferimento-vs-condivisione",
+        "memoria-c/retain-fuori-dalle-utility",
+        "memoria-c/xmalloc-wrapper"
+      ]
+    },
+    {
+      "id": "esercizi-c-base",
+      "title": "Esercizi C di base (file nella root)",
+      "path": "*.c, hello_world.s",
+      "status": "working",
+      "last_modified": "2026-02-13",
+      "build": "for f in *.c; do cc -W -Wall -g $f -o $BUILD/${f%.c}; done",
+      "run": "eseguire in $BUILD (mmap_test e matrix_dump scrivono file nella cwd)",
+      "works": [
+        "18/19 compilano senza warning",
+        "bst/bst2/pls/stdio3 senza leak",
+        "mmap_test scrive su file via mmap",
+        "matrix/matrix_dump mostrano il layout dello stack"
+      ],
+      "missing": [
+        "hexdump.c non compila (manca #include <stdio.h>)",
+        "tac.c non libera le stringhe (16 leak)",
+        "struct.c non libera f1/f2",
+        "hello_world.s è arm64 e non corrisponde a hello_world.c",
+        "stdio1.c continua dopo fopen fallita"
+      ],
+      "next_step": "Correggere hexdump.c e il leak di tac.c, poi rigenerare hello_world.s su Intel con cc -S.",
+      "concepts": [
+        "memoria-c/refcount-retain-release",
+        "memoria-c/regola-stack-heap",
+        "memoria-c/mmap",
+        "memoria-c/malloc-non-azzera"
+      ]
+    },
+    {
+      "id": "game-of-life",
+      "title": "Game of Life",
+      "path": "game_of_life/game_of_life.c",
+      "status": "done",
+      "last_modified": "2025-07-14",
+      "build": "cc -W -Wall -g game_of_life/game_of_life.c -o $BUILD/game_of_life",
+      "run": "perl -e 'alarm 2; exec @ARGV' -- $BUILD/game_of_life",
+      "works": [
+        "regole di Conway",
+        "glider che si muove correttamente",
+        "griglia toroidale per i vicini a distanza 1",
+        "doppio buffer sullo stack senza malloc"
+      ],
+      "missing": [
+        "cell_to_index restituisce indici fuori array per coordinate negative multiple di 20 (game_of_life.c:29-36, latente; corretto in life.c)",
+        "r >= GRID_COLS invece di GRID_ROWS (game_of_life.c:25)",
+        "nessun input iniziale da file, nessuna uscita pulita"
+      ],
+      "next_step": "Riscrivere cell_to_index con ((c % N) + N) % N e caricare la configurazione iniziale da file.",
+      "concepts": [
+        "memoria-c/regola-stack-heap",
+        "memoria-c/cache-locality-prefetch"
+      ]
+    },
+    {
+      "id": "snake",
+      "title": "Snake (umano + IA BFS/A*)",
+      "path": "snake/",
+      "status": "working",
+      "last_modified": "2026-02-23",
+      "build": "cmake -S snake -B $BUILD/snake && make -C $BUILD/snake",
+      "run": "perl -e 'alarm 12; exec @ARGV' -- $BUILD/snake/snake astar < /dev/null",
+      "works": [
+        "modalità umana, bfs, bfs perf, astar",
+        "IA che mangia frutti (score 5-6 in 10 s)",
+        "ring buffer per il corpo, zero malloc",
+        "layer di piattaforma separato + CMake",
+        "fix dell'ultimo bug della chat (controller A*) già applicato"
+      ],
+      "missing": [
+        "runSurvivalMode legge body[head-1] con head==0 (snake.c:524)",
+        "insertHeap senza controllo di capacità (snake.c:367)",
+        "due run_id statici sullo stesso visited (snake.c:268, 440)",
+        "porting sul Pico non iniziato (GameContext e minHeap sullo stack)",
+        "Hamiltonian non implementato"
+      ],
+      "next_step": "Correggere l'indice modulare in runSurvivalMode e aggiungere assert in insertHeap; poi static GameContext per il Pico.",
+      "concepts": [
+        "memoria-c/cache-locality-prefetch",
+        "memoria-c/run-id-generazione",
+        "memoria-c/regola-stack-heap",
+        "memoria-c/buffer-grandi-stack-overflow",
+        "memoria-c/contesto-stack-initcontext"
+      ]
+    }
+  ],
+  "gemini_errors": [
+    {
+      "turn": 37,
+      "claim": ".rodata è bloccata a livello hardware: free() su un literal manda in crash il sistema; xmalloc(1) è l'unica soluzione corretta",
+      "correction": "La protezione hardware scatta in scrittura (SIGBUS). free su un puntatore non ottenuto da malloc è UB, intercettato dall'allocatore (abort, exit 134, verificato). Vanno bene anche strdup(\"\") o un flag di ownership."
+    },
+    {
+      "turn": 76,
+      "claim": "malloc deve cercare nel sistema operativo un buco libero; l'arena d'esempio è pronta all'uso e nessun leak è possibile",
+      "correction": "malloc è codice libc in user space, le syscall avvengono solo ogni tanto; l'arenaAlloc d'esempio ignora l'allineamento (puntatori disallineati = UB)."
+    },
+    {
+      "turn": 79,
+      "claim": "Lo standard architetturale è mettere rulesTable in fondo al file per evitare dipendenze circolari",
+      "correction": "I prototipi bastavano; spostarla in fondo ha causato 'undeclared identifier' (turno 80)."
+    },
+    {
+      "turn": 82,
+      "claim": "Allocare il contesto sullo stack costa 0 chiamate di sistema (implicando che malloc le faccia)",
+      "correction": "Anche una malloc di 40 byte di solito non fa syscall; il vantaggio reale è non dover gestire free e lifetime."
+    },
+    {
+      "turn": 207,
+      "claim": "Portare MAXAUDIOBUFFER a 15 MB risolve l'overflow del ring buffer",
+      "correction": "Ctx era sullo stack: 15 MB superano gli 8 MB dello stack del main, quindi il segfault del turno 208 è stato causato da questo consiglio."
+    },
+    {
+      "turn": 209,
+      "claim": "Il limite dello stack è 8 MB",
+      "correction": "Solo per il main thread; i pthread secondari su macOS hanno 512 KB di default (verificato), rilevante per il player multithread."
+    },
+    {
+      "turn": 210,
+      "claim": "calloc chiede al kernel di cercare una zona di RAM libera e continua",
+      "correction": "La contiguità è solo virtuale; le pagine fisiche vengono assegnate al primo accesso e quelle da mmap arrivano già azzerate."
+    },
+    {
+      "turn": 211,
+      "claim": "Con MAXDATASIZE=1 si fa una syscall per ogni byte",
+      "correction": "SSL_read legge interi record TLS nel buffer interno di OpenSSL: le chiamate per byte sono chiamate di libreria, non syscall (comunque lente)."
+    },
+    {
+      "turn": 137,
+      "claim": "Con mmap il codice del parser resta identico al 100% e il kernel libera automaticamente le vecchie pagine",
+      "correction": "Il file mappato non è terminato da \\0 e split() scrive nel buffer (chord-pratt-threads.c:789): serve MAP_PRIVATE+PROT_WRITE; le pagine si liberano solo sotto pressione di memoria."
+    },
+    {
+      "turn": 116,
+      "claim": "result2 = evalAST(ctx2.ast) crea un nuovo nodo nell'heap",
+      "correction": "evalAST restituisce un nodo esistente dell'albero (chord-pratt.c:671-686), come detto nel turno 111; le conclusioni su double free e leak restano valide."
+    },
+    {
+      "turn": 99,
+      "claim": "fprintf delega la gestione del buffer al sistema operativo",
+      "correction": "Il buffer di FILE* è nella libc (user space); il kernel riceve solo le write()."
+    },
+    {
+      "turn": 48,
+      "claim": "Con la macro LIST_PUSH, passando un tipo sbagliato il compilatore si rifiuta di compilare",
+      "correction": "Con clang 17 è solo un warning (-Wincompatible-pointer-types), quindi il binario viene prodotto (verificato)."
+    },
+    {
+      "turn": 83,
+      "claim": "Dopo memset a 0 non serve più scrivere ctx->ast = NULL",
+      "correction": "Vero sulle piattaforme comuni ma non garantito dallo standard; la forma idiomatica è pCtx ctx = {0};"
+    }
+  ],
+  "open_questions": [
+    "toyforth: freeObject non libera list.ele e il main non libera nulla; il progetto è fermo dal 16/03.",
+    "Arena allocator mai provato: ha senso in chord-pratt visto che evalAST condivide i nodi con refcount?",
+    "Zero-copy nel lexer di chord-pratt: scartato o rimandato?",
+    "evalAST di chord-pratt modifica l'AST: accettabile o serve una versione senza effetti collaterali?",
+    "Player multithread: quali buffer locali finiscono negli stack da 512 KB dei pthread? pthread_attr_setstacksize mai discusso.",
+    "Snake sul Pico: GameContext e minHeap andrebbero static (stack da 2 KB)."
+  ],
+  "side_topics": [
+    {
+      "title": "WebAssembly: memoria lineare, memory.grow e _free esportata",
+      "turns": [
+        29,
+        31
+      ]
+    },
+    {
+      "title": "Lettura di file enormi a chunk: sliding window con memmove",
+      "turns": [
+        137
+      ]
+    },
+    {
+      "title": "Embedded senza OS: malloc di newlib, allocazione statica e memory pool (chat snake)",
+      "turns": []
+    },
+    {
+      "title": "Buffer overflow didattico e layout dello stack (matrix.c, matrix_dump.c)",
+      "turns": []
+    }
+  ],
+  "self_check": [
+    {
+      "q": "In basicMathFunctions di toyforth, perché fai release(a) anche se a è una variabile locale che sparirà al return?",
+      "concept": "memoria-c/puntatore-stack-oggetto-heap",
+      "difficulty": 1
+    },
+    {
+      "q": "Che differenza c'è tra char *s = \"ciao\" e char s[] = \"ciao\"? Cosa succede con s[0] = 'C' in ciascun caso?",
+      "concept": "memoria-c/string-literal-rodata",
+      "difficulty": 1
+    },
+    {
+      "q": "Perché exec fa retain(word) mentre basicMathFunctions pusha createIntObject(result) senza retain?",
+      "concept": "memoria-c/trasferimento-vs-condivisione",
+      "difficulty": 1
+    },
+    {
+      "q": "Applica la regola stack/heap a: token del lexer, nodo AST, contesto del parser, ring buffer audio.",
+      "concept": "memoria-c/regola-stack-heap",
+      "difficulty": 1
+    },
+    {
+      "q": "Cosa succede con Token t = ctx->lexer.curToken; t.type = TOKEN_PLUS;? Come lo correggi?",
+      "concept": "memoria-c/copia-per-valore",
+      "difficulty": 1
+    },
+    {
+      "q": "Perché salvare in ctx->table un array locale di createContext è un bug? Quali sono le due alternative corrette?",
+      "concept": "memoria-c/dangling-pointer-stack",
+      "difficulty": 2
+    },
+    {
+      "q": "In split(), quanti byte devi copiare per portarti dietro il \\0? Cosa succede se dopo la metà del file non c'è un \\n?",
+      "concept": "memoria-c/malloc-non-azzera",
+      "difficulty": 2
+    },
+    {
+      "q": "Cosa succede ai refcount se fai listPushObj(result1, result2) senza retain e poi rilasci entrambi gli AST?",
+      "concept": "memoria-c/trasferimento-vs-condivisione",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché nel buffer condiviso di printAST_recursive serve ripristinare sharedBuf[originalLen] = '\\0'?",
+      "concept": "memoria-c/buffer-ricorsione-backtracking",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché Ctx da 15 MB sullo stack fa crashare il programma prima di stampare? Perché con 7 MB funziona e in un pthread no?",
+      "concept": "memoria-c/buffer-grandi-stack-overflow",
+      "difficulty": 2
+    },
+    {
+      "q": "Trova il leak in freeObject di toyforth: come lo confermi con leaks?",
+      "concept": "memoria-c/refcount-retain-release",
+      "difficulty": 2
+    },
+    {
+      "q": "Cosa guadagni e cosa perdi passando dal refcount a un arena allocator? Perché l'arena deve gestire l'allineamento?",
+      "concept": "memoria-c/arena-allocator",
+      "difficulty": 3
+    },
+    {
+      "q": "Cache locality e prefetch sono la stessa cosa? Perché il ring buffer dello snake batte la linked list anche senza contare le malloc?",
+      "concept": "memoria-c/cache-locality-prefetch",
+      "difficulty": 3
+    },
+    {
+      "q": "Perché run_id sostituisce memset(visited)? Che bug nasce con due static int run_id separati?",
+      "concept": "memoria-c/run-id-generazione",
+      "difficulty": 3
+    },
+    {
+      "q": "Se usassi mmap al posto di fread nel parser chord-pratt, quali due assunzioni si rompono?",
+      "concept": "memoria-c/mmap",
+      "difficulty": 3
+    }
+  ]
+}

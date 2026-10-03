@@ -1,0 +1,743 @@
+{
+  "area": {
+    "id": "sicp-combinatori",
+    "title": "SICP (picture language) e logica combinatoria",
+    "summary": "Il picture language di SICP 2.2.4 implementato in TypeScript + Canvas (painter come funzioni frame → disegno, chiusura, square_limit, painter da JPEG), poi i combinatori di To Mock a Mockingbird scritti come funzioni TS curryficate e usati per comporre i painter; chiusura teorica su Mockingbird e ricorsione anonima, Y, base S-K, Turing-completezza, uccello ideale/Gödel ed eBPF.",
+    "period": "2026-07-25/2026-10-01",
+    "turns": [
+      270,
+      278,
+      279,
+      280,
+      281,
+      282,
+      283,
+      284,
+      285,
+      286,
+      287,
+      288,
+      289,
+      290,
+      291,
+      292,
+      293,
+      294,
+      295,
+      296,
+      297,
+      298,
+      299,
+      300,
+      301,
+      302,
+      303,
+      304,
+      305,
+      306,
+      307,
+      308,
+      309,
+      310,
+      311,
+      312,
+      313,
+      314,
+      315,
+      316,
+      317,
+      318,
+      319,
+      320,
+      321,
+      322,
+      323,
+      324,
+      325,
+      326,
+      327,
+      328,
+      329,
+      330,
+      331,
+      332,
+      333,
+      334,
+      335,
+      336
+    ]
+  },
+  "concepts": [
+    {
+      "id": "sicp-combinatori/elementi-linguaggio",
+      "title": "Elementi di un linguaggio: primitive, combinazione, astrazione",
+      "summary": "Ogni linguaggio ha primitive, mezzi di combinazione e di astrazione; nel picture language l'evaluator è la chiamata stessa del painter col frame (shallow embedding), non un eval separato.",
+      "turns": [
+        278,
+        286,
+        288,
+        289
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:452",
+        "sicp/language-picture/script.ts:642",
+        "sicp/language-picture/script.ts:754"
+      ],
+      "related": [
+        "algebra-fp/language-elements-evaluator",
+        "sicp-combinatori/chiusura"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "sicp-combinatori/pair-liste",
+      "title": "pair/head/tail e liste come in SICP JS",
+      "summary": "La coppia è il mattone dei dati: liste, vettori, segmenti e frame sono pair; un unico tipo Pair costringe a cast ovunque.",
+      "turns": [
+        270,
+        280
+      ],
+      "projects": [
+        "picture-language",
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:249",
+        "sicp/language-picture/script.ts:282",
+        "sicp/language-picture/script.ts:413",
+        "sicp/pair.ts:1"
+      ],
+      "related": [
+        "sicp-combinatori/frame"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "sicp-combinatori/frame",
+      "title": "Frame e frame_coord_map",
+      "summary": "Un frame è (origine, edge1, edge2); frame_coord_map porta (x,y) del quadrato unitario in origin + x·edge1 + y·edge2. frame1 inverte l'asse Y del canvas.",
+      "turns": [
+        280,
+        282
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:441",
+        "sicp/language-picture/script.ts:553"
+      ],
+      "related": [
+        "sicp-combinatori/transform-painter"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "sicp-combinatori/painter",
+      "title": "Painter come funzione frame → disegno",
+      "summary": "Un painter è (frame) => void: costruirlo non disegna nulla, si disegna solo chiamandolo con un frame; per questo i combinatori valgono uguali per linee e JPEG.",
+      "turns": [
+        280,
+        288,
+        297
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:253",
+        "sicp/language-picture/script.ts:452"
+      ],
+      "related": [
+        "sicp-combinatori/image-to-painter"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "sicp-combinatori/transform-painter",
+      "title": "transform_painter, flip, rotate, shrink, squash",
+      "summary": "Ogni trasformazione è transform_painter con tre punti (origine, corner1, corner2) che definiscono il sotto-frame; es. rotate90 mappa (x,y)→(1-y,x).",
+      "turns": [
+        280,
+        285,
+        297
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:559",
+        "sicp/language-picture/script.ts:580",
+        "sicp/language-picture/script.ts:605"
+      ],
+      "related": [
+        "sicp-combinatori/frame",
+        "algebra-fp/magma-monoid-group"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-combinatori/chiusura",
+      "title": "beside/below e proprietà di chiusura",
+      "summary": "beside e below restituiscono un Painter, quindi si annidano all'infinito; la parte algebrica (magma, monoide, gruppo) è in algebra-fp.",
+      "turns": [
+        283,
+        284,
+        285,
+        286,
+        302,
+        303,
+        305
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:642",
+        "sicp/language-picture/script.ts:687"
+      ],
+      "related": [
+        "algebra-fp/closure-sicp",
+        "algebra-fp/magma-monoid-group",
+        "sicp-combinatori/square-of-four"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-combinatori/split-square-limit",
+      "title": "right_split, up_split, corner_split, square_limit",
+      "summary": "Ricorsione su painter: right_split = beside(p)(below(smaller)(smaller)); square_limit combina 4 corner_split con square_of_four.",
+      "turns": [
+        280,
+        284
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:709",
+        "sicp/language-picture/script.ts:725",
+        "sicp/language-picture/script.ts:754"
+      ],
+      "related": [
+        "sicp-combinatori/square-of-four"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-combinatori/square-of-four",
+      "title": "square_of_four e funzioni di ordine superiore",
+      "summary": "Prende quattro trasformazioni Painter→Painter e restituisce una trasformazione: si combinano operazioni, non immagini.",
+      "turns": [
+        284
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:742"
+      ],
+      "related": [
+        "algebra-fp/higher-order-combinators",
+        "sicp-combinatori/combinatori-painter"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-combinatori/image-to-painter",
+      "title": "image_to_painter e asse Y capovolto",
+      "summary": "Un JPEG si proietta nel frame con ctx.transform; poiché nelle immagini y=0 è la cima, serve translate(0,1)+scale(1,-1) per non vederla capovolta. crossOrigin='anonymous' blocca il caricamento da file://.",
+      "turns": [
+        280,
+        281,
+        282
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:480",
+        "sicp/language-picture/script.ts:489",
+        "sicp/language-picture/script.ts:500"
+      ],
+      "related": [
+        "sicp-combinatori/painter"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-combinatori/currying-ts",
+      "title": "Currying in TypeScript e posizione dei generici",
+      "summary": "Ogni generico va dichiarato sul livello in cui compare il primo argomento da cui inferirlo, altrimenti diventa unknown all'applicazione parziale; C(B) non compila per lo stesso limite.",
+      "turns": [
+        303,
+        304,
+        306,
+        313,
+        315,
+        316
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:43",
+        "sicp/language-picture/script.ts:75",
+        "sicp/language-picture/script.ts:912"
+      ],
+      "related": [
+        "sicp-combinatori/combinatori-ts"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-combinatori/combinatori-ts",
+      "title": "Combinatori di Smullyan implementati in TS",
+      "summary": "B, K, C, M, W, R, T, F, L, D, B1, E, D2, S più VS, ZD, Psi, Phoenix, Pheasant e Nicator (questi ultimi non nel libro) come funzioni curryficate con generici.",
+      "turns": [
+        304,
+        306,
+        307,
+        312,
+        313,
+        315,
+        316,
+        317,
+        320,
+        321,
+        322,
+        323,
+        324,
+        325,
+        326,
+        327,
+        328,
+        329,
+        330,
+        331
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:43",
+        "sicp/language-picture/script.ts:66",
+        "sicp/language-picture/script.ts:135",
+        "sicp/language-picture/script.ts:191"
+      ],
+      "related": [
+        "sicp-combinatori/currying-ts",
+        "sicp-combinatori/combinatori-painter"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-combinatori/derivazioni-b",
+      "title": "Derivazioni da B: D, B1, E, B2",
+      "summary": "D = BB, B1 = BBB, E = B(BBB) = BBBB(BB), B2 = B(BBB)B = BB1B; l'applicazione associa a sinistra.",
+      "turns": [
+        290,
+        291,
+        292,
+        295,
+        296
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "sicp-combinatori/combinatori-ts"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "sicp-combinatori/combinatori-painter",
+      "title": "Comporre i painter con B, C, T, W, D",
+      "summary": "B è la composizione (B(flip_horiz)(flip_vert) = rotate180), C scambia gli argomenti, W duplica (W(below)(p)), D trasforma solo il secondo argomento di beside.",
+      "turns": [
+        297,
+        299,
+        300,
+        301,
+        302,
+        312,
+        314,
+        315,
+        316,
+        320,
+        321,
+        322,
+        323,
+        324,
+        325,
+        326,
+        327,
+        328,
+        329,
+        330,
+        331
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:768",
+        "sicp/language-picture/script.ts:909",
+        "sicp/language-picture/script.ts:914"
+      ],
+      "related": [
+        "sicp-combinatori/chiusura"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-combinatori/mockingbird-ricorsione",
+      "title": "Mockingbird e ricorsione anonima (make_fractal, SelfApplicable)",
+      "summary": "Mx = xx: una funzione che riceve se stessa può richiamarsi con M(self) senza nome; il tipo ricorsivo SelfApplicable<R> lo rende type-safe. L con y: any ha nascosto il bug Step/Painter.",
+      "turns": [
+        307,
+        308,
+        309,
+        310,
+        311,
+        317,
+        318,
+        319
+      ],
+      "projects": [
+        "picture-language"
+      ],
+      "code_refs": [
+        "sicp/language-picture/script.ts:64",
+        "sicp/language-picture/script.ts:779",
+        "sicp/language-picture/script.ts:97"
+      ],
+      "related": [
+        "sicp-combinatori/y-sage"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "sicp-combinatori/y-sage",
+      "title": "Combinatore Y vs M e uccelli saggi",
+      "summary": "Un uccello saggio soddisfa θx = x(θx); BML, BM(CBM) e SLL lo sono. In JS eager serve la variante Z.",
+      "turns": [
+        308,
+        335
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "sicp-combinatori/mockingbird-ricorsione"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "sicp-combinatori/base-sk",
+      "title": "Base S/K e Turing-completezza",
+      "summary": "S e K generano tutto (I = SKK, M = SII); M non serve come primitiva; Iota da solo basta.",
+      "turns": [
+        287,
+        324,
+        336
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "sicp-combinatori/uccello-ideale"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "sicp-combinatori/uccello-ideale",
+      "title": "Uccello ideale, halting problem, Gödel, eBPF",
+      "summary": "Non esiste un uccello che decida proprietà non banali di tutti gli altri (indecidibilità, stessa diagonalizzazione di Gödel); eBPF rinuncia a ricorsione e cicli illimitati per avere terminazione garantita.",
+      "turns": [
+        332,
+        333,
+        334
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "sicp-combinatori/base-sk"
+      ],
+      "difficulty": 3
+    }
+  ],
+  "projects": [
+    {
+      "id": "picture-language",
+      "title": "Picture Language (SICP 2.2.4) in TypeScript + Canvas",
+      "path": "sicp/language-picture",
+      "status": "working",
+      "last_modified": "2026-09-24",
+      "build": "tsc -p tsconfig.json (TypeScript 5.9 dalla build dir; lo shim tsc di mise non ha versione impostata) → 0 errori",
+      "run": "aprire index.html; per il painter JPEG servire la cartella con python3 -m http.server (da file:// crossOrigin blocca l'immagine)",
+      "works": [
+        "frame, frame_coord_map, transform_painter, flip/rotate/shrink/squash",
+        "beside/below curryficati, right/up/corner_split, square_of_four, square_limit (verificato in headless Chrome)",
+        "image_to_painter con correzione asse Y (verificato via http)",
+        "21 combinatori tipizzati; tutti gli esempi con i painter compilano tranne C(B)",
+        "frattale con M(make_fractal) e SelfApplicable<Step>"
+      ],
+      "missing": [
+        "script.js non allineato a script.ts (3 differenze; esegue ancora WesternNic)",
+        "tutte le chiamate di disegno in script.ts sono commentate: ricompilando il canvas resta vuoto",
+        "img.crossOrigin='anonymous' (script.ts:500) fa fallire il caricamento da file://",
+        "L con y: any (script.ts:97) nasconde errori di tipo",
+        "C(B) (script.ts:912) non compila",
+        "tipo Pair unico per numeri/vettori/frame con cast ovunque"
+      ],
+      "next_step": "Riattivare una chiamata finale, ricompilare con tsc -p . e committare script.ts+script.js insieme; togliere crossOrigin e riattivare run() con square_limit(imgPainter, 2); tipizzare L con SelfApplicable<R>.",
+      "concepts": [
+        "sicp-combinatori/frame",
+        "sicp-combinatori/painter",
+        "sicp-combinatori/transform-painter",
+        "sicp-combinatori/chiusura",
+        "sicp-combinatori/split-square-limit",
+        "sicp-combinatori/square-of-four",
+        "sicp-combinatori/image-to-painter",
+        "sicp-combinatori/currying-ts",
+        "sicp-combinatori/combinatori-ts",
+        "sicp-combinatori/combinatori-painter",
+        "sicp-combinatori/mockingbird-ricorsione"
+      ]
+    },
+    {
+      "id": "sicp-streams",
+      "title": "SICP 3.5 Streams (bozza) + coppie procedurali",
+      "path": "sicp/streams/streams.ts, sicp/pair.ts",
+      "status": "stub",
+      "last_modified": "2026-09-21",
+      "build": "tsc --noEmit --strict streams/streams.ts pair.ts → exit 0 (tutto commentato)",
+      "run": "nessun codice attivo",
+      "works": [
+        "idea di tail come funzione e stream_ref ricorsivo (bozza commentata)",
+        "esperimenti di coppia procedurale (SICP 2.1.3, es. 2.4) in pair.ts"
+      ],
+      "missing": [
+        "make_stream(h, t: Stream) riceve la coda già calcolata: nessun ritardo reale (integers_from va in stack overflow, verificato)",
+        "nessuna memoizzazione, stream_map/filter, stream infiniti",
+        "pair.ts:53 head2 restituisce p inesistente"
+      ],
+      "next_step": "Stream<T> generico con cons_stream(h, () => coda), memo per delay/force, poi stream_map/filter, integers, crivello, partial_sums e integral con integrando ritardato (percorso nella scheda).",
+      "concepts": [
+        "sicp-combinatori/pair-liste",
+        "sicp-combinatori/mockingbird-ricorsione"
+      ]
+    }
+  ],
+  "gemini_errors": [
+    {
+      "turn": 291,
+      "claim": "B(BB)xyzwv = ((xy)(zw))v, cioè B(BB) è il Dove.",
+      "correction": "B(BB) = BD e BDxyzwv = xyz(wv): è il Dickcissel D1 (la conclusione ≠ E resta vera)."
+    },
+    {
+      "turn": 302,
+      "claim": "(B (B beside) flip_vert) p1 p2 = beside(p1)(flip_vert(p2)).",
+      "correction": "Si riduce a beside((flip_vert p1)(p2)), che applica un painter a un painter (tsc dà errore). Il combinatore giusto è il Dove: D(beside)(p1)(flip_vert)(p2)."
+    },
+    {
+      "turn": 313,
+      "claim": "Per il Robin conviene mettere tutti i generici <U,T,V> sul primo livello.",
+      "correction": "Al primo livello si conosce solo x: T e V diventano unknown e R(painter)(beside) non compila (verificato). La versione di Stefano con <U> poi <T,V> è quella giusta, coerente col turno 304."
+    },
+    {
+      "turn": 317,
+      "claim": "Esempio d'uso del Lark: L(flip_vert)(makeFractal), con y: any.",
+      "correction": "make_fractal(make_fractal) è uno Step, non un Painter: non disegna nulla; y: any impedisce a tsc di accorgersene (con y: SelfApplicable<R> l'errore viene segnalato)."
+    },
+    {
+      "turn": 318,
+      "claim": "Il canvas è vuoto per un TypeError o uno stack overflow.",
+      "correction": "Nessun errore: il risultato è una funzione (depth) => Painter mai chiamata (verificato in headless Chrome). La spiegazione corretta arriva solo al turno 319."
+    },
+    {
+      "turn": 308,
+      "claim": "doubleFlip = M((f) => (p) => f(f(p))) applica una trasformazione due volte; il frattale mette p sopra il livello ricorsivo.",
+      "correction": "In M(f) f è la funzione stessa, quindi l'esempio non ha senso; il cornerSplit costruito con Z è in realtà right_split; below(p)(smaller) mette p sotto e smaller sopra (corretto da Stefano al 311)."
+    },
+    {
+      "turn": 281,
+      "claim": "Un percorso assoluto del disco in img.src viene bloccato dal browser per sicurezza.",
+      "correction": "Da file:// il percorso diventa file:///Users/... e funzionerebbe; il vero blocco è img.crossOrigin='anonymous' su file:// (CORS, verificato). Con un server http il percorso del disco non esiste (404)."
+    },
+    {
+      "turn": 280,
+      "claim": "crossOrigin='anonymous' serve per evitare problemi CORS.",
+      "correction": "Serve solo per immagini remote da rileggere con getImageData; per disegnare non serve e con file:// fa fallire il caricamento."
+    },
+    {
+      "turn": 335,
+      "claim": "Y = B(SM)(SM) nella notazione di Smullyan.",
+      "correction": "B(SM)(SM)x = SM(SMx), un'applicazione parziale e non x(Yx). Uccelli saggi corretti: BML, BM(CBM), SLL."
+    },
+    {
+      "turn": 333,
+      "claim": "Un sistema con S e K (o M e L) è Turing-completo.",
+      "correction": "{M, L} non è completo: manca la cancellazione (K). S e K sì."
+    },
+    {
+      "turn": 336,
+      "claim": "Senza cancellazione (solo B, C, W, I) il sistema non è Turing-completo.",
+      "correction": "Il λI-calcolo di Church (corrispondente a B, C, W, I) definisce tutte le funzioni ricorsive: manca la possibilità di scartare argomenti, non la potenza di calcolo."
+    },
+    {
+      "turn": 332,
+      "claim": "Datalog elimina la ricorsione arbitraria di Prolog; Datalog e smart contract come linguaggi limitati.",
+      "correction": "Datalog ammette la ricorsione; termina perché non ha simboli di funzione. La EVM degli smart contract è Turing-completa (limitata dal gas)."
+    },
+    {
+      "turn": 326,
+      "claim": "Zebra Dove, Violet Starling, Psi, Phoenix, Pheasant e Nicator sono la 'fauna di Smullyan'.",
+      "correction": "Non compaiono in To Mock a Mockingbird; vengono da cataloghi moderni di combinatori (Phoenix = S' di Turner, Psi = on di Haskell)."
+    }
+  ],
+  "open_questions": [
+    "Come tipizzare in TS combinatori che ricevono altri combinatori generici (C(B)) senza perdere i tipi?",
+    "Picture language in C: AST + interprete o struct {fn, void *ctx}? Mai implementato.",
+    "Manca un flusso di build (tsc --watch) che tenga script.js allineato.",
+    "rotate90 applicato 4 volte dà lo stesso painter solo matematicamente, non al bit in floating point.",
+    "SICP 3.5 (stream) mai discusso nella conversazione: streams.ts è una bozza."
+  ],
+  "side_topics": [
+    {
+      "title": "Perché leggere SICP",
+      "turns": [
+        270
+      ]
+    },
+    {
+      "title": "Radio Garden e directory di web radio",
+      "turns": [
+        271
+      ]
+    },
+    {
+      "title": "Legalità di un aggregatore di web radio / Telegram Mini App",
+      "turns": [
+        272,
+        273,
+        274
+      ]
+    },
+    {
+      "title": "Shoutcast/ICY, icy-metaint e HLS",
+      "turns": [
+        275,
+        276
+      ]
+    },
+    {
+      "title": "Riprendere l'ascolto: finestra DVR HLS vs Shoutcast live, ring buffer",
+      "turns": [
+        277
+      ]
+    },
+    {
+      "title": "Racket/DrRacket vs TS+Canvas per SICP",
+      "turns": [
+        279
+      ]
+    },
+    {
+      "title": "parse in SICP JS capitolo 4 (omoiconicità, Source Academy)",
+      "turns": [
+        289
+      ]
+    },
+    {
+      "title": "Combinatori in C: funzione + void* contesto, macro, AST",
+      "turns": [
+        294
+      ]
+    },
+    {
+      "title": "Utilità dei combinatori nell'architettura software",
+      "turns": [
+        293
+      ]
+    }
+  ],
+  "self_check": [
+    {
+      "q": "Che tipo ha un painter nel tuo codice e perché costruire square_limit(painter, 2) non disegna ancora nulla?",
+      "concept": "sicp-combinatori/painter",
+      "difficulty": 1
+    },
+    {
+      "q": "Cosa restituisce frame_coord_map(frame1) per (0.5, 0.5) e per (0, 1)? Perché edge2 = (0,-600)?",
+      "concept": "sicp-combinatori/frame",
+      "difficulty": 1
+    },
+    {
+      "q": "Quali tre punti passi a transform_painter per shrink_to_upper_right e perché bastano tre punti?",
+      "concept": "sicp-combinatori/transform-painter",
+      "difficulty": 1
+    },
+    {
+      "q": "Perché il JPEG usciva capovolto mentre George no? Cosa fanno translate(0,1) e scale(1,-1)?",
+      "concept": "sicp-combinatori/image-to-painter",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché beside non è associativo? Fai un esempio con le larghezze.",
+      "concept": "sicp-combinatori/chiusura",
+      "difficulty": 1
+    },
+    {
+      "q": "Calcola B(flip_horiz)(flip_vert) sulle coordinate (x,y): che trasformazione ottieni?",
+      "concept": "sicp-combinatori/combinatori-painter",
+      "difficulty": 2
+    },
+    {
+      "q": "Calcola flip_vert(rotate90(p)) sulle coordinate (x,y): è una trasformazione che hai già nel codice?",
+      "concept": "sicp-combinatori/transform-painter",
+      "difficulty": 2
+    },
+    {
+      "q": "Riduci BBBB(BB)xyzwv passo per passo: quale uccello è?",
+      "concept": "sicp-combinatori/derivazioni-b",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché B1Bxyzwv ≠ Bx(yzw)v? Riduci entrambe.",
+      "concept": "sicp-combinatori/derivazioni-b",
+      "difficulty": 3
+    },
+    {
+      "q": "Con quale uccello trasformi solo il secondo painter di beside? E solo il primo?",
+      "concept": "sicp-combinatori/combinatori-painter",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché B con <A,B,C> tutti sul primo livello dà unknown e la tua versione no? Applica il ragionamento al Robin.",
+      "concept": "sicp-combinatori/currying-ts",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché M(make_fractal) non va in ricorsione infinita in JavaScript, mentre Y scritto alla lettera sì?",
+      "concept": "sicp-combinatori/mockingbird-ricorsione",
+      "difficulty": 3
+    },
+    {
+      "q": "Perché L(flip_vert)(make_fractal)(frame1) non disegna e non dà errori? Come cambi il tipo di L perché tsc lo segnali?",
+      "concept": "sicp-combinatori/mockingbird-ricorsione",
+      "difficulty": 3
+    },
+    {
+      "q": "Dimostra che BML è un uccello saggio. Perché M non serve come primitiva per la Turing-completezza?",
+      "concept": "sicp-combinatori/base-sk",
+      "difficulty": 3
+    },
+    {
+      "q": "In che senso l'inesistenza dell'uccello ideale è parente del teorema di Gödel, e perché eBPF vieta la ricorsione?",
+      "concept": "sicp-combinatori/uccello-ideale",
+      "difficulty": 3
+    }
+  ]
+}

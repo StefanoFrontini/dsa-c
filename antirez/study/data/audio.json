@@ -1,0 +1,106 @@
+{
+  "area": {
+    "id": "audio",
+    "title": "Audio player: decodifica, riproduzione, multithreading",
+    "summary": "Dal client HTTPS/HLS al player che suona: segmenti .ts, ring buffer di byte compressi, FFmpeg con I/O custom (read_packet), PCM planar/packed, SDL3 push e pacing sulla coda, versione multithread produttore-consumatore con mutex e due condition variable, caccia ai memory leak con leaks/sample.",
+    "period": "2026-06-27/2026-07-06",
+    "turns": [194, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242]
+  },
+  "concepts": [
+    {"id": "audio/segmenti-hls-ts", "title": "Segmenti HLS .ts, bitrate e Content-Length", "summary": "Il BANDWIDTH è in bit/s: 67171 x 6,83 s = ~57 KB; i ~4 KB in più del Content-Length sono overhead MPEG-TS (pacchetti da 188 byte, PAT/PMT, PES).", "turns": [194], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:45", "networking/client_http.c:570"], "related": ["audio/ring-buffer"], "difficulty": 1},
+    {"id": "audio/ring-buffer", "title": "Ring buffer di byte compressi (head/tail)", "summary": "head = dove scrive la rete, tail = prossimo byte che legge FFmpeg; disponibili = head-tail con giro. Dimensionamento, overflow del turno 207 e separazione stato persistente/stato della richiesta.", "turns": [196, 200, 207, 211, 229], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:72", "networking/client_http.c:132", "networking/client_http.c:343", "networking/client_http.c:324"], "related": ["audio/stack-vs-heap", "audio/custom-io-read-packet"], "difficulty": 1},
+    {"id": "audio/stack-vs-heap", "title": "Stack vs heap per buffer grandi", "summary": "Un Ctx da 15 MB sullo stack (limite 8 MB) va in segfault; con calloc va sull'heap, che ha la stessa velocità di accesso e pagine allocate in modo pigro.", "turns": [208, 209, 210], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:984"], "related": ["audio/memory-leak"], "difficulty": 1},
+    {"id": "audio/custom-io-read-packet", "title": "I/O custom di FFmpeg: avio_alloc_context + read_packet", "summary": "FFmpeg chiama una tua callback con opaque=Ctx* per avere byte; nel live deve bloccarsi invece di restituire EOF. Il buffer AVIO viene riallocato (~5 MB dal probing): va liberato avio_ctx->buffer.", "turns": [198, 199, 200, 207, 229, 232, 233], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:333", "networking/client_http.c:827", "networking/client_http.c:975"], "related": ["audio/pipeline-ffmpeg", "audio/multithread-produttore-consumatore"], "difficulty": 2},
+    {"id": "audio/pipeline-ffmpeg", "title": "Pipeline FFmpeg: container, pacchetti, decoder, frame", "summary": "avformat_open_input/find_stream_info, av_read_frame dà AVPacket compressi, avcodec_send_packet/receive_frame dà AVFrame PCM; filtrare la traccia audio e fare sempre av_packet_unref.", "turns": [198, 204, 222, 237, 238], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:844", "networking/client_http.c:862", "networking/client_http.c:915", "networking/client_http.c:962"], "related": ["audio/pcm-planar-packed"], "difficulty": 2},
+    {"id": "audio/pcm-planar-packed", "title": "PCM: formati planar e packed", "summary": "FLTP = un array per canale (data[0], data[1]), FLT = L R L R in data[0]; data è un array di puntatori. Interleaving manuale verso SDL al posto di libswresample.", "turns": [204, 222, 223], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:943", "networking/client_http.c:104"], "related": ["audio/sdl3-audiostream"], "difficulty": 2},
+    {"id": "audio/campionamento-float", "title": "Campionamento, quantizzazione, float in [-1, 1]", "summary": "ADC: campionamento a 44,1 kHz (Nyquist) e quantizzazione; DAC + filtro di ricostruzione. Il decoder AAC produce float a 32 bit con fondo scala ±1; 44100 x 2 x 4 = 352800 B/s.", "turns": [224, 225, 226], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:47", "networking/client_http.c:895"], "related": ["audio/pacing"], "difficulty": 1},
+    {"id": "audio/sdl3-audiostream", "title": "Output audio con SDL3 (AudioStream push)", "summary": "SDL_OpenAudioDeviceStream crea uno stream in pausa (SDL_ResumeAudioStreamDevice); SDL_PutAudioStreamData accoda senza bloccare; lo stream converte formato e frequenza verso il dispositivo.", "turns": [197, 204, 205, 206, 207], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:889", "networking/client_http.c:899", "networking/client_http.c:906"], "related": ["audio/pacing"], "difficulty": 2},
+    {"id": "audio/pacing", "title": "Sincronizzazione decodifica/riproduzione (pacing)", "summary": "La decodifica è molto più veloce del tempo reale; il clock della scheda audio detta il ritmo e il decode thread dorme quando la coda SDL supera 3 s (polling, non condvar).", "turns": [205, 207, 224, 227, 234, 242], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:911"], "related": ["audio/multithread-produttore-consumatore", "audio/soglia-riempimento"], "difficulty": 2},
+    {"id": "audio/seek-chunk", "title": "Seek: diretta, ±1 chunk, ±5 secondi (teoria)", "summary": "Si salva l'offset di inizio di ogni chunk, si sposta tail sotto mutex e si svuotano AVIO, decoder (e demuxer) e coda SDL; saltare a chunk interi evita di cadere a metà di un pacchetto. Non implementato.", "turns": [201, 202, 214], "projects": ["audio-player"], "code_refs": [], "related": ["audio/ring-buffer", "audio/custom-io-read-packet"], "difficulty": 3},
+    {"id": "audio/multithread-produttore-consumatore", "title": "Produttore-consumatore: mutex e due condition variable", "summary": "Un mutex per head/tail, una condvar 'ci sono dati' e una 'serve rete'; predicato controllato sotto lock e in while, stesso mutex nella wait, signal e non wait, nessun I/O di rete col lock preso.", "turns": [214, 216, 217, 227, 228, 229, 230, 231, 232, 233, 234], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:127", "networking/client_http.c:337", "networking/client_http.c:774", "networking/client_http.c:1012"], "related": ["actor-model/thread-pool-vs-event-loop", "audio/soglia-riempimento"], "difficulty": 3},
+    {"id": "audio/soglia-riempimento", "title": "Riempimento a soglia e finestra sulla playlist live", "summary": "Il network thread scarica solo i segmenti nuovi (max 4, last_sequence) quando i byte disponibili scendono sotto 50.000; assunzioni fragili su 100 segmenti e sul parsing del numero di sequenza.", "turns": [229, 230, 234], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:48", "networking/client_http.c:606", "networking/client_http.c:615"], "related": ["audio/multithread-produttore-consumatore"], "difficulty": 2},
+    {"id": "audio/memory-leak", "title": "Caccia ai memory leak con leaks/sample/heap", "summary": "Leak veri: SSL_CTX per connessione, SSL/socket non liberati, pacchetti ID3 senza unref. Fix inutili: session cache, av_frame_unref. La crescita finale era il page faulting del ring buffer da 15 MB e del buffer AVIO da 5 MB.", "turns": [231, 235, 236, 237, 238, 239, 240, 241, 242], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:390", "networking/client_http.c:789", "networking/client_http.c:962", "networking/client_http.c:993"], "related": ["audio/profilo-sample", "audio/stack-vs-heap"], "difficulty": 3},
+    {"id": "audio/profilo-sample", "title": "Leggere un profilo sample", "summary": "sample fotografa gli stack ogni 1 ms: un player sano passa il tempo in __psynch_cvwait (condvar) e nanosleep (SDL_Delay); al turno 231 ha mostrato il caricamento dei certificati a ogni fetch.", "turns": [231, 234, 242], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:777", "networking/client_http.c:913"], "related": ["audio/memory-leak"], "difficulty": 2},
+    {"id": "audio/hw-vs-sw-decoding", "title": "Decodifica hardware vs software", "summary": "libavcodec non fa fallback automatico hardware→software; hwaccel è esplicito e pensato per il video. L'audio si decodifica in software a costo trascurabile.", "turns": [219], "projects": ["audio-player"], "code_refs": ["networking/client_http.c:862"], "related": ["audio/browser"], "difficulty": 1},
+    {"id": "audio/browser", "title": "Architettura del player nel browser", "summary": "Rete/UI in JS, decodifica in un Web Worker (C → WebAssembly) o con WebCodecs, riproduzione con AudioWorklet.", "turns": [218], "projects": [], "code_refs": [], "related": ["actor-model"], "difficulty": 1},
+    {"id": "audio/download-paralleli", "title": "Download paralleli: thread pool vs event loop", "summary": "K worker su una coda protetta da mutex oppure un thread con socket non bloccanti; i chunk arrivano fuori ordine e servono slot per chunk. Approfondito nell'area actor-model.", "turns": [214, 215, 216, 217], "projects": [], "code_refs": [], "related": ["actor-model/thread-pool-vs-event-loop"], "difficulty": 2},
+    {"id": "audio/build-pkg-config", "title": "Build multipiattaforma con pkg-config e Makefile", "summary": "pkg-config fornisce i flag di openssl, sdl3 e libav* su Linux, Mac Intel e M1; su Linux servono i pacchetti -dev.", "turns": [197, 203, 206], "projects": ["audio-player"], "code_refs": ["networking/Makefile:1"], "related": [], "difficulty": 1}
+  ],
+  "projects": [
+    {
+      "id": "audio-player",
+      "title": "Audio player HLS Underground Radio (multithread)",
+      "path": "networking/client_http.c",
+      "status": "working",
+      "last_modified": "2026-07-07",
+      "build": "cc -W -Wall -O2 $(pkg-config --cflags openssl sdl3 libavcodec libavformat libavutil) networking/client_http.c $(pkg-config --libs openssl sdl3 libavcodec libavformat libavutil) -o $BUILD/underground_radio",
+      "run": "perl -e 'alarm 30; exec @ARGV' -- $BUILD/underground_radio < /dev/null",
+      "works": [
+        "Compila senza warning; scarica master playlist, sub-playlist (100 segmenti) e 4 segmenti (~245 KB nel ring buffer)",
+        "FFmpeg riconosce aac HE-AACv2 44100 Hz stereo fltp + timed_id3, SDL3 si avvia (2 canali @ 44100 Hz)",
+        "Riempimento a soglia: in 4 minuti 12 fetch, ogni volta i 3 segmenti nuovi",
+        "leaks: 0 leak; heap stabile; ThreadSanitizer: 0 warning; il binario precompilato x86_64 funziona"
+      ],
+      "missing": [
+        "Bomba a tempo: numero di sequenza letto dalle ultime 7 cifre (client_http.c:606-607); a 10.000.000 (~marzo 2027) accesso fuori dai limiti di urls_buf",
+        "Assume esattamente 100 segmenti (client_http.c:615); altrimenti loop stretto di richieste al server",
+        "Ring buffer da 15 MB per ~250 KB di dati vivi, senza controllo pieno (client_http.c:45, :132)",
+        "Lock del mutex per ogni byte (client_http.c:579-581)",
+        "TLS senza verifica del certificato e senza SNI (client_http.c:161, :270)",
+        "Nessuna UI (pausa, seek, diretta, uscita) né uscita pulita (client_http.c:804, :967, :1026)",
+        "Errori di av_read_frame ignorati (client_http.c:915)"
+      ],
+      "next_step": "Correggere il parsing della sequenza con strrchr('-') + strtol e togliere l'assunzione url_count == 100; poi ridurre MAXAUDIOBUFFER a ~1 MB con controllo pieno e scrittura a blocchi.",
+      "concepts": ["audio/ring-buffer", "audio/stack-vs-heap", "audio/custom-io-read-packet", "audio/pipeline-ffmpeg", "audio/pcm-planar-packed", "audio/sdl3-audiostream", "audio/pacing", "audio/multithread-produttore-consumatore", "audio/soglia-riempimento", "audio/memory-leak"]
+    }
+  ],
+  "gemini_errors": [
+    {"turn": 205, "claim": "In SDL3 la macro corretta per le casse è SDL_AUDIO_DEVICE_DEFAULT_OUTPUT (anche 197, 204, 207, 208); SDL_ResumeAudioStream; SDL_InitSubSystem(...) < 0", "correction": "In SDL3 la costante è SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK (quella che Stefano usava già), la funzione è SDL_ResumeAudioStreamDevice (errore di compilazione al 206) e SDL_InitSubSystem restituisce bool."},
+    {"turn": 200, "claim": "Con ring buffer vuoto read_packet restituisce 0 o un codice di blocco e FFmpeg aspetta", "correction": "0/AVERROR_EOF significa fine dello stream; per aspettare bisogna bloccarsi dentro la callback. Gemini lo segnala come bug al 229 dopo averlo suggerito al 199."},
+    {"turn": 201, "claim": "Per saltare alla diretta bastano tail = offset, avio_flush, avcodec_flush_buffers, SDL_ClearAudioStream", "correction": "Incompleto: manca avformat_flush sul demuxer e lo spostamento di tail va fatto sotto mutex perché il decode thread la usa."},
+    {"turn": 207, "claim": "Portare pcm_buffer a 8192 per evitare stack smashing con HE-AACv2", "correction": "2048 campioni x 2 canali = 4096 float: il buffer da 4096 bastava, 8192 è solo margine."},
+    {"turn": 211, "claim": "Con MAXDATASIZE = 1 facevi una syscall per ogni byte", "correction": "SSL_read legge un intero record TLS e poi serve i byte dal suo buffer: il costo era l'overhead per chiamata, non una syscall per byte."},
+    {"turn": 214, "claim": "Ogni thread consuma 2-8 MB di stack, 99 thread ≈ 1 GB di RAM (ripetuto al 221)", "correction": "Lo stack è memoria virtuale riservata; quella fisica conta solo le pagine toccate. Su macOS i thread secondari hanno 512 KB di default."},
+    {"turn": 218, "claim": "WebCodecs AudioDecoder usa il decoder hardware del chip M1 e la CPU dorme", "correction": "Contraddice il turno 219 (accelerazione hardware per il video, quasi mai per l'audio): nel browser la decodifica audio è di norma software. Al 219 inoltre aac_at (AudioToolbox) è presentato come hardware."},
+    {"turn": 222, "claim": "Ogni campione float è tassativamente compreso tra -1.0 e +1.0", "correction": "È il range nominale: un decoder può produrre valori leggermente oltre, il clipping avviene a valle."},
+    {"turn": 225, "claim": "La scalinata del DAC crea aliasing", "correction": "In riproduzione si parla di immagini spettrali (imaging); l'aliasing si previene con il filtro anti-aliasing prima dell'ADC, che non viene citato."},
+    {"turn": 226, "claim": "Nello stream AAC viaggiano coefficienti matematici con la virgola", "correction": "L'AAC trasmette coefficienti MDCT quantizzati interi (con scalefactor e codifica Huffman); i float nascono nel decoder."},
+    {"turn": 231, "claim": "initSSL dentro fetch è un grave errore di performance", "correction": "È anche un leak: un SSL_CTX nuovo per connessione mai liberato (footprint 48 MB nel sample)."},
+    {"turn": 235, "claim": "Puoi rimuovere la pulizia che facevi nello stato RECONNECT", "correction": "Seguendo il consiglio, al 236 Stefano ha introdotto il leak di un SSL + socket per ogni richiesta, poi 'scoperto' da Gemini."},
+    {"turn": 237, "claim": "La session cache TLS 1.3 di OpenSSL accumula migliaia di sessioni nel SSL_CTX; FFmpeg accumula errori di parsing come micro-leak", "correction": "Lato client OpenSSL non usa la cache interna per default (modo SSL_SESS_CACHE_SERVER) e la cache è comunque limitata; SSL_SESS_CACHE_OFF è innocuo ma non era la causa. I micro-leak di FFmpeg sono inventati."},
+    {"turn": 239, "claim": "Manca av_frame_unref: leak di decine di MB al minuto", "correction": "avcodec_receive_frame chiama av_frame_unref sul frame prima di riempirlo: non c'era alcun leak."},
+    {"turn": 241, "claim": "0 leaks: non stai perdendo nemmeno un byte; plateau a 45-48 MB come il picco del log precedente", "correction": "leaks trova solo blocchi irraggiungibili, non la crescita di memoria raggiungibile (qui la conferma viene da heap stabile). Il 48 MB era della versione 231 con il leak di SSL_CTX; la crescita viene dal ring buffer da 15 MB e dal buffer AVIO da 5 MB."}
+  ],
+  "open_questions": [
+    "Pause policy: cosa fa il network thread durante una pausa lunga e come tornare al live edge (hls_player.md)",
+    "Uscita pulita con flag quit: oggi il cleanup è irraggiungibile",
+    "Dimensione giusta del ring buffer con finestra a 4 chunk (~300 KB?)",
+    "Calcolare SDLBUFFER e THRESHOLD da spec e bitrate invece di scriverli a mano",
+    "Resampling verso un dispositivo a 48 kHz: lo fa lo SDL_AudioStream, mai discusso; libswresample non usata",
+    "Verifica del certificato TLS e SNI mancanti",
+    "Ridurre probesize/analyzeduration per accorciare l'avvio e il buffer AVIO da 5 MB?"
+  ],
+  "side_topics": [
+    {"title": "Installazione su Kubuntu (apt -dev, SDL3 da sorgente)", "turns": [203]},
+    {"title": "Cache locality vs prefetch", "turns": [212]},
+    {"title": "Cache locality nella progettazione del broker MQTT", "turns": [213]},
+    {"title": "XState, actor model, Erlang/BEAM (vedi area actor-model)", "turns": [220, 221]}
+  ],
+  "self_check": [
+    {"q": "Perché 67171 bit/s x 6,83 s non coincide con il Content-Length di un segmento .ts? Da dove vengono i byte in più?", "concept": "audio/segmenti-hls-ts", "difficulty": 1},
+    {"q": "Nel ring buffer cosa rappresenta tail? Chi la fa avanzare e in quale funzione?", "concept": "audio/ring-buffer", "difficulty": 1},
+    {"q": "Con solo head e tail come distingui buffer vuoto e pieno? Cosa fa oggi enqueueAudioBuffer se il buffer è pieno?", "concept": "audio/ring-buffer", "difficulty": 2},
+    {"q": "Perché Ctx ctx; con 15 MB va in segfault e calloc no? L'heap è più lento da leggere?", "concept": "audio/stack-vs-heap", "difficulty": 1},
+    {"q": "Cosa sono opaque, buf e buf_size in read_packet? Cosa succede se restituisci AVERROR_EOF in uno stream live?", "concept": "audio/custom-io-read-packet", "difficulty": 2},
+    {"q": "Perché va liberato avio_ctx->buffer e non il puntatore passato ad avio_alloc_context?", "concept": "audio/custom-io-read-packet", "difficulty": 2},
+    {"q": "Differenza tra AVPacket e AVFrame e ordine di av_read_frame, avcodec_send_packet, avcodec_receive_frame.", "concept": "audio/pipeline-ffmpeg", "difficulty": 1},
+    {"q": "Differenza tra FLTP e FLT? Perché decoded_frame->data sembra un solo array?", "concept": "audio/pcm-planar-packed", "difficulty": 2},
+    {"q": "Cosa rappresenta 352800 in SDLBUFFER? Come lo ricavi per 48 kHz mono?", "concept": "audio/campionamento-float", "difficulty": 1},
+    {"q": "Chi impone la velocità di riproduzione e come si adegua il decode thread? Cosa succede senza il controllo su SDL_GetAudioStreamQueued?", "concept": "audio/pacing", "difficulty": 2},
+    {"q": "Perché pthread_cond_wait va in un while e il predicato va letto sotto mutex? Descrivi il segnale perso del turno 230.", "concept": "audio/multithread-produttore-consumatore", "difficulty": 3},
+    {"q": "Perché non si fa la fetch tenendo il mutex, e perché non si può usare una condition variable sulla coda di SDL?", "concept": "audio/multithread-produttore-consumatore", "difficulty": 2},
+    {"q": "Ricostruisci la caccia ai leak: quali erano leak veri, quali fix inutili, e perché la memoria saliva comunque?", "concept": "audio/memory-leak", "difficulty": 3},
+    {"q": "Per 'torna alla diretta' quali buffer vanno svuotati e quali problemi di concorrenza ci sono?", "concept": "audio/seek-chunk", "difficulty": 3},
+    {"q": "Il numero di sequenza è letto con atol(line_buf + l_idx - 10): cosa succede quando arriva a 10.000.000?", "concept": "audio/soglia-riempimento", "difficulty": 3}
+  ]
+}

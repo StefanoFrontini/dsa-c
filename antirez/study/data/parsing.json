@@ -1,0 +1,292 @@
+{
+  "area": {
+    "id": "parsing",
+    "title": "Tecniche di parsing",
+    "summary": "Lo stesso chord parser scritto con Recursive Descent (C), Pratt (TypeScript) e Shunting-yard (C), più una calcolatrice Shunting-yard: confine lexer/parser, AST finale vs evaluator, error recovery, confronto fra tecniche, parser del browser, WebAssembly, web worker e idea di un talk per frontend developer.",
+    "period": "2026-03-14/2026-05-06",
+    "turns": [3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,31,32,33,34,35,36,41,42,43,44,45,46,47,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,94,95,100,101,102,103,104,105,106,107,108,109]
+  },
+  "concepts": [
+    {
+      "id": "parsing/lexer-parser-boundary",
+      "title": "Confine lexer / parser",
+      "summary": "Il lexer produce token, il parser struttura; il confine è una scelta (lexer magro con parseChord nel parser, o lexer grasso che legge [C] intero o inietta token).",
+      "turns": [3, 102, 105],
+      "projects": ["chord-sheet-parser", "chord-shunting-yard"],
+      "code_refs": ["chord_sheet_parser/chord_sheet_parser.c:460", "chord_sheet_parser/chord_sheet_parser.c:513", "chord-shunting-yard/chord-shunting-yard.c:128", "toyforth/toyforth.c:281"],
+      "related": ["parsing/fsm", "parsing/recursive-descent"],
+      "difficulty": 1
+    },
+    {
+      "id": "parsing/recursive-descent",
+      "title": "Recursive Descent (grammatica + una funzione per regola)",
+      "summary": "Si scrive la grammatica (song: line+, line: word+, word: chord lyric) e una funzione parseX per regola; le ripetizioni sono cicli while, quindi la profondità dello stack dipende dalla grammatica, non dalla lunghezza del testo.",
+      "turns": [4, 5, 8, 19, 66, 67, 94, 95, 100],
+      "projects": ["chord-sheet-parser"],
+      "code_refs": ["chord_sheet_parser/chord_sheet_parser.c:96", "chord_sheet_parser/chord_sheet_parser.c:498", "chord_sheet_parser/chord_sheet_parser.c:554", "chord_sheet_parser/chord_sheet_parser.c:584", "chord_sheet_parser/chord_sheet_parser.c:595"],
+      "related": ["parsing/technique-comparison", "parsing/error-recovery"],
+      "difficulty": 1
+    },
+    {
+      "id": "parsing/error-recovery",
+      "title": "Error recovery vs fail-fast",
+      "summary": "Fail-fast: al primo errore rilasci il padre parziale e propaghi un oggetto ERROR; recovery: inserisci nodi ERROR nell'AST e ti sincronizzi (panic mode) per mostrare tutti gli errori.",
+      "turns": [4, 5, 6, 7, 57, 65, 71, 72, 73],
+      "projects": ["chord-sheet-parser", "chord-shunting-yard"],
+      "code_refs": ["chord_sheet_parser/chord_sheet_parser.c:501", "chord_sheet_parser/chord_sheet_parser.c:557", "chord_sheet_parser/chord_sheet_parser.c:571", "chord-shunting-yard/chord-shunting-yard.c:131"],
+      "related": ["parsing/recursive-descent", "parsing/browser-parsers"],
+      "difficulty": 2
+    },
+    {
+      "id": "parsing/ast-vs-evaluation",
+      "title": "AST finale vs AST + evaluation",
+      "summary": "Tre architetture: parsing come deserializzazione (l'AST è l'output), AST + evaluator/executor (toyforth, Pratt TS che appiattisce l'albero binario), compilazione per una VM senza AST (Jack Compiler).",
+      "turns": [12, 13, 14, 18, 107],
+      "projects": ["chord-sheet-parser", "chord-shunting-yard"],
+      "code_refs": ["chord_sheet_parser/chord_sheet_parser.c:595", "chord-shunting-yard/chord-shunting-yard.c:683", "toyforth/toyforth.c:401"],
+      "related": ["parsing/pratt-parsing", "algebra-fp/language-elements-evaluator"],
+      "difficulty": 1
+    },
+    {
+      "id": "parsing/pratt-parsing",
+      "title": "Pratt parsing e parsing table",
+      "summary": "Ogni token ha funzione prefix (NUD), infix (LED) e precedenza; parseExpression(prec) cicla finché la precedenza del prossimo token è maggiore. La tabella di toyforth invece è una dispatch table di esecuzione, non di parsing.",
+      "turns": [8, 9, 10, 11, 12, 49, 94],
+      "projects": ["math-shunting-yard", "chord-shunting-yard"],
+      "code_refs": ["toyforth/toyforth.c:43", "toyforth/toyforth.c:388", "math-shunting-yard/math-shunting-yard.c:524", "chord-shunting-yard/chord-shunting-yard.c:676"],
+      "related": ["parsing/technique-comparison", "Pratt in C (math-pratt, chord-pratt): altra area"],
+      "difficulty": 2
+    },
+    {
+      "id": "parsing/infix-postfix-jack",
+      "title": "Infix → postfix nel Jack Compiler",
+      "summary": "compileExpression compila i termini e poi emette l'operatore: traduzione guidata dalla sintassi in postfix per una stack VM, senza precedenza (2+3*4 = 20 in Jack).",
+      "turns": [13, 14, 15, 16],
+      "projects": [],
+      "code_refs": [],
+      "related": ["parsing/shunting-yard", "parsing/ast-vs-evaluation"],
+      "difficulty": 1
+    },
+    {
+      "id": "parsing/shunting-yard",
+      "title": "Shunting-yard (coda + stack, precedenza, parentesi, associatività)",
+      "summary": "Operandi in coda, operatori nello stack; un operatore entrante fa uscire quelli con precedenza >= (o > se destra-associativo); ( fa da muro, ) svuota fino alla (; poi una stack machine valuta la postfix. Coda e stack sono lo stesso array dinamico.",
+      "turns": [14, 15, 16, 20, 22, 23, 33, 35],
+      "projects": ["math-shunting-yard", "chord-shunting-yard"],
+      "code_refs": ["math-shunting-yard/math-shunting-yard.c:138", "math-shunting-yard/math-shunting-yard.c:287", "math-shunting-yard/math-shunting-yard.c:320", "math-shunting-yard/math-shunting-yard.c:391", "math-shunting-yard/math-shunting-yard.c:514", "math-shunting-yard/math-shunting-yard.c:565"],
+      "related": ["parsing/unary-minus", "algebra-fp/reduce-fold"],
+      "difficulty": 2
+    },
+    {
+      "id": "parsing/unary-minus",
+      "title": "Meno unario",
+      "summary": "Il - è binario solo dopo un numero o una ); altrimenti diventa ~ (negazione), precedenza alta, destra-associativo, pop di un solo operando.",
+      "turns": [34, 35],
+      "projects": ["math-shunting-yard"],
+      "code_refs": ["math-shunting-yard/math-shunting-yard.c:246", "math-shunting-yard/math-shunting-yard.c:325", "math-shunting-yard/math-shunting-yard.c:463"],
+      "related": ["parsing/shunting-yard"],
+      "difficulty": 2
+    },
+    {
+      "id": "parsing/chord-shunting-yard",
+      "title": "Chord parser con Shunting-yard: operatori invisibili e sentinelle",
+      "summary": "CHORD è un operatore prefisso (3), WORD_MULT una moltiplicazione implicita (2), \\n una somma (1); il ciclo principale inietta WORD_MULT prima di ogni parola, chord/lyric vuoti, sentinelle SONG/LINE e un \\n finale.",
+      "turns": [20, 36, 37, 41, 42, 43, 44, 45, 46, 47],
+      "projects": ["chord-shunting-yard"],
+      "code_refs": ["chord-shunting-yard/chord-shunting-yard.c:591", "chord-shunting-yard/chord-shunting-yard.c:700", "chord-shunting-yard/chord-shunting-yard.c:763", "chord-shunting-yard/chord-shunting-yard.c:769", "chord-shunting-yard/chord-shunting-yard.c:786", "chord-shunting-yard/chord-shunting-yard.c:808", "chord-shunting-yard/chord-shunting-yard.c:835"],
+      "related": ["algebra-fp/neutral-tokens", "algebra-fp/monoid", "parsing/shunting-yard"],
+      "difficulty": 3
+    },
+    {
+      "id": "parsing/technique-comparison",
+      "title": "Confronto fra tecniche: statement vs espressioni, JSON",
+      "summary": "Statement con RD (keyword iniziale, LL(1)), espressioni con Pratt/precedence climbing; JSON con RD puro. Un RD codifica la precedenza nei livelli della grammatica, Pratt in una tabella.",
+      "turns": [19, 20, 21, 66, 67, 94, 95, 100],
+      "projects": ["chord-sheet-parser", "chord-shunting-yard"],
+      "code_refs": ["chord_sheet_parser/chord_sheet_parser.c:107", "chord-shunting-yard/chord-shunting-yard.c:669"],
+      "related": ["parsing/recursive-descent", "parsing/pratt-parsing", "parsing/shunting-yard"],
+      "difficulty": 2
+    },
+    {
+      "id": "parsing/fsm",
+      "title": "Finite State Machine",
+      "summary": "Stati finiti + funzione di transizione (stato, input) -> (stato, azione); usata nel lexer del chord-pratt C per iniettare token, nel tokenizer HTML e nelle UI (XState).",
+      "turns": [104, 105],
+      "projects": [],
+      "code_refs": [],
+      "related": ["parsing/lexer-parser-boundary", "parsing/js-generators"],
+      "difficulty": 2
+    },
+    {
+      "id": "parsing/js-generators",
+      "title": "Generatori JavaScript come state machine",
+      "summary": "function* è compilata come macchina a stati con pausa su yield: utile per un lexer lazy e per un parser didattico passo-passo da animare, sconsigliata nel parser di produzione.",
+      "turns": [109],
+      "projects": [],
+      "code_refs": [],
+      "related": ["parsing/fsm", "parsing/talk-frontend"],
+      "difficulty": 2
+    },
+    {
+      "id": "parsing/browser-parsers",
+      "title": "Parser di HTML, CSS, JS, Markdown e JSON",
+      "summary": "HTML: tokenizer a stati + stack of open elements + recovery estremo; CSS: scarta la dichiarazione invalida; JS: RD + precedence, fail-fast, lazy parsing; Markdown: blocchi poi inline con stack di delimitatori; JSON: RD LL(1).",
+      "turns": [62, 63, 64, 65, 71, 72, 73, 100],
+      "projects": [],
+      "code_refs": [],
+      "related": ["parsing/error-recovery", "parsing/technique-comparison"],
+      "difficulty": 2
+    },
+    {
+      "id": "parsing/wasm-parser",
+      "title": "WebAssembly per il parser",
+      "summary": "Il C compilato in Wasm condivide con JS una memoria lineare: stringhe codificate e copiate, AST letto via DataView (offset della struct wasm32), getter esportati o JSON; release esportata da chiamare da JS. JSON.parse nativo vince se i dati devono tornare oggetti JS.",
+      "turns": [27, 28, 29, 30, 31, 32, 101],
+      "projects": ["chord-sheet-parser"],
+      "code_refs": ["chord_sheet_parser/chord_sheet_parser.c:168", "chord_sheet_parser/chord_sheet_parser.c:170"],
+      "related": ["parsing/web-workers"],
+      "difficulty": 3
+    },
+    {
+      "id": "parsing/web-workers",
+      "title": "Web worker e serializzazione",
+      "summary": "postMessage usa lo structured clone (copia profonda); alternative Transferable e SharedArrayBuffer (COOP/COEP). Il worker salva la reattività della UI, ma per input piccoli la clonazione costa più del parsing.",
+      "turns": [58, 59, 60, 61, 108],
+      "projects": [],
+      "code_refs": [],
+      "related": ["algebra-fp/associativity-parallelism", "parsing/wasm-parser"],
+      "difficulty": 2
+    },
+    {
+      "id": "parsing/talk-frontend",
+      "title": "Idea del talk per frontend developer",
+      "summary": "Arco: regex e React spaghetti che falliscono, lexer/parser/AST, RD, testo come equazione, Shunting-yard animato, reduce in TS, componente React ricorsivo, error recovery, analogie con i parser del browser, demo con web worker.",
+      "turns": [17, 18, 19, 20, 21, 51, 52, 53, 54, 55, 56, 57, 62, 63, 64, 65, 66, 67, 106, 107, 108],
+      "projects": [],
+      "code_refs": [],
+      "related": ["algebra-fp/reduce-fold", "parsing/js-generators", "parsing/web-workers"],
+      "difficulty": 1
+    }
+  ],
+  "projects": [
+    {
+      "id": "chord-sheet-parser",
+      "title": "Chord Sheet Parser (Recursive Descent)",
+      "path": "antirez/chord_sheet_parser",
+      "status": "broken",
+      "last_modified": "2026-03-24",
+      "build": "cc -W -Wall -g chord_sheet_parser/chord_sheet_parser.c -o $BUILD/csp  (fallisce: errore -Wint-conversion a :462)",
+      "run": "$BUILD/csp chord_sheet_parser/test.txt",
+      "works": [
+        "Grammatica e funzioni parseSong/parseLine/parseWord/parseChord/parseLyric (verificato con una copia corretta di 1 riga nella build dir)",
+        "Parole senza accordo e accordi senza testo",
+        "Errori di parseChord inseriti come nodi ERROR nell'albero, parsing che continua",
+        "0 leaks sui testi validi e su [C, []x, file vuoto"
+      ],
+      "missing": [
+        "chord_sheet_parser.c:462 isStringConstant(l->p[0]) invece di isStringConstant(l): non compila",
+        "chord_sheet_parser.c:571-575 leak di 32 byte (WORD non rilasciata nel ramo d'errore), riprodotto con test.txt",
+        "eatToken consuma il token sbagliato (:501), nessuna sincronizzazione su \\n",
+        "isascii (:392) scarta i caratteri UTF-8",
+        "Output di debug invece del JSON richiesto dal frontend"
+      ],
+      "next_step": "Correggere la riga 462 in isStringConstant(l) e rilasciare la WORD prima di return error in parseWord, poi rieseguire leaks su test.txt.",
+      "concepts": ["parsing/recursive-descent", "parsing/error-recovery", "parsing/lexer-parser-boundary", "parsing/ast-vs-evaluation", "parsing/wasm-parser", "algebra-fp/adt-sum-product"]
+    },
+    {
+      "id": "math-shunting-yard",
+      "title": "Math Shunting-yard",
+      "path": "antirez/math-shunting-yard",
+      "status": "working",
+      "last_modified": "2026-04-03",
+      "build": "cc -W -Wall -g math-shunting-yard/math-shunting-yard.c -o $BUILD/msy",
+      "run": "$BUILD/msy math-shunting-yard/test.txt",
+      "works": [
+        "-(2 + 3) = -5, 3 + 4 * 2 = 11, (3 + 4) * 2 = 14, 1 - 2 - 3 = -4, --2 = 2, 2 * -3 = -6",
+        "Parentesi e meno unario con associatività corretta",
+        "Warning per parentesi aperte non chiuse",
+        "0 leaks su tutti i casi validi e su input vuoto"
+      ],
+      "missing": [
+        "1 / 0 -> SIGFPE (math-shunting-yard.c:496-497)",
+        "Lettere e % accettate da isSymbolChar (:216-219) ma senza funzione -> NULL deref a :399-400 (segfault)",
+        "Errori di sintassi (2 +) non segnalati: evalPostfix ignora gli errori nel ramo LIST (:403-407)",
+        ") senza ( non segnalata (:294-308)",
+        "printf di debug durante la valutazione"
+      ],
+      "next_step": "Rimuovere lettere/% da isSymbolChar, controllare entry != NULL e il divisore zero, verificare che a fine valutazione resti un solo numero.",
+      "concepts": ["parsing/shunting-yard", "parsing/unary-minus", "parsing/pratt-parsing", "algebra-fp/reduce-fold"]
+    },
+    {
+      "id": "chord-shunting-yard",
+      "title": "Chord Shunting-yard",
+      "path": "antirez/chord-shunting-yard",
+      "status": "working",
+      "last_modified": "2026-04-13",
+      "build": "cc -W -Wall -g chord-shunting-yard/chord-shunting-yard.c -o $BUILD/chsy",
+      "run": "$BUILD/chsy chord-shunting-yard/test.txt",
+      "works": [
+        "test.txt e testi multi-riga con accordi, parole senza accordo, accordi senza testo, righe vuote, [C][G]x",
+        "Sentinelle SONG/LINE e firme fisse degli operatori in applyOperator",
+        "0 leaks su tutti i casi provati (incluso file vuoto)"
+      ],
+      "missing": [
+        "Caratteri non ASCII persi (isascii, chord-shunting-yard.c:102)",
+        "CRLF produce righe vuote extra (\\r e \\n entrambi ENDOFLINE, :252)",
+        "Errori di accordo con exit(1) (:131-132, :142-143)",
+        "Debug 'Printing: %d' in printCsObj (:445)",
+        "evalPostfix ignora gli errori dei figli (:708-711); l'ultimo \\n artificiale fallisce in silenzio se il testo finisce con \\n"
+      ],
+      "next_step": "Togliere il printf di debug a :445 e trattare \\r\\n come un solo ENDOFLINE nel lexer.",
+      "concepts": ["parsing/chord-shunting-yard", "parsing/shunting-yard", "parsing/lexer-parser-boundary", "algebra-fp/neutral-tokens", "algebra-fp/monoid", "algebra-fp/reduce-fold"]
+    }
+  ],
+  "gemini_errors": [
+    {"turn": 5, "claim": "Review del codice dopo le correzioni senza segnalare problemi in advanceLexer (al turno 4 aveva suggerito isStringConstant(l)).", "correction": "Il codice usa isStringConstant(l->p[0]) (chord_sheet_parser.c:462): passa un char dove serve un Lexer*, con clang 17 non compila."},
+    {"turn": 8, "claim": "La tabella di toyforth è table-driven parsing; quando risolve le precedenze si chiama Pratt.", "correction": "In toyforth la tabella mappa simboli a callback di esecuzione (toyforth.c:43-47, 388-398): è la dispatch table dell'interprete. La parsing table Pratt associa a ogni token funzioni prefix/infix e precedenza."},
+    {"turn": 28, "claim": "In 'Abra cadabra, WebAssembly is Awesome!' ci sono 6 lettere A.", "correction": "Sono 7 (verificato)."},
+    {"turn": 31, "claim": "Da JS si libera con wasmInstance.exports._free(pointer).", "correction": "Impreciso: _free con underscore è il nome sull'oggetto Module di Emscripten; gli export reali del modulo dipendono da toolchain e flag, e con clang --target=wasm32 senza libc free non esiste."},
+    {"turn": 52, "claim": "Sketch TS del reduce con initialStack [emptySong, emptyLine] e ENDOFLINE che unisce LINE e SONG.", "correction": "Dopo il primo \\n non c'è una nuova LINE vuota: la seconda riga rompe le firme. Nel C le LINE sono token in coda (chord-shunting-yard.c:764, 822). Inoltre tratta CHORD come operando invece che come operatore prefisso."},
+    {"turn": 58, "claim": "Creare un thread costa spesso millisecondi.", "correction": "La creazione di un pthread costa tipicamente decine di microsecondi (resta inutile per una canzone piccola)."},
+    {"turn": 62, "claim": "Il parsing inline del Markdown usa regole di precedenza simili a Pratt (binding power).", "correction": "CommonMark usa uno stack di delimitatori con regole left/right-flanking, non precedenze; i blocchi si chiudono confrontando ogni riga con i blocchi aperti."},
+    {"turn": 66, "claim": "Il Recursive Descent fa esplodere il call stack sul testo inline; l'approccio algebrico è l'unica soluzione scalabile; Pratt è bottom-up.", "correction": "La profondità del RD dipende dalla grammatica (i + sono cicli, chord_sheet_parser.c:586, 597), non dalla lunghezza del testo; Pratt è Top Down Operator Precedence (lo dice Gemini stesso al turno 94). Contraddice i turni 8 e 102."},
+    {"turn": 67, "claim": "parseLine che richiama parseLine dopo la parola è il problema della left recursion.", "correction": "Quella è ricorsione destra; la left recursion è line: line word, che va in loop subito. Con word+ si usa un while."},
+    {"turn": 71, "claim": "calc() non può essere parsato con Recursive Descent per la left recursion.", "correction": "La grammatica CSS è <calc-sum> = <calc-product> [ ['+'|'-'] <calc-product> ]*: EBNF con ripetizione, parsata con RD."},
+    {"turn": 94, "claim": "Fare le espressioni con RD puro è un incubo, lentissimo, consuma troppa memoria.", "correction": "Esagerato: una funzione per livello di precedenza è la tecnica standard; Pratt/precedence climbing riduce le chiamate, ma non cambia la complessità."},
+    {"turn": 95, "claim": "Racconta un primo parser RD della struttura interna degli accordi (parseRootNote, parseQuality...).", "correction": "Inventato: quel codice non è mai esistito. Stefano lo ha corretto al turno 102."},
+    {"turn": 102, "claim": "L'iniezione di token dal lexer si chiama Lexer Hack.", "correction": "Il lexer hack è il feedback dei typedef dal parser al lexer del C (descritto correttamente al turno 105)."},
+    {"turn": 103, "claim": "Nel RD il thread della seconda metà non sa in che stato grammaticale si trova; hai dimezzato i tempi.", "correction": "Tagliando su \\n lo stato è noto (inizio riga) e anche il RD può produrre una SONG per metà da concatenare. Lo speedup misurato è 0.134 s -> 0.083 s (circa 1.6x)."},
+    {"turn": 127, "claim": "Il Recursive Descent non è parallelizzabile (P-completo); i dati si possono spezzare alla cieca.", "correction": "Conta avere punti di taglio sicuri (\\n) e un merge associativo, non la tecnica; il parsing context-free non è P-completo in generale. Spezzare alla cieca contraddice il turno 58 (bisogna tagliare su \\n)."}
+  ],
+  "open_questions": [
+    "chord_sheet_parser deve fare error recovery coerente (sincronizzazione su \\n) o fail-fast?",
+    "Come portare riga/colonna nei token per i tooltip d'errore nel frontend?",
+    "Gestione UTF-8 nei lexer: isascii scarta le lettere accentate",
+    "Il Pratt TypeScript (myguitarsongs-repl) non è in questo repo e non è stato verificato",
+    "Le librerie TypeScript e la web app per il talk non sono ancora iniziate"
+  ],
+  "side_topics": [
+    {"title": "Export della conversazione in txt/pdf/Docs (Gemini simula file e spaccia un riassunto per trascrizione)", "turns": [68, 69, 70]},
+    {"title": "Software per animare le slide (Manim, Keynote Magic Move, Remotion, Figma)", "turns": [106]},
+    {"title": "Tag HTML <ruby> per l'accordo sopra la sillaba", "turns": [107]},
+    {"title": "Legge di Amdahl e costo di coordinamento", "turns": [61]},
+    {"title": "Lazy parsing di V8", "turns": [72]}
+  ],
+  "self_check": [
+    {"q": "Qual è la differenza fra lexer e parser? Perché toyforth può fonderli?", "concept": "parsing/lexer-parser-boundary", "difficulty": 1},
+    {"q": "Scrivi la grammatica del chord sheet e associa ogni regola alla funzione C corrispondente.", "concept": "parsing/recursive-descent", "difficulty": 1},
+    {"q": "Perché line: word+ si implementa con un while? Quanto cresce lo stack con 10.000 righe?", "concept": "parsing/recursive-descent", "difficulty": 2},
+    {"q": "Cosa fa eatToken quando il token non è quello atteso e che effetto ha sull'error recovery?", "concept": "parsing/error-recovery", "difficulty": 2},
+    {"q": "Fail-fast con refcount: cosa fai con il padre parziale prima di ritornare l'errore? Dove manca in parseWord?", "concept": "parsing/error-recovery", "difficulty": 2},
+    {"q": "Quando l'AST è già l'output e quando serve un evaluator? Un esempio per caso dai tuoi progetti.", "concept": "parsing/ast-vs-evaluation", "difficulty": 1},
+    {"q": "Esegui a mano lo Shunting-yard su (3 + 4) * 2 - 1 mostrando coda e stack a ogni passo.", "concept": "parsing/shunting-yard", "difficulty": 2},
+    {"q": "Perché ( può avere precedenza 0 e perché le parentesi non finiscono mai nella postfix?", "concept": "parsing/shunting-yard", "difficulty": 2},
+    {"q": "Come distingui - binario da - unario? Perché ~ usa > e non >=?", "concept": "parsing/unary-minus", "difficulty": 2},
+    {"q": "Cosa contiene la tabella di toyforth e cosa una parsing table Pratt?", "concept": "parsing/pratt-parsing", "difficulty": 2},
+    {"q": "Nel chord shunting-yard perché WORD_MULT va iniettato prima della parola?", "concept": "parsing/chord-shunting-yard", "difficulty": 3},
+    {"q": "Perché in evalPostfix il primo pop dell'operatore CHORD restituisce l'accordo e non la lirica?", "concept": "parsing/chord-shunting-yard", "difficulty": 3},
+    {"q": "Statement vs espressioni: quale tecnica per ciascuno e come codifica la precedenza un parser RD?", "concept": "parsing/technique-comparison", "difficulty": 2},
+    {"q": "Perché un parser Wasm difficilmente batte JSON.parse se il risultato deve tornare a JavaScript?", "concept": "parsing/wasm-parser", "difficulty": 3},
+    {"q": "Un web worker rende il parsing più veloce? Cosa misureresti in una demo?", "concept": "parsing/web-workers", "difficulty": 2}
+  ]
+}

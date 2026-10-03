@@ -1,0 +1,861 @@
+{
+  "area": {
+    "id": "networking",
+    "title": "Networking: socket, HTTP, TLS, HLS",
+    "summary": "Dalla guida di Beej al player HLS di Radio 24: getaddrinfo/socket/recv a pezzi, parser HTTP come FSM con byte stream iterator (chunked e Content-Length, testato con un mock server), HTTPS con OpenSSL, playlist HLS, segmenti .ts in un ring buffer, time-shifting; più UNP (daytime) e Shoutcast.",
+    "period": "2026-05-27/2026-06-30",
+    "turns": [
+      137,
+      138,
+      139,
+      140,
+      141,
+      142,
+      143,
+      144,
+      145,
+      146,
+      147,
+      148,
+      149,
+      150,
+      151,
+      152,
+      153,
+      154,
+      155,
+      156,
+      157,
+      158,
+      159,
+      160,
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167,
+      168,
+      169,
+      170,
+      171,
+      172,
+      173,
+      174,
+      175,
+      176,
+      177,
+      178,
+      179,
+      180,
+      181,
+      182,
+      183,
+      184,
+      185,
+      186,
+      187,
+      188,
+      189,
+      190,
+      191,
+      192,
+      193,
+      194,
+      195,
+      196,
+      197,
+      198,
+      199,
+      200,
+      201,
+      202,
+      203,
+      275,
+      276,
+      277
+    ]
+  },
+  "concepts": [
+    {
+      "id": "networking/streaming-vs-mmap",
+      "title": "Leggere a pezzi: buffer scorrevole vs mmap",
+      "summary": "Un file enorme si legge a blocchi fissi spostando il residuo (memmove+refill) oppure con mmap; un socket è un flusso infinito, quindi niente mmap: serve lo streaming con buffer fisso.",
+      "turns": [
+        137,
+        138
+      ],
+      "projects": [
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http.c:285-323"
+      ],
+      "related": [
+        "networking/recv-loop"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "networking/player-architecture",
+      "title": "Architettura del player: thread di rete, ring buffer, decoder, audio",
+      "summary": "Thread di rete (I/O bound) e thread audio (tempo reale) separati e disaccoppiati da un ring buffer; separati perché recv/SSL_read sono bloccanti.",
+      "turns": [
+        138,
+        146,
+        163,
+        179
+      ],
+      "projects": [
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http.c:759-809",
+        "networking/client_http.c:811-980",
+        "networking/client_http.c:1012-1013",
+        "networking/hls_player.md"
+      ],
+      "related": [
+        "networking/ring-buffer",
+        "audio/ (decodifica FFmpeg + SDL3)"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "networking/wasm-browser-player",
+      "title": "Il browser come player e WebAssembly",
+      "summary": "Chrome/Safari riproducono già HLS; il C in wasm non può aprire socket veri (Emscripten li emula con WebSocket/fetch): JS scarica, wasm decodifica, il ring buffer sta nella memoria lineare.",
+      "turns": [
+        139,
+        140,
+        141,
+        155,
+        158
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "networking/player-architecture"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "networking/getaddrinfo",
+      "title": "getaddrinfo, hints e la lista addrinfo",
+      "summary": "getaddrinfo risolve nome+porta in una lista concatenata di struct addrinfo; AF_UNSPEC chiede IPv4+IPv6, SOCK_STREAM solo TCP; poi inet_ntop e freeaddrinfo.",
+      "turns": [
+        142,
+        143
+      ],
+      "projects": [
+        "echo-client",
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/old.c:20-51",
+        "networking/echo_client.c:28-35"
+      ],
+      "related": [
+        "networking/ip-failover"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "networking/ip-failover",
+      "title": "Più indirizzi IP e failover",
+      "summary": "Più record DNS per bilanciare il carico e avere ridondanza; TCP non cambia IP da solo: chiudi, riconnetti al prossimo indirizzo e richiedi lo stesso segmento. Un connect verso un host muto si blocca fino al timeout del kernel.",
+      "turns": [
+        143,
+        144,
+        145
+      ],
+      "projects": [
+        "echo-client",
+        "daytime-client",
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/echo_client.c:37-68",
+        "networking/client_http.c:228-263",
+        "networking/client_http.c:737-751"
+      ],
+      "related": [
+        "networking/getaddrinfo",
+        "networking/recv-loop"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "networking/socket-basics",
+      "title": "socket / connect / send / recv",
+      "summary": "socket crea il descrittore, connect fa l'handshake, send può inviare meno byte del richiesto, recv restituisce quello che c'è (0 = chiuso, -1 = errore). TCP è un flusso: i confini delle write non si conservano.",
+      "turns": [
+        142,
+        149,
+        164,
+        168,
+        169
+      ],
+      "projects": [
+        "echo-client",
+        "daytime-client"
+      ],
+      "code_refs": [
+        "networking/echo_client.c:53-94",
+        "networking/daytime_client/daytimetcpsrv.c:36-44",
+        "networking/daytime_client/daytimetcpcli.c:55-62"
+      ],
+      "related": [
+        "networking/recv-loop"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "networking/recv-loop",
+      "title": "recv bloccante e lettura a pezzi",
+      "summary": "recv va sempre in un ciclo con un buffer piccolo e fisso, elaborando i dati mentre arrivano; senza timeout (SO_RCVTIMEO/poll) può bloccarsi per sempre; il ritorno va in un int, non in un size_t.",
+      "turns": [
+        168,
+        169,
+        170,
+        179
+      ],
+      "projects": [
+        "http-client",
+        "echo-client",
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http_3.c:56",
+        "networking/client_http.c:36",
+        "networking/client_http.c:286-304"
+      ],
+      "related": [
+        "networking/header-fsm"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "networking/http-request",
+      "title": "Struttura di una richiesta HTTP/1.1 e header",
+      "summary": "Request line, header Chiave: valore, riga vuota, body opzionale, tutto separato da \\r\\n; Host obbligatorio, User-Agent facoltativo, Connection: close fa chiudere il socket al server.",
+      "turns": [
+        149,
+        165,
+        166,
+        167
+      ],
+      "projects": [
+        "http-client",
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http.c:166-202"
+      ],
+      "related": [
+        "networking/header-fsm"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "networking/header-fsm",
+      "title": "Parser dell'header come FSM che consuma byte (byte stream iterator)",
+      "summary": "La FSM legge un byte alla volta da getNextByte, che richiama recv/SSL_read solo a buffer esaurito: il parser ignora i confini dei pacchetti e funziona anche con MAXDATASIZE 1.",
+      "turns": [
+        150,
+        151,
+        152,
+        170,
+        171,
+        172
+      ],
+      "projects": [
+        "http-client",
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http_3.c:227-238",
+        "networking/client_http.c:312-323",
+        "networking/client_http.c:447-568",
+        "networking/client_http_2.c:182-234"
+      ],
+      "related": [
+        "networking/chunked",
+        "parsing/ (lexer e FSM)"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "networking/chunked",
+      "title": "Content-Length vs Transfer-Encoding: chunked",
+      "summary": "Body a lunghezza nota oppure a pezzi: dimensione esadecimale\\r\\n dati\\r\\n ... 0\\r\\n\\r\\n (standard HTTP/1.1); dopo ogni chunk va consumato il \\r\\n.",
+      "turns": [
+        150,
+        167,
+        173,
+        174,
+        175,
+        192
+      ],
+      "projects": [
+        "http-client",
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http.c:570-728"
+      ],
+      "related": [
+        "networking/header-fsm",
+        "networking/mock-server"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "networking/mock-server",
+      "title": "Test locale con mock server",
+      "summary": "Un server Python che invia una risposta chunked nota, con pause tra i chunk, rende ripetibile il test del parser; output atteso in output.txt.",
+      "turns": [
+        174,
+        175
+      ],
+      "projects": [
+        "http-client"
+      ],
+      "code_refs": [
+        "networking/mock_server.py",
+        "networking/output.txt"
+      ],
+      "related": [
+        "networking/chunked"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "networking/openssl-tls",
+      "title": "OpenSSL: SSL_CTX, SSL_connect, SSL_read/SSL_write, SNI, verifica",
+      "summary": "SSL_CTX contiene la configurazione, SSL rappresenta la connessione (SSL_set_fd + SSL_connect), SSL_read/SSL_write sostituiscono recv/send; senza SSL_VERIFY_PEER, SNI e SSL_set1_host qualsiasi certificato viene accettato.",
+      "turns": [
+        149,
+        169,
+        185,
+        187,
+        189,
+        190,
+        191,
+        192,
+        193
+      ],
+      "projects": [
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http.c:145-164",
+        "networking/client_http.c:270-277",
+        "networking/client_http.c:286",
+        "networking/client_http.c:432"
+      ],
+      "related": [
+        "networking/header-fsm"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "networking/system-headers",
+      "title": "Dove sono gli header di sistema; pkg-config",
+      "summary": "Su Linux #include <...> cerca in /usr/local/include e /usr/include, le librerie stanno in /usr/lib/<multiarch>; su macOS /usr/include non esiste (SDK + Homebrew); pkg-config fornisce i flag giusti.",
+      "turns": [
+        185,
+        186,
+        187,
+        188,
+        197,
+        203
+      ],
+      "projects": [
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/Makefile"
+      ],
+      "related": [],
+      "difficulty": 1
+    },
+    {
+      "id": "networking/hls",
+      "title": "HLS: master playlist, sub-playlist, segmenti .ts",
+      "summary": "La master elenca le varianti, la media playlist elenca i segmenti (MEDIA-SEQUENCE = numero del primo); i segmenti MPEG-TS sono multipli di pacchetti da 188 byte. Radio 24: una sola variante, 100 segmenti da 6.82667 s.",
+      "turns": [
+        142,
+        153,
+        154,
+        159,
+        160,
+        161,
+        162,
+        193,
+        194
+      ],
+      "projects": [
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http.c:587-643",
+        "networking/client_http.c:606-607",
+        "networking/client_http.c:615"
+      ],
+      "related": [
+        "networking/abr",
+        "networking/ring-buffer"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "networking/abr",
+      "title": "Adaptive bitrate",
+      "summary": "Più varianti con segmenti allineati; il client misura la banda e cambia variante segmento per segmento. Radio 24 ha una sola variante, quindi non si applica.",
+      "turns": [
+        158,
+        159,
+        160,
+        161
+      ],
+      "projects": [
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http.c:596-601"
+      ],
+      "related": [
+        "networking/hls"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "networking/ring-buffer",
+      "title": "Ring buffer: head/tail e dimensionamento",
+      "summary": "Array circolare: head scritto dalla rete, tail letto da read_packet (FFmpeg); serve un modo per distinguere vuoto da pieno; dimensione = bitrate × secondi / 8. Nel codice: 15 MB di buffer, ma una soglia di 50 KB.",
+      "turns": [
+        138,
+        146,
+        162,
+        163,
+        196,
+        200
+      ],
+      "projects": [
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http.c:45-48",
+        "networking/client_http.c:72-77",
+        "networking/client_http.c:132-143",
+        "networking/client_http.c:333-364",
+        "networking/client_http.c:774-783"
+      ],
+      "related": [
+        "networking/time-shift",
+        "concorrenza: mutex e condition variable"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "networking/time-shift",
+      "title": "Time-shifting e 'Vai alla diretta'",
+      "summary": "Dopo una caduta di rete scegli tra recuperare i segmenti persi (ritardo crescente) e saltare al live edge (buco nell'audio); la finestra della playlist (circa 11 min) è il limite. Il cap a 4 segmenti del codice è un salto implicito verso la diretta.",
+      "turns": [
+        147,
+        148,
+        162,
+        163,
+        201,
+        202
+      ],
+      "projects": [
+        "audio-player"
+      ],
+      "code_refs": [
+        "networking/client_http.c:627-631"
+      ],
+      "related": [
+        "networking/ring-buffer",
+        "networking/hls"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "networking/hls-vs-shoutcast",
+      "title": "HLS vs Shoutcast/ICY",
+      "summary": "Shoutcast è un unico flusso HTTP infinito con metadati ogni icy-metaint byte: più semplice da leggere, ma senza finestra DVR per recuperare dopo una disconnessione.",
+      "turns": [
+        275,
+        276,
+        277
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "networking/hls",
+        "networking/time-shift"
+      ],
+      "difficulty": 1
+    }
+  ],
+  "projects": [
+    {
+      "id": "daytime-client",
+      "title": "Daytime client/server (UNP cap. 1)",
+      "path": "networking/daytime_client/",
+      "status": "working",
+      "last_modified": "2026-07-23",
+      "build": "cc -W -Wall -g networking/daytime_client/daytimetcpsrv.c -o $B/daytimetcpsrv (stesso comando per daytimetcpcli.c e daytimetcpcli_IPv6.c)",
+      "run": "$B/daytimetcpsrv & ; $B/daytimetcpcli 127.0.0.1",
+      "works": [
+        "Client e server in locale: stampa la data, 'Counter is 1-2' con 26 write da 1 byte",
+        "Client IPv6 verso un server su ::1 (porta modificata per il test)",
+        "Nessun leak"
+      ],
+      "missing": [
+        "Senza argomenti: segfault (manca exit dopo l'uso)",
+        "Dopo un errore di inet_pton prosegue (si connette a 0.0.0.0)",
+        "I wrapper fanno solo perror e non escono: un bind fallito mette il server in ascolto su una porta casuale",
+        "Manca SO_REUSEADDR: dopo il riavvio la porta è in TIME_WAIT",
+        "Il ritorno di write viene ignorato; aritmetica su void*"
+      ],
+      "next_step": "Fai uscire i wrapper con exit(1) come err_sys di UNP e aggiungi SO_REUSEADDR al server.",
+      "concepts": [
+        "networking/socket-basics",
+        "networking/recv-loop",
+        "networking/ip-failover"
+      ]
+    },
+    {
+      "id": "echo-client",
+      "title": "Echo client (+ showip old.c, telnot.c di Beej)",
+      "path": "networking/echo_client.c",
+      "status": "done",
+      "last_modified": "2026-06-07",
+      "build": "cc -W -Wall -g networking/echo_client.c -o $B/echo_client",
+      "run": "$B/echo_client tcpbin.com",
+      "works": [
+        "Eco da tcpbin.com:4242 via IPv6, 13 byte inviati e ricevuti, nessun leak",
+        "Fallback tra gli indirizzi restituiti da getaddrinfo",
+        "old.c elenca 2 IPv6 + 2 IPv4 di Akamai",
+        "Senza \\n il client resta bloccato (verificato: spiega il problema del turno 164)"
+      ],
+      "missing": [
+        "Una sola recv e una sola send, senza cicli",
+        "servinfo non viene liberato se nessun indirizzo funziona",
+        "telnot.c (codice di Beej): read()==0 non gestito, loop al 100% di CPU con EOF",
+        "Nessun timeout"
+      ],
+      "next_step": "Scrivi sendall()/recvn() e gestisci EOF in telnot.c prima di passare all'event loop.",
+      "concepts": [
+        "networking/getaddrinfo",
+        "networking/ip-failover",
+        "networking/socket-basics"
+      ]
+    },
+    {
+      "id": "http-client",
+      "title": "Client HTTP in chiaro (tappe client_http_2.c, client_http_3.c, versione mock)",
+      "path": "networking/client_http_3.c",
+      "status": "done",
+      "last_modified": "2026-06-18",
+      "build": "cc -W -Wall -g networking/client_http_3.c -o $B/client_http_3 ; versione mock: git show 0de4502:./networking/client_http.c > $B/v.c && cc -W -Wall -g $B/v.c -o $B/client_http_0de4502",
+      "run": "$B/client_http_3 (example.com:80) ; python3 networking/mock_server.py & $B/client_http_0de4502",
+      "works": [
+        "client_http_3.c: header FSM con getNextByte e MAXDATASIZE 1, 200 + 13 header di example.com, nessun warning, nessun leak",
+        "Versione mock 0de4502: output identico a output.txt con MAXDATASIZE 1/3/1000/8192, nessun leak",
+        "Body chunked robusto: chunk extension, esadecimale maiuscolo, CL+TE, troncamento rilevato"
+      ],
+      "missing": [
+        "client_http_2.c non compila (start ridefinito, riga 213): ramo abbandonato",
+        "client_http_3.c: size_t numbytes con controllo == 0 (il -1 di recv non viene rilevato), codice morto della versione _ACC, nessun body",
+        "Status >= 400 → exit; nessun 3xx; un solo spazio saltato; TE confrontato esattamente con 'chunked'; risposte con solo LF rifiutate; host/porta/path fissi"
+      ],
+      "next_step": "Trasforma client_http_3.c in un tool 'httpget host port path' con numbytes int e test automatici basati sul mock server.",
+      "concepts": [
+        "networking/http-request",
+        "networking/recv-loop",
+        "networking/header-fsm",
+        "networking/chunked",
+        "networking/mock-server"
+      ]
+    }
+  ],
+  "gemini_errors": [
+    {
+      "turn": 142,
+      "claim": "Con ai_socktype=0 e il servizio 'http', SOCK_DGRAM nei risultati significa che il server supporta UDP.",
+      "correction": "getaddrinfo legge /etc/services (http è registrato su tcp e udp); non interroga il server."
+    },
+    {
+      "turn": 143,
+      "claim": "Il failover al secondo IP avviene in pochi microsecondi.",
+      "correction": "Solo se il server risponde con RST; un host muto blocca connect() fino al timeout del kernel (oltre 10 s nel test). Serve un connect non bloccante con timeout."
+    },
+    {
+      "turn": 144,
+      "claim": "Quando la connessione salta, recv() restituisce <= 0.",
+      "correction": "Senza FIN/RST (metro) recv/SSL_read resta bloccata per sempre se non c'è SO_RCVTIMEO/poll/keepalive."
+    },
+    {
+      "turn": 145,
+      "claim": "VLC tiene 3 s di PCM decodificato; access_output gestisce l'input HTTP.",
+      "correction": "network-caching (default 1000 ms) bufferizza dati compressi; access_output è per lo streaming in uscita. Dettagli probabilmente inventati."
+    },
+    {
+      "turn": 150,
+      "claim": "Il chunked è un formato proprietario; senza Content-Length resti bloccato su SSL_read.",
+      "correction": "Il chunked è standard HTTP/1.1 (RFC 9112); con Connection: close la fine del body è la chiusura."
+    },
+    {
+      "turn": 152,
+      "claim": "La FSM legge un carattere alla volta senza mai guardare oltre.",
+      "correction": "Il codice legge buffer[i+1]/buffer[i+2] oltre la lunghezza: comportamento indefinito e non funziona con l'header a pezzi."
+    },
+    {
+      "turn": 153,
+      "claim": "Playlist d'esempio con playlist-64000_184502.ts e TARGETDURATION 6.",
+      "correction": "Inventata: quella reale ha 03204/seg64000-06406875.ts e TARGETDURATION 7."
+    },
+    {
+      "turn": 154,
+      "claim": "I nuovi chunk si contano confrontando il nuovo MEDIA-SEQUENCE con last_sequence.",
+      "correction": "MEDIA-SEQUENCE è il numero del primo segmento: va confrontato l'ultimo (media_seq + n - 1); il codice di Stefano lo fa correttamente."
+    },
+    {
+      "turn": 156,
+      "claim": "FFmpeg comprende la libreria 'libutil'.",
+      "correction": "Si chiama libavutil."
+    },
+    {
+      "turn": 160,
+      "claim": "Radio 24 supporta ABR con varianti 32k/64k/128k.",
+      "correction": "Master inventata: quella reale ha una sola variante (BANDWIDTH=67171)."
+    },
+    {
+      "turn": 161,
+      "claim": "I 3171 bit/s in più di BANDWIDTH sono overhead MPEG-TS e HTTP.",
+      "correction": "BANDWIDTH non include HTTP; il bitrate misurato dei segmenti è circa 72 kbps, oltre 67171."
+    },
+    {
+      "turn": 162,
+      "claim": "99 chunk: calcolo corretto al 100%.",
+      "correction": "I segmenti sono 100 (06418776-06418875), verificato anche il 2026-10-03."
+    },
+    {
+      "turn": 163,
+      "claim": "Un secondo ring buffer PCM è tassativo; una race condition provoca un crash inevitabile.",
+      "correction": "SDL_AudioStream fa già da coda; una data race è comportamento indefinito, non sempre un crash."
+    },
+    {
+      "turn": 165,
+      "claim": "Content-Length: 27 per {\"status\":\"ok\",\"buffer\":100}.",
+      "correction": "Il body è di 28 byte (verificato). Inoltre senza TLS il body POST non è 'nascosto in modo sicuro'."
+    },
+    {
+      "turn": 166,
+      "claim": "Akamai risponde 403/400 senza User-Agent.",
+      "correction": "Verificato: 200 OK senza UA sia su 443 sia su 80."
+    },
+    {
+      "turn": 170,
+      "claim": "Codice con strstr su header_accumulator; Slowloris = header infiniti che esauriscono la RAM.",
+      "correction": "L'accumulatore non è terminato da \\0 (comportamento indefinito); Slowloris tiene aperte molte connessioni inviando header lentamente."
+    },
+    {
+      "turn": 172,
+      "claim": "Bug: la riga vuota finale viene trattata come chiave in HEADER_KEY.",
+      "correction": "Nel codice di Stefano HEADER_CRLF intercettava già \\r\\n\\r; gli altri 3 bug segnalati erano reali."
+    },
+    {
+      "turn": 174,
+      "claim": "httpbin.org reindirizza a HTTPS, quindi sulla porta 80 non ottieni il body.",
+      "correction": "http://httpbin.org/stream/3 risponde 200 chunked sulla porta 80 (verificato)."
+    },
+    {
+      "turn": 185,
+      "claim": "Il client cifra un segreto con la chiave pubblica del server; SSL_connect==1 significa tunnel sicuro.",
+      "correction": "Lo scambio RSA è stato rimosso in TLS 1.3 (si usa (EC)DHE); senza SSL_VERIFY_PEER l'handshake riesce con qualsiasi certificato."
+    },
+    {
+      "turn": 187,
+      "claim": "SSL_CTX_set_default_verify_paths serve a verificare che Akamai sia chi dice.",
+      "correction": "Carica solo le CA; servono SSL_CTX_set_verify(SSL_VERIFY_PEER), SNI e SSL_set1_host (verificato con badssl.com)."
+    },
+    {
+      "turn": 190,
+      "claim": "Le man page di OpenSSL sono già incluse in libssl-dev (dopo aver proposto 'openssl-doc').",
+      "correction": "Il pacchetto è libssl-doc (corretto al turno 191)."
+    },
+    {
+      "turn": 193,
+      "claim": "Sub-playlist d'esempio con media_12345.ts da 10 s.",
+      "correction": "Inventata: quella reale era già nota (seg64000-*.ts da 6.82667 s)."
+    },
+    {
+      "turn": 200,
+      "claim": "read_packet restituisce 0 quando il buffer è vuoto.",
+      "correction": "0 non è un ritorno valido nelle FFmpeg recenti (si usa AVERROR_EOF oppure si blocca); il codice di Stefano si blocca su una condition variable."
+    },
+    {
+      "turn": 201,
+      "claim": "Per tornare alla diretta: tail = chunk_offsets[98].",
+      "correction": "Quello è l'ultimo segmento scaricato, non il live edge; inoltre l'indice va spostato sotto mutex."
+    },
+    {
+      "turn": 202,
+      "claim": "Avanti/indietro di un chunk spostando tail su chunk_offsets[...] è sicuro.",
+      "correction": "La zona prima di tail è spazio libero e può essere già sovrascritta; il confronto tail >= offset ignora il wrap-around."
+    },
+    {
+      "turn": 203,
+      "claim": "libsdl3-dev è disponibile da Kubuntu 24.10.",
+      "correction": "SDL 3.2 (la prima stabile) è uscita a gennaio 2025, dopo la 24.10 (ottobre 2024)."
+    }
+  ],
+  "open_questions": [
+    "Come fare failover/retry dello stesso segmento su un altro IP invece di exit(1) in fetch?",
+    "Timeout: SO_RCVTIMEO sotto OpenSSL oppure socket non bloccante + poll + SSL_ERROR_WANT_READ?",
+    "Keep-alive sullo stesso socket TLS per playlist e segmenti: cosa cambia nel parser?",
+    "Dopo una lunga disconnessione: saltare oltre il quarto segmento (come oggi) o fare time-shift?",
+    "Gestire 3xx/Location e i 404 dei segmenti scaduti senza terminare il programma.",
+    "Perché BANDWIDTH=67171 è minore del bitrate reale (circa 72 kbps)? Il manifest dice mp4a.40.5, ffprobe vede HE-AACv2: va bene così?",
+    "Chrome desktop riproduce davvero gli .m3u8 nativamente (turno 155)? Da provare."
+  ],
+  "side_topics": [
+    {
+      "title": "Protocolli testuali vs binari, FSM per MQTT",
+      "turns": [
+        176
+      ]
+    },
+    {
+      "title": "Server asincrono single-threaded alla Redis (kqueue/epoll) e pub/sub",
+      "turns": [
+        177
+      ]
+    },
+    {
+      "title": "IoT con connessione intermittente: code locali, sessioni persistenti, QoS",
+      "turns": [
+        178
+      ]
+    },
+    {
+      "title": "Radix tree vs trie per i topic MQTT",
+      "turns": [
+        180
+      ]
+    },
+    {
+      "title": "B-tree vs strutture in RAM di Redis (dict, skiplist, listpack, rax)",
+      "turns": [
+        181
+      ]
+    },
+    {
+      "title": "Redis Streams vs Kafka, log append-only",
+      "turns": [
+        182
+      ]
+    },
+    {
+      "title": "WhatsApp Web e recupero dei messaggi offline",
+      "turns": [
+        183
+      ]
+    },
+    {
+      "title": "Code offline per un futuro broker MQTT in C",
+      "turns": [
+        184
+      ]
+    },
+    {
+      "title": "Libri consigliati: C avanzato, UNP (Stevens), sicurezza",
+      "turns": [
+        195
+      ]
+    }
+  ],
+  "self_check": [
+    {
+      "q": "Perché getaddrinfo restituisce una lista? Cosa fanno AF_UNSPEC e SOCK_STREAM negli hints?",
+      "concept": "networking/getaddrinfo",
+      "difficulty": 1
+    },
+    {
+      "q": "Cosa restituisce recv quando il server chiude la connessione? E in caso di errore? Perché va in un ciclo?",
+      "concept": "networking/socket-basics",
+      "difficulty": 1
+    },
+    {
+      "q": "Scrivi a memoria una GET HTTP/1.1 minima. Quale header è obbligatorio e perché?",
+      "concept": "networking/http-request",
+      "difficulty": 1
+    },
+    {
+      "q": "Perché l'echo client restava bloccato con tcpbin.com finché non hai aggiunto \\n?",
+      "concept": "networking/socket-basics",
+      "difficulty": 1
+    },
+    {
+      "q": "Il daytime server fa 26 write da 1 byte e il client 1-2 read: cosa dimostra su TCP?",
+      "concept": "networking/socket-basics",
+      "difficulty": 2
+    },
+    {
+      "q": "Decodifica a mano 5\\r\\nWi\\rki\\r\\n5\\r\\npedia\\r\\n0\\r\\n\\r\\n. Perché il terminale mostra 'ki'?",
+      "concept": "networking/chunked",
+      "difficulty": 2
+    },
+    {
+      "q": "Cosa fa getNextByte e perché il parser funziona con MAXDATASIZE 1?",
+      "concept": "networking/header-fsm",
+      "difficulty": 2
+    },
+    {
+      "q": "Come distingue il parser la fine degli header dall'inizio del body? Quale bug c'era al turno 172 sul \\n finale?",
+      "concept": "networking/header-fsm",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché salvare il ritorno di SSL_read in un size_t è un bug?",
+      "concept": "networking/recv-loop",
+      "difficulty": 2
+    },
+    {
+      "q": "Ruolo di SSL_CTX, SSL, SSL_set_fd, SSL_connect. Cosa manca a initSSL per rifiutare un certificato scaduto? Cos'è la SNI?",
+      "concept": "networking/openssl-tls",
+      "difficulty": 3
+    },
+    {
+      "q": "Master playlist, media playlist, segmento .ts: cosa contiene ciascuno per Radio 24? Cosa indica MEDIA-SEQUENCE?",
+      "concept": "networking/hls",
+      "difficulty": 2
+    },
+    {
+      "q": "6.82667 s a 67171 bit/s: quanti byte ti aspetti? Perché il server ne manda 61288 e perché 61288/188 è un intero?",
+      "concept": "networking/hls",
+      "difficulty": 2
+    },
+    {
+      "q": "In un ring buffer con solo head e tail, come distingui vuoto da pieno? Chi muove tail nel tuo player?",
+      "concept": "networking/ring-buffer",
+      "difficulty": 2
+    },
+    {
+      "q": "Dei 15 MB di MAXAUDIOBUFFER, quanti ne usa la logica THRESHOLD + max 4 chunk? Cosa cambieresti per avere 11 minuti di time-shift?",
+      "concept": "networking/time-shift",
+      "difficulty": 3
+    },
+    {
+      "q": "In metro il segnale sparisce senza FIN né RST: cosa succede oggi al thread di rete e come lo renderesti robusto?",
+      "concept": "networking/ip-failover",
+      "difficulty": 3
+    }
+  ]
+}

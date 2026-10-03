@@ -1,0 +1,149 @@
+{
+  "area": {
+    "id": "algebra-fp",
+    "title": "Algebra e programmazione funzionale",
+    "summary": "Dal chord parser Shunting-yard alla lettura algebrica: stack machine come reduce, monoidi e monoide libero, sentinelle come elementi neutri, Algebraic Data Types, associatività e parallelismo; poi chiusura, magma/monoide/gruppo e combinatori di ordine superiore nel picture language di SICP.",
+    "period": "2026-04-13/2026-08-28",
+    "turns": [38,39,40,41,42,43,44,45,46,47,48,49,50,53,103,127,283,284,285,286,287,288]
+  },
+  "concepts": [
+    {
+      "id": "algebra-fp/reduce-fold",
+      "title": "Reduce / fold: la stack machine come riduzione",
+      "summary": "Valutare una postfix con uno stack è un reduce: lo stack è l'accumulatore, le sentinelle sono l'initialValue, applyOperator è il reducer. Come 5*2+3 si riduce a 13, il testo si riduce all'AST.",
+      "turns": [38, 41, 51, 52, 53],
+      "projects": ["chord-shunting-yard", "math-shunting-yard"],
+      "code_refs": ["chord-shunting-yard/chord-shunting-yard.c:683", "chord-shunting-yard/chord-shunting-yard.c:591", "chord-shunting-yard/chord-shunting-yard.c:763"],
+      "related": ["algebra-fp/neutral-tokens", "parsing/shunting-yard"],
+      "difficulty": 1
+    },
+    {
+      "id": "algebra-fp/monoid",
+      "title": "Monoide (associatività + elemento neutro)",
+      "summary": "Insieme con operazione binaria chiusa, associativa e con elemento neutro. Nel chord parser: (LINE, concatenazione, LINE vuota) e (SONG, concatenazione, SONG vuota); listPushObj è un append LINE×WORD→LINE, non l'operazione del monoide.",
+      "turns": [39, 40, 103, 118],
+      "projects": ["chord-shunting-yard"],
+      "code_refs": ["chord-shunting-yard/chord-shunting-yard.c:614", "chord-shunting-yard/chord-shunting-yard.c:629"],
+      "related": ["algebra-fp/free-monoid-closure", "algebra-fp/associativity-parallelism"],
+      "difficulty": 2
+    },
+    {
+      "id": "algebra-fp/free-monoid-closure",
+      "title": "Monoide libero, chiusura ed evoluzione dei tipi",
+      "summary": "Le liste con la concatenazione sono il monoide libero; WORD×WORD→LINE viola la chiusura, che si recupera vedendo una WORD come lista di un elemento. CHORD(LYRIC)=WORD è un costruttore, non un'operazione di monoide.",
+      "turns": [40, 103],
+      "projects": ["chord-shunting-yard"],
+      "code_refs": ["chord-shunting-yard/chord-shunting-yard.c:592"],
+      "related": ["algebra-fp/monoid", "algebra-fp/closure-sicp"],
+      "difficulty": 3
+    },
+    {
+      "id": "algebra-fp/neutral-tokens",
+      "title": "Token neutri / sentinelle (emptySong, emptyLine) vs valori di default (emptyChord, emptyLyric)",
+      "summary": "Iniettare SONG e LINE vuote come accumulatori iniziali dà firme fisse agli operatori e garantisce una sola SONG finale; emptyChord/emptyLyric sono invece valori di default del campo mancante della WORD.",
+      "turns": [36, 37, 41, 42, 43, 44, 45, 46, 47],
+      "projects": ["chord-shunting-yard"],
+      "code_refs": ["chord-shunting-yard/chord-shunting-yard.c:158", "chord-shunting-yard/chord-shunting-yard.c:222", "chord-shunting-yard/chord-shunting-yard.c:229", "chord-shunting-yard/chord-shunting-yard.c:763", "chord-shunting-yard/chord-shunting-yard.c:821", "chord-shunting-yard/chord-shunting-yard.c:835"],
+      "related": ["parsing/chord-shunting-yard", "algebra-fp/reduce-fold", "algebra-fp/monoid"],
+      "difficulty": 2
+    },
+    {
+      "id": "algebra-fp/adt-sum-product",
+      "title": "Algebraic Data Types (sum e product)",
+      "summary": "Product = A e B (struct, |A|·|B| valori), sum = A oppure B (tagged union in C, union discriminata in TS). CsObj e Token sono sum type; WORD è concettualmente un product; una lista è un tipo ricorsivo Nil | Cons.",
+      "turns": [50],
+      "projects": ["chord-sheet-parser", "chord-shunting-yard"],
+      "code_refs": ["chord_sheet_parser/chord_sheet_parser.c:168", "chord-shunting-yard/chord-shunting-yard.c:46", "chord-shunting-yard/chord-shunting-yard.c:296"],
+      "related": ["algebra-fp/monoid"],
+      "difficulty": 2
+    },
+    {
+      "id": "algebra-fp/associativity-parallelism",
+      "title": "Perché l'associatività permette il parallelismo",
+      "summary": "Con un'operazione associativa puoi ridurre pezzi separati e poi combinarli (MapReduce). Servono punti di taglio sicuri (\\n) e un merge per concatenazione; la tecnica di parsing (Pratt o RD) non c'entra.",
+      "turns": [58, 103, 118, 126, 127],
+      "projects": [],
+      "code_refs": [],
+      "related": ["algebra-fp/monoid", "parsing/web-workers", "thread/MapReduce in C: altra area"],
+      "difficulty": 3
+    },
+    {
+      "id": "algebra-fp/closure-sicp",
+      "title": "Proprietà di chiusura (SICP, picture language)",
+      "summary": "Una combinazione è chiusa se restituisce lo stesso tipo degli argomenti (beside di due Painter è un Painter): permette di ricombinare all'infinito e gestire la complessità.",
+      "turns": [283, 286],
+      "projects": [],
+      "code_refs": ["sicp/language-picture/script.ts:642", "sicp/language-picture/script.ts:687", "sicp/language-picture/script.ts:709", "sicp/language-picture/script.ts:725"],
+      "related": ["algebra-fp/magma-monoid-group", "algebra-fp/free-monoid-closure"],
+      "difficulty": 1
+    },
+    {
+      "id": "algebra-fp/magma-monoid-group",
+      "title": "Magma, monoide, gruppo nel picture language",
+      "summary": "(Painter, beside) è un magma (non associativo, senza neutro); (Painter, over, painter vuoto) sarebbe un monoide; rotazioni e riflessioni con la composizione formano il gruppo diedrale D4 (8 elementi, ognuno con inversa).",
+      "turns": [283, 285],
+      "projects": [],
+      "code_refs": ["sicp/language-picture/script.ts:559", "sicp/language-picture/script.ts:577", "sicp/language-picture/script.ts:580", "sicp/language-picture/script.ts:589", "sicp/language-picture/script.ts:605"],
+      "related": ["algebra-fp/closure-sicp", "algebra-fp/monoid"],
+      "difficulty": 3
+    },
+    {
+      "id": "algebra-fp/higher-order-combinators",
+      "title": "Algebra di ordine superiore e combinatori",
+      "summary": "square_of_four prende quattro trasformazioni Painter→Painter e ne restituisce una: un'operazione sulle funzioni (algebra alla Backus). I combinatori di Smullyan (M, W) sono funzioni pure che combinano funzioni.",
+      "turns": [284, 287],
+      "projects": [],
+      "code_refs": ["sicp/language-picture/script.ts:742", "sicp/language-picture/script.ts:754", "sicp/language-picture/script.ts:69", "sicp/language-picture/script.ts:768"],
+      "related": ["algebra-fp/closure-sicp", "logica combinatoria / To Mock a Mockingbird: altra area"],
+      "difficulty": 2
+    },
+    {
+      "id": "algebra-fp/language-elements-evaluator",
+      "title": "Elementi di un linguaggio ed evaluator (shallow vs deep embedding)",
+      "summary": "Un linguaggio = primitive + combinazioni + astrazione. Nel picture language un Painter è una funzione (shallow embedding) e valutare è chiamarla con un frame; i tuoi parser fanno un deep embedding (AST + evaluator esplicito).",
+      "turns": [288],
+      "projects": ["chord-shunting-yard"],
+      "code_refs": ["sicp/language-picture/script.ts:441", "sicp/language-picture/script.ts:452", "chord-shunting-yard/chord-shunting-yard.c:683", "toyforth/toyforth.c:401"],
+      "related": ["parsing/ast-vs-evaluation", "algebra-fp/closure-sicp"],
+      "difficulty": 2
+    }
+  ],
+  "projects": [],
+  "gemini_errors": [
+    {"turn": 39, "claim": "emptyLyric/emptyChord sono l'elemento neutro del monoide; con un monoide il reduce non crasherà mai.", "correction": "Sono valori di default del campo mancante nel product WORD; gli elementi neutri sono LINE vuota e SONG vuota. 'Non crasherà mai' è un'esagerazione."},
+    {"turn": 40, "claim": "La chiusura è violata (WORD×WORD→LINE).", "correction": "Corretto, ma contraddice il turno 39 dove aveva detto che la chiusura valeva perché 'sono tutti nodi dell'AST'."},
+    {"turn": 50, "claim": "WORD_MULT forma tipi prodotto più complessi (array di N elementi); CHORD e LYRIC sono due sum types isolati.", "correction": "Una lista è un tipo ricorsivo (sum di product: Nil | Cons), non un product; CHORD e LYRIC sono varianti dello stesso sum type."},
+    {"turn": 103, "claim": "Gli stati STATE_EMPTY_CHORD del lexer generano l'elemento neutro e tale che x∘e = x.", "correction": "Il neutro della concatenazione è la lista vuota (LINE/SONG vuota), non l'accordo vuoto."},
+    {"turn": 127, "claim": "Il Recursive Descent è intrinsecamente sequenziale (P-completo); il Game of Life non si parallelizza.", "correction": "La parallelizzazione dipende da punti di taglio (\\n) e merge associativo, non dalla tecnica; il Game of Life è parallelizzabile per cella in ogni generazione."},
+    {"turn": 285, "claim": "Applicare rotate90 e poi flip_vert equivale a flip_horiz; {identity, rotate90/180/270, flip_vert, flip_horiz} è il gruppo D4.", "correction": "Con le definizioni di script.ts, flip_vert(rotate90(p)) mappa (x,y) in (1-y, 1-x): riflessione sull'antidiagonale. Quelle 6 trasformazioni non sono chiuse; D4 ha 8 elementi (mancano le due riflessioni diagonali)."},
+    {"turn": 287, "claim": "Y è il punto fisso di Turing; da S, K, M si costruisce tutto; il libro non usa notazione algebrica.", "correction": "Y è il combinatore di Curry (quello di Turing è Θ); bastano S e K (M = SII); il libro usa notazioni come Bxyz = x(yz). Titolo italiano citato non verificato."}
+  ],
+  "open_questions": [
+    "Implementare e testare una funzione di concatenazione SONG ++ SONG e verificarne l'associatività",
+    "Il merge dell'evaluator Pratt TS (incolla ultima riga e prima riga) permette tagli a metà riga: qual è il suo elemento neutro?",
+    "Aggiungere le riflessioni diagonali al picture language e verificare la tabella di composizione di D4",
+    "Quale mezzo di astrazione (nominare sezioni, ripetizioni) aggiungere al linguaggio degli accordi?"
+  ],
+  "side_topics": [
+    {"title": "Generics in C: macro LIST_PUSH vs void * per unificare listPush e listPushObj", "turns": [48]},
+    {"title": "Pratt in C: architettura senza codice (NUD/LED, tabella di regole)", "turns": [49]},
+    {"title": "To Mock a Mockingbird come introduzione alla logica combinatoria", "turns": [287]}
+  ],
+  "self_check": [
+    {"q": "Dai la definizione di monoide e tre esempi presi da JavaScript.", "concept": "algebra-fp/monoid", "difficulty": 1},
+    {"q": "Perché valutare una postfix con uno stack è un reduce? Chi è l'accumulatore e chi l'initialValue?", "concept": "algebra-fp/reduce-fold", "difficulty": 1},
+    {"q": "Quali sono i due monoidi del chord parser e i loro elementi neutri?", "concept": "algebra-fp/monoid", "difficulty": 2},
+    {"q": "emptyChord è un elemento neutro? Di quale operazione?", "concept": "algebra-fp/neutral-tokens", "difficulty": 2},
+    {"q": "Differenza fra push(LINE, WORD) e LINE ++ LINE: quale serve per unire due SONG prodotte da due thread?", "concept": "algebra-fp/monoid", "difficulty": 3},
+    {"q": "Cos'è la chiusura e perché WORD×WORD→LINE la viola? Come la recupera il monoide libero?", "concept": "algebra-fp/free-monoid-closure", "difficulty": 3},
+    {"q": "Descrivi CsObj in termini di sum e product type. Che tipo è una lista?", "concept": "algebra-fp/adt-sum-product", "difficulty": 2},
+    {"q": "Perché senza le sentinelle applyOperator aveva bisogno di tanti if sui tipi?", "concept": "algebra-fp/neutral-tokens", "difficulty": 2},
+    {"q": "Perché iniettare WORD_MULT dopo la parola produceva 'Expected LINE in WORD_MULT, got 2'?", "concept": "algebra-fp/neutral-tokens", "difficulty": 3},
+    {"q": "Perché l'associatività permette di dividere il parsing fra thread? Dove tagli il testo?", "concept": "algebra-fp/associativity-parallelism", "difficulty": 2},
+    {"q": "(Painter, beside) è un monoide? Mostralo con le percentuali di larghezza.", "concept": "algebra-fp/magma-monoid-group", "difficulty": 2},
+    {"q": "Che struttura formano rotazioni e riflessioni con la composizione? Cosa manca nel tuo script.ts?", "concept": "algebra-fp/magma-monoid-group", "difficulty": 3},
+    {"q": "Qual è il tipo di square_of_four e perché è un'operazione di ordine superiore?", "concept": "algebra-fp/higher-order-combinators", "difficulty": 2},
+    {"q": "Shallow vs deep embedding: dove sta l'evaluator nel picture language e dove nel tuo chord parser?", "concept": "algebra-fp/language-elements-evaluator", "difficulty": 2},
+    {"q": "Quali sono gli elementi di un linguaggio secondo SICP e cosa manca al linguaggio degli accordi?", "concept": "algebra-fp/language-elements-evaluator", "difficulty": 1}
+  ]
+}

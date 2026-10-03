@@ -1,0 +1,699 @@
+{
+  "area": {
+    "id": "actor-model",
+    "title": "Actor model, event loop e architetture event driven",
+    "summary": "Dal player multithread all'actor model in un solo thread: mailbox, macchine a stati, timer e poll() come cuore dell'event loop in C; parallelo con l'event loop del browser (queueMicrotask, attori funzionali, React, renderer), epoll/kqueue e l'architettura di Chrome.",
+    "period": "2026-06-30/2026-07-16",
+    "turns": [
+      214,
+      215,
+      216,
+      217,
+      220,
+      221,
+      243,
+      244,
+      245,
+      246,
+      247,
+      248,
+      249,
+      250,
+      251,
+      252,
+      253,
+      254,
+      255,
+      256,
+      257,
+      258,
+      259,
+      260,
+      261,
+      262,
+      263,
+      264,
+      265,
+      266,
+      267,
+      268,
+      269
+    ]
+  },
+  "concepts": [
+    {
+      "id": "actor-model/thread-pool-vs-event-loop",
+      "title": "Thread pool vs event loop per I/O parallelo",
+      "summary": "Per N download paralleli non servono N thread: o K thread che pescano da una coda protetta da mutex, o un solo thread con socket non bloccanti e poll/epoll (l'equivalente C di Promise.all).",
+      "turns": [
+        214,
+        215,
+        216,
+        217
+      ],
+      "projects": [],
+      "code_refs": [
+        "networking/client_http.c:1012"
+      ],
+      "related": [
+        "actor-model/poll-event-loop"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/actor-basics",
+      "title": "Actor model: stato privato, mailbox, comportamento",
+      "summary": "Un attore ha stato privato, una mailbox FIFO e un comportamento: (stato, evento) -> (nuovo stato, messaggi da inviare). Nessuno tocca lo stato altrui.",
+      "turns": [
+        220,
+        243,
+        245
+      ],
+      "projects": [
+        "audio-player-actor"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:108",
+        "networking/actor/client_http_actor.c:123",
+        "networking/actor/client_http_actor.c:434"
+      ],
+      "related": [
+        "actor-model/fsm-transition"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "actor-model/actors-and-threads",
+      "title": "Attori con o senza thread (1:1, single thread, M:N)",
+      "summary": "L'attore e' logica, il thread e' esecuzione: un thread per attore, tutti in un thread (event loop, zero mutex) o M:N con scheduler come la BEAM.",
+      "turns": [
+        243,
+        244,
+        245
+      ],
+      "projects": [
+        "audio-player-actor"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:1001",
+        "networking/actor/client_http_actor.c:1045"
+      ],
+      "related": [
+        "actor-model/erlang-xstate"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/dispatch-loop-mailbox",
+      "title": "Event loop di dispatch e mailbox ring buffer",
+      "summary": "Il main raccoglie eventi dal mondo e svuota le mailbox chiamando receive(); inviare = scrivere in events[head]. Serve gestire la mailbox piena, altrimenti head raggiunge tail e la coda sembra vuota.",
+      "turns": [
+        245
+      ],
+      "projects": [
+        "audio-player-actor"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:434",
+        "networking/actor/client_http_actor.c:1442",
+        "networking/actor/client_http_actor.c:23"
+      ],
+      "related": [
+        "actor-model/actor-basics"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/fsm-transition",
+      "title": "Macchina a stati come comportamento (switch stato x evento)",
+      "summary": "La funzione di transizione e' una griglia switch(stato)/switch(evento); eventi non previsti vengono ignorati. Nel codice: receive del Player sbagliato e break mancante.",
+      "turns": [
+        220,
+        245,
+        257
+      ],
+      "projects": [
+        "audio-player-actor"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:225",
+        "networking/actor/client_http_actor.c:253",
+        "networking/actor/client_http_actor.c:315",
+        "networking/actor/client_http_actor.c:407"
+      ],
+      "related": [
+        "XState"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "actor-model/macro-micro-states",
+      "title": "Macro-stati vs micro-stati: FSM interna e pipeline di attori",
+      "summary": "Un attore puo' avere una FSM interna (come fetch()), purche' non blocchi: lo stato del parser deve stare in una struct e avanzare a ogni POLLIN. Alternativa: sotto-attori Connector/HeaderParser.",
+      "turns": [
+        257
+      ],
+      "projects": [
+        "audio-player-actor"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:76",
+        "networking/actor/client_http_actor.c:607",
+        "networking/actor/client_http_actor.c:609"
+      ],
+      "related": [
+        "actor-model/ssl-in-event-loop"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "actor-model/network-coordinator-retry",
+      "title": "Stati del network coordinator e RETRY non bloccante",
+      "summary": "IDLE, MASTER/SUB_PLAYLIST_DOWNLOADING, CHUNK_AUDIO_DOWNLOADING, RETRY: il retry non usa sleep ma un timer che invia TIME_ELAPSED; STOP durante RETRY torna a IDLE.",
+      "turns": [
+        258
+      ],
+      "projects": [
+        "audio-player-actor"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:54",
+        "networking/actor/client_http_actor.c:103"
+      ],
+      "related": [
+        "actor-model/async-timers-c"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/async-timers-c",
+      "title": "Timer asincroni in C",
+      "summary": "Un timer e' una scadenza assoluta: il timeout di poll e' il tempo al timer piu' vicino; dopo poll si inviano i TIME_ELAPSED scaduti. Usare CLOCK_MONOTONIC.",
+      "turns": [
+        259
+      ],
+      "projects": [
+        "audio-player-actor"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:143",
+        "networking/actor/client_http_actor.c:1331",
+        "networking/actor/client_http_actor.c:1432"
+      ],
+      "related": [
+        "actor-model/poll-event-loop"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/poll-event-loop",
+      "title": "poll() come cuore dell'event loop",
+      "summary": "poll blocca finche' un fd e' pronto o scade il timeout (in millisecondi); il loop calcola timeout = min(timer, frame). Nel codice il timeout e' passato in microsecondi e stdin e' monitorato due volte.",
+      "turns": [
+        260,
+        262
+      ],
+      "projects": [
+        "audio-player-actor",
+        "poll-input"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:1387",
+        "networking/actor/client_http_actor.c:1400",
+        "networking/actor/poll_input.c:47"
+      ],
+      "related": [
+        "actor-model/raf-vs-poll"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/noncanonical-keyboard",
+      "title": "Tastiera in modo non canonico (termios)",
+      "summary": "Togliendo ICANON ed ECHO ogni tasto arriva subito su stdin e sveglia poll; il terminale va ripristinato con atexit e anche su SIGINT.",
+      "turns": [
+        214,
+        261
+      ],
+      "projects": [
+        "audio-player-actor"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:1313",
+        "networking/actor/client_http_actor.c:1375",
+        "networking/actor/client_http_actor.c:1404"
+      ],
+      "related": [
+        "actor-model/poll-event-loop"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/ssl-in-event-loop",
+      "title": "OpenSSL dentro un event loop (SSL_read, SSL_pending)",
+      "summary": "OpenSSL puo' tenere byte decifrati nel suo buffer mentre il socket e' vuoto: serve socket non bloccante e drain loop SSL_read fino a WANT_READ; WANT_WRITE richiede POLLOUT.",
+      "turns": [
+        264
+      ],
+      "projects": [
+        "audio-player-actor"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:513",
+        "networking/actor/client_http_actor.c:1244"
+      ],
+      "related": [
+        "actor-model/poll-event-loop"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "actor-model/poll-epoll-kqueue",
+      "title": "poll vs epoll/kqueue/IOCP",
+      "summary": "poll e' O(n) e portabile, epoll/kqueue tengono l'insieme di fd nel kernel e restituiscono solo i pronti, IOCP e' a completamento; con 2-3 fd basta poll.",
+      "turns": [
+        215,
+        265,
+        267
+      ],
+      "projects": [
+        "poll-input"
+      ],
+      "code_refs": [
+        "networking/actor/poll_input.c:47"
+      ],
+      "related": [
+        "broker MQTT"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/revents-bitmask",
+      "title": "Bitmask di revents",
+      "summary": "revents e' uno short con un bit per evento; revents & POLLIN vale 0 o il bit stesso (vero in C). Piu' flag possono essere attivi insieme.",
+      "turns": [
+        264,
+        266
+      ],
+      "projects": [
+        "poll-input"
+      ],
+      "code_refs": [
+        "networking/actor/poll_input.c:57",
+        "networking/actor/poll_input.c:63"
+      ],
+      "related": [],
+      "difficulty": 1
+    },
+    {
+      "id": "actor-model/js-event-loop-microtask",
+      "title": "Attori nel browser e queueMicrotask",
+      "summary": "Nel browser l'event loop e' gia' single thread; send() accoda e programma il dispatch con queueMicrotask per non eseguire il ricevente in modo sincrono. Un ping-pong infinito di microtask blocca la pagina.",
+      "turns": [
+        246,
+        247
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "actor-model/functional-actors"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/functional-actors",
+      "title": "Attori in stile funzionale (closure)",
+      "summary": "creaAttore(stato, transizione) restituisce send; stato e mailbox vivono nella closure come i campi di una struct C passata con self.",
+      "turns": [
+        248,
+        249
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "actor-model/actor-basics"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/pubsub-react",
+      "title": "Pub/sub + actor model con React",
+      "summary": "Ingresso via send nella mailbox (actor), uscita via subscribe/notify (observer); React diventa solo vista con useSyncExternalStore.",
+      "turns": [
+        252,
+        253
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "actor-model/renderer-actor"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/renderer-actor",
+      "title": "Renderer actor in vanilla JS",
+      "summary": "Senza React un attore aggiorna il DOM: un renderer centrale o un attore per pezzo di UI, con o senza web components (closure legate a elementi per id).",
+      "turns": [
+        254,
+        255,
+        256
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "actor-model/pubsub-react"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/raf-vs-poll",
+      "title": "requestAnimationFrame vs poll con timeout",
+      "summary": "Entrambi danno un battito per ridisegnare: rAF segue il refresh del monitor e si ferma nelle tab nascoste, poll usa un timer software fisso.",
+      "turns": [
+        262,
+        263
+      ],
+      "projects": [
+        "audio-player-actor"
+      ],
+      "code_refs": [
+        "networking/actor/client_http_actor.c:1303",
+        "networking/actor/client_http_actor.c:1394"
+      ],
+      "related": [
+        "actor-model/poll-event-loop"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "actor-model/erlang-xstate",
+      "title": "Erlang/Elixir, XState e framework ad attori",
+      "summary": "In Erlang l'actor model e' nativo (spawn, !, receive, supervisori); XState v5 tratta tutto come attore; Elm/TEA e' il gemello single thread.",
+      "turns": [
+        220,
+        221,
+        250
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "actor-model/actors-and-threads"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "actor-model/chrome-workers-wasm",
+      "title": "Chrome, web worker e WebAssembly",
+      "summary": "Chrome e' multiprocesso con IPC Mojo e PostTask tra thread; un dedicated worker e' un thread nello stesso processo, wasm non e' un thread ma gira su chi lo chiama.",
+      "turns": [
+        249,
+        267,
+        268,
+        269
+      ],
+      "projects": [],
+      "code_refs": [],
+      "related": [
+        "actor-model/poll-epoll-kqueue"
+      ],
+      "difficulty": 2
+    }
+  ],
+  "projects": [
+    {
+      "id": "audio-player-actor",
+      "title": "Audio player HLS ad attori (event loop single thread)",
+      "path": "networking/actor/client_http_actor.c",
+      "status": "broken",
+      "last_modified": "2026-07-17",
+      "build": "cc -W -Wall -g networking/actor/client_http_actor.c $(pkg-config --cflags --libs libavformat libavcodec libavutil libswresample sdl3 openssl) -o $BUILD/client_http_actor  (oggi: 9 errori)",
+      "run": "perl -e 'alarm 20; exec @ARGV' -- $BUILD/client_http_actor < /dev/null  (solo dopo le correzioni di compilazione)",
+      "works": [
+        "Strutture Event/Mailbox/Actor con receive a puntatore a funzione",
+        "Event loop con poll su stdin, timeout calcolato sul frame, spinner a 30 FPS",
+        "Modo non canonico del terminale con ripristino via atexit",
+        "Tasti a/d/q tradotti in messaggi agli attori; drain delle mailbox",
+        "fetch() HTTP/HLS/TLS funzionante in versione bloccante (verificato contro il server reale)"
+      ],
+      "missing": [
+        "Non compila: ResourceType usata prima della definizione, prototipi e 5 funzioni mancanti (:190, :323, :602, :625, :660, :821, :1380, :1439)",
+        "Timeout di poll in microsecondi invece che millisecondi (:1400)",
+        "pfds[1].fd = sockfd = 0: stdin monitorato due volte, q non esce su macOS (:1387)",
+        "read da STDERR_FILENO invece di STDIN_FILENO (:1404)",
+        "Player usa transitionFnBuffer (:407); break mancante in BUFFERING (:253)",
+        "ACTOR_NUM 3 con 4 attori: mailbox del Fetcher mai svuotata (:23, :1442); sizeof(Actor) invece di sizeof(Actor*) (:426)",
+        "Rami delle FSM vuoti; stati MASTER/SUB/CHUNK -> exit(1); niente RETRY; EV_START_RADIO mai inviato (:225-379)",
+        "Mailbox senza controllo di coda piena (:434)",
+        "O_NONBLOCK con connect/SSL_connect bloccanti: connessione sempre fallita (:1244-1268)",
+        "fetch/decode/read_packet/get_data bloccanti o in attesa attiva, non integrati nel loop (:588, :607, :1015, :1142)",
+        "Socket POLLIN non gestito; drain SSL_read solo commentato (:513, :1418)",
+        "Timer mai avviato e non incluso nel timeout di poll; gettimeofday non monotono (:1297, :1331)",
+        "Nessun handler SIGINT, nessuna free in uscita"
+      ],
+      "next_step": "Farlo compilare (enum, prototipi, funzioni del ring buffer da client_http.c, errExit) e poi correggere il loop: timeout/1000, pfds[1].fd = -1, read da STDIN_FILENO, ACTOR_NUM 4, receive del Player, break mancante.",
+      "concepts": [
+        "actor-model/actor-basics",
+        "actor-model/actors-and-threads",
+        "actor-model/dispatch-loop-mailbox",
+        "actor-model/fsm-transition",
+        "actor-model/macro-micro-states",
+        "actor-model/network-coordinator-retry",
+        "actor-model/async-timers-c",
+        "actor-model/poll-event-loop",
+        "actor-model/noncanonical-keyboard",
+        "actor-model/ssl-in-event-loop",
+        "actor-model/raf-vs-poll"
+      ]
+    },
+    {
+      "id": "poll-input",
+      "title": "Esercizio poll() (esempio della man page)",
+      "path": "networking/actor/poll_input.c",
+      "status": "working",
+      "last_modified": "2026-07-15",
+      "build": "cc -W -Wall -g networking/actor/poll_input.c -o $BUILD/poll_input",
+      "run": "mkfifo f1 f2; $BUILD/poll_input f1 f2  (scrivere su f1/f2 da un altro terminale)",
+      "works": [
+        "Compila senza warning",
+        "Multiplexing di piu' FIFO con poll(-1) e stampa dei flag di revents",
+        "Messaggio d'uso senza argomenti"
+      ],
+      "missing": [
+        "read() == 0 (EOF) non gestito: ciclo infinito su file regolari (:64)",
+        "Su macOS nessun POLLHUP alla chiusura dello scrittore FIFO: poll resta bloccato",
+        "POLLNVAL non stampato; su macOS /dev/tty da' POLLNVAL (poll non supporta i device)",
+        "Nessuna tastiera/modo non canonico nonostante il nome; argv dichiarato come char *argv[1] (:14)"
+      ],
+      "next_step": "Gestire s == 0 come EOF, stampare POLLNVAL, poi aggiungere STDIN_FILENO in modo non canonico come palestra per il loop del player.",
+      "concepts": [
+        "actor-model/poll-event-loop",
+        "actor-model/revents-bitmask",
+        "actor-model/poll-epoll-kqueue"
+      ]
+    }
+  ],
+  "gemini_errors": [
+    {
+      "turn": 214,
+      "claim": "99 thread consumerebbero quasi 1 GB di RAM di stack",
+      "correction": "Lo stack e' memoria virtuale riservata: le pagine fisiche vengono usate solo se toccate."
+    },
+    {
+      "turn": 214,
+      "claim": "Se il thread rete scrive head mentre l'audio legge tail nello stesso ciclo di clock la memoria si corrompe",
+      "correction": "Un ring buffer 1 produttore/1 consumatore puo' essere lock-free con atomiche; il problema e' visibilita'/ordinamento della memoria."
+    },
+    {
+      "turn": 215,
+      "claim": "Registrazione con EPOLLIN|EPOLLET mentre il testo dice di attendere EPOLLOUT per la connect",
+      "correction": "Per una connect non bloccante si attende la scrivibilita' (EPOLLOUT/POLLOUT) e si controlla SO_ERROR; anche l'handshake TLS va fatto in modo non bloccante."
+    },
+    {
+      "turn": 221,
+      "claim": "Con i thread nativi poche migliaia e poi crash; in Erlang non esistono thread del SO",
+      "correction": "La BEAM usa thread del SO (uno scheduler per core); Linux regge decine di migliaia di thread."
+    },
+    {
+      "turn": 245,
+      "claim": "send_message senza controllo e SDL_Delay(1) per non andare al 100% di CPU",
+      "correction": "Senza controllo di coda piena head raggiunge tail e la mailbox sembra vuota; l'attesa corretta e' dentro poll con timeout calcolato."
+    },
+    {
+      "turn": 247,
+      "claim": "Con queueMicrotask gli attori possono rimbalzarsi messaggi all'infinito in sicurezza",
+      "correction": "Lo stack non cresce, ma la coda microtask non si svuota mai: niente rendering ne' input, la pagina si blocca. Il minimo di 4 ms di setTimeout vale solo dopo 5 livelli di annidamento."
+    },
+    {
+      "turn": 249,
+      "claim": "Il Web Worker gira su un core separato; FFmpeg in WASM serve per decodificare",
+      "correction": "Il core lo sceglie il SO; il browser decodifica gia' AAC/HLS (WebCodecs, MSE): FFmpeg/WASM e' una scelta didattica."
+    },
+    {
+      "turn": 250,
+      "claim": "Wind.js e' un framework ad attori; lo Shadow DOM protegge la memoria; CustomEvent come mailbox",
+      "correction": "Wind.js era una libreria per l'asincronia; lo Shadow DOM isola DOM/CSS, non lo stato JS; dispatchEvent e' sincrono, non accoda."
+    },
+    {
+      "turn": 253,
+      "claim": "Nel pub/sub tutti i callback partono in parallelo",
+      "correction": "forEach li chiama in sequenza sullo stesso thread."
+    },
+    {
+      "turn": 254,
+      "claim": "React rigenera l'intero albero del Virtual DOM a ogni cambio di stato",
+      "correction": "Rifà il render solo del sottoalbero del componente il cui stato e' cambiato."
+    },
+    {
+      "turn": 255,
+      "claim": "Built-in personalizzati (extends button, is=) e 'l'Event Loop salta l'attore corrotto'",
+      "correction": "I customized built-in non sono supportati da Safari; se la transizione lancia un'eccezione l'attore di creaAttore resta bloccato con la mailbox piena."
+    },
+    {
+      "turn": 258,
+      "claim": "Codice JS del network coordinator con RETRY e attoreTimer",
+      "correction": "Lo stato oggetto {fase:'RETRY'} non entra mai nel case 'RETRY' e il timer legge evento.payload mentre i campi sono al primo livello (TypeError)."
+    },
+    {
+      "turn": 259,
+      "claim": "kqueue EVFILT_TIMER si registra passandogli il descrittore del socket; il loop annullera' il timer da solo",
+      "correction": "L'ident di EVFILT_TIMER e' un id arbitrario del timer; la cancellazione va fatta esplicitamente dall'attore. Per i timer meglio CLOCK_MONOTONIC di gettimeofday."
+    },
+    {
+      "turn": 260,
+      "claim": "Se poll blocca 5 s l'app macOS crasha; poll(0)+SDL_Delay(1) e' la soluzione industriale usata anche dal browser",
+      "correction": "L'app mostra la rotellina ma non crasha; browser e GUI si bloccano nell'attesa del SO con timeout calcolato (es. SDL_WaitEventTimeout), non con un tick da 1 ms."
+    },
+    {
+      "turn": 261,
+      "claim": "atexit ripristina il terminale anche in caso di uscita improvvisa",
+      "correction": "atexit non gira su segnali (Ctrl-C) o crash: serve un handler di SIGINT/SIGTERM."
+    },
+    {
+      "turn": 265,
+      "claim": "epoll e' O(1) anche con 100.000 socket grazie a una callback hardware",
+      "correction": "Il costo di epoll_wait cresce con gli eventi pronti; la callback e' del kernel (wait queue), non hardware."
+    },
+    {
+      "turn": 267,
+      "claim": "Chrome sperimenta io_uring per il networking",
+      "correction": "Affermazione non verificata."
+    },
+    {
+      "turn": 268,
+      "claim": "Chromium vieta quasi del tutto i mutex; esiste un Media Decoder Process",
+      "correction": "base::Lock esiste (sconsigliato, non vietato); un processo decoder dedicato non e' standard su tutte le piattaforme."
+    },
+    {
+      "turn": 269,
+      "claim": "postMessage tra main thread e worker usa Mojo dietro le quinte",
+      "correction": "Per un dedicated worker nello stesso processo e' un passaggio di task tra thread; affermazione dubbia."
+    }
+  ],
+  "open_questions": [
+    "Come integrare FFmpeg (read_packet che tira byte e si aspetta di bloccarsi) in un event loop che non deve mai bloccare?",
+    "Chi possiede il ring buffer audio: l'attore Buffer (local_ctx) o il Ctx condiviso? Chi libera il payload dei messaggi?",
+    "Che politica adottare per la mailbox piena (scartare, exit, coda dinamica)?",
+    "In C conviene spezzare l'HTTP in attori Connector/HeaderParser o basta una FSM riprendibile per connessione?",
+    "Passare da Connection: close a keep-alive per evitare un handshake TLS a ogni chunk?",
+    "Il player e' davvero single thread se SDL3 usa un thread audio interno?"
+  ],
+  "side_topics": [
+    {
+      "title": "Video player: HLS su Ubuntu Oracle, DASH di YouTube, A/V sync con PTS",
+      "turns": [
+        251
+      ]
+    },
+    {
+      "title": "Simulatore domotico ad attori come esercizio",
+      "turns": [
+        220
+      ]
+    },
+    {
+      "title": "Figma come esempio di motore C++ in WASM",
+      "turns": [
+        249,
+        250
+      ]
+    }
+  ],
+  "self_check": [
+    {
+      "q": "Quali sono le tre parti di un attore e cosa puo' fare quando riceve un messaggio?",
+      "concept": "actor-model/actor-basics",
+      "difficulty": 1
+    },
+    {
+      "q": "Perche' con tutti gli attori in un solo thread non servono mutex sulla mailbox?",
+      "concept": "actor-model/actors-and-threads",
+      "difficulty": 1
+    },
+    {
+      "q": "In una mailbox ring buffer come distingui vuota da piena? Cosa succede nel tuo sendMessage al 33esimo messaggio non letto?",
+      "concept": "actor-model/dispatch-loop-mailbox",
+      "difficulty": 2
+    },
+    {
+      "q": "Cosa restituisce revents & POLLHUP se revents vale POLLIN|POLLHUP, e perche' e' vero?",
+      "concept": "actor-model/revents-bitmask",
+      "difficulty": 1
+    },
+    {
+      "q": "Che differenza c'e' tra poll con timeout -1, 0 e 33? In che unita' e' il timeout?",
+      "concept": "actor-model/poll-event-loop",
+      "difficulty": 1
+    },
+    {
+      "q": "Perche' in modo canonico poll su stdin non si sveglia quando premi 'a'? Quali flag di termios togli?",
+      "concept": "actor-model/noncanonical-keyboard",
+      "difficulty": 2
+    },
+    {
+      "q": "Perche' queueMicrotask evita lo stack overflow nel ping-pong tra attori ma non il blocco della pagina?",
+      "concept": "actor-model/js-event-loop-microtask",
+      "difficulty": 2
+    },
+    {
+      "q": "Nel tuo client_http_actor.c perche' EV_FETCHER_DOWNLOAD non verrebbe mai elaborato?",
+      "concept": "actor-model/dispatch-loop-mailbox",
+      "difficulty": 2
+    },
+    {
+      "q": "Come calcoli il timeout di poll con un timer di retry e un'animazione a 30 FPS? Perche' CLOCK_MONOTONIC?",
+      "concept": "actor-model/async-timers-c",
+      "difficulty": 2
+    },
+    {
+      "q": "Spiega la trappola SSL_read + poll: dove stanno i byte quando poll dorme? Che ruolo hanno SSL_ERROR_WANT_READ e SSL_pending?",
+      "concept": "actor-model/ssl-in-event-loop",
+      "difficulty": 3
+    },
+    {
+      "q": "Cosa ritorna connect() su un socket O_NONBLOCK e come capisci che la connessione e' riuscita?",
+      "concept": "actor-model/thread-pool-vs-event-loop",
+      "difficulty": 3
+    },
+    {
+      "q": "Perche' fetch() cosi' com'e' non puo' stare nell'event loop? Quali variabili devono diventare campi di struct?",
+      "concept": "actor-model/macro-micro-states",
+      "difficulty": 3
+    },
+    {
+      "q": "Quando conviene epoll/kqueue rispetto a poll? Perche' per il player basta poll?",
+      "concept": "actor-model/poll-epoll-kqueue",
+      "difficulty": 2
+    },
+    {
+      "q": "Web worker, wasm, processo renderer: chi e' un thread, chi un processo, chi nessuno dei due?",
+      "concept": "actor-model/chrome-workers-wasm",
+      "difficulty": 2
+    },
+    {
+      "q": "Disegna la transizione del Network coordinator con RETRY, incluso STOP durante l'attesa e un TIME_ELAPSED vecchio.",
+      "concept": "actor-model/network-coordinator-retry",
+      "difficulty": 3
+    }
+  ]
+}

@@ -1,0 +1,629 @@
+{
+  "area": {
+    "id": "concorrenza",
+    "title": "Thread, parallelismo e benchmark",
+    "summary": "Dal monoide al MapReduce: chord-pratt parsato da 2 pthread con split su \\n, merge con retain per riga, benchmark con CLOCK_MONOTONIC + bash/bc e bug delle 200k righe. Poi mutex e condition variable (esempi LLNL) e l'uso dei thread nel player per non bloccare l'audio su recv.",
+    "period": "2026-05-05/2026-07-06",
+    "turns": [
+      103,
+      112,
+      113,
+      114,
+      115,
+      116,
+      117,
+      118,
+      119,
+      120,
+      121,
+      122,
+      123,
+      124,
+      125,
+      126,
+      127,
+      128,
+      129,
+      130,
+      131,
+      132,
+      133,
+      134,
+      135,
+      136,
+      137,
+      179,
+      214,
+      215,
+      216,
+      217,
+      227,
+      228,
+      229
+    ]
+  },
+  "concepts": [
+    {
+      "id": "concorrenza/pthread-create-join",
+      "title": "Thread POSIX: create, join e passaggio del contesto",
+      "summary": "pthread_create avvia fn(void *arg) su un nuovo thread, pthread_join aspetta che finisca. Il contesto si passa come puntatore a struct, e il tipo passato deve coincidere con il cast nel thread (&ctx su un Ctx* = segfault, turno 228).",
+      "turns": [
+        112,
+        113,
+        114,
+        228
+      ],
+      "projects": [
+        "chord-pratt-threads",
+        "thread-basics"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt-threads.c:798",
+        "chord-pratt/chord-pratt-threads.c:851",
+        "networking/client_http.c:1012"
+      ],
+      "related": [
+        "concorrenza/race-condition",
+        "stack thread secondario 512 KB su macOS"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "concorrenza/split-confine-riga",
+      "title": "Split dell'input su un confine di riga",
+      "summary": "Si taglia al primo \\n dopo la metà, così nessun token viene spezzato, e ogni thread riparte da uno stato pulito del lexer. Bug reali: buf2 NULL se non c'è un \\n (segfault) e WORD vuota in più per il finto EOF.",
+      "turns": [
+        112,
+        114,
+        115,
+        119,
+        122
+      ],
+      "projects": [
+        "chord-pratt-threads"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt-threads.c:777",
+        "chord-pratt/chord-pratt-threads.c:789",
+        "chord-pratt/chord-pratt-threads.c:330"
+      ],
+      "related": [
+        "memoria-c/malloc-non-azzera",
+        "concorrenza/mapreduce-monoide"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "concorrenza/mapreduce-monoide",
+      "title": "MapReduce grazie al monoide",
+      "summary": "Se l'unione dei pezzi è associativa (concatenazione di liste di righe), le metà si calcolano in parallelo (map) e si uniscono alla fine (reduce). Il merge giusto è concatenare, non inserire una SONG in un'altra.",
+      "turns": [
+        103,
+        112,
+        118,
+        119,
+        127
+      ],
+      "projects": [
+        "chord-pratt-threads"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt-threads.c:861"
+      ],
+      "related": [
+        "algebra-fp/monoid",
+        "algebra-fp/associativity-parallelism"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "concorrenza/ownership-merge",
+      "title": "Ownership dopo il merge di due AST",
+      "summary": "Dopo il reduce ogni LINE del thread 2 ha due padri, quindi serve un retain per ogni riga trasferita (non sul contenitore) e la release di entrambi gli AST. Risultato verificato: 0 leak.",
+      "turns": [
+        114,
+        116,
+        117,
+        118,
+        119,
+        121
+      ],
+      "projects": [
+        "chord-pratt-threads"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt-threads.c:865",
+        "chord-pratt/chord-pratt-threads.c:879"
+      ],
+      "related": [
+        "memoria-c/trasferimento-vs-condivisione",
+        "memoria-c/owner-vs-osservatore"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "concorrenza/race-condition",
+      "title": "Race condition e memoria condivisa",
+      "summary": "I thread condividono heap e globali ma hanno stack separati. Due accessi concorrenti di cui almeno uno in scrittura, senza sincronizzazione, sono UB. Il parser multi è senza race (TSan pulito); togliendo il mutex da dotprod TSan la rileva anche se il risultato sembra giusto.",
+      "turns": [
+        112,
+        113,
+        114,
+        214,
+        229
+      ],
+      "projects": [
+        "chord-pratt-threads",
+        "thread-basics"
+      ],
+      "code_refs": [
+        "networking/mutex_example.c:67",
+        "chord-pratt/chord-pratt-threads.c:843"
+      ],
+      "related": [
+        "concorrenza/mutex"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "concorrenza/misurare-tempo-monotono",
+      "title": "Misurare: wall-clock monotono vs CPU time",
+      "summary": "Per lo speedup serve il wall-clock con CLOCK_MONOTONIC. clock() somma la CPU di tutti i thread. Risoluzione su macOS 1 µs. Il timer esclude I/O e release (che a 600k righe costa più del parsing).",
+      "turns": [
+        120,
+        121,
+        122
+      ],
+      "projects": [
+        "chord-pratt-threads"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt-threads.c:839",
+        "chord-pratt/chord-pratt-threads.c:868"
+      ],
+      "related": [
+        "concorrenza/bash-bc-statistica"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "concorrenza/bash-bc-statistica",
+      "title": "Script bash + bc: media e deviazione standard",
+      "summary": "Ciclo for, $(...) per catturare l'output, grep per isolare il numero, bc -l per i decimali, printf per formattare. 'Parse error: bad token' viene da bc quando il binario crasha e l'output è vuoto.",
+      "turns": [
+        123,
+        124,
+        125,
+        128,
+        134
+      ],
+      "projects": [
+        "chord-pratt-threads"
+      ],
+      "code_refs": [
+        "chord-pratt/run_test.sh:12",
+        "chord-pratt/run_test.sh:26"
+      ],
+      "related": [
+        "concorrenza/misurare-tempo-monotono"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "concorrenza/risultati-benchmark",
+      "title": "Risultati dei benchmark single vs multi",
+      "summary": "M1: 100k 0,134→0,083 s (1,61×), 600k 0,844→0,565 s (1,49×). Rieseguito su i7 Intel: speedup 1,41-1,47 a -O0 e 1,65 a -O2. Il multi è più veloce del 35-40% circa, lontano dal 2×.",
+      "turns": [
+        126,
+        136
+      ],
+      "projects": [
+        "chord-pratt-threads"
+      ],
+      "code_refs": [
+        "chord-pratt/benchmarks.csv:2",
+        "chord-pratt/old_benchmarks.csv:2"
+      ],
+      "related": [
+        "concorrenza/amdahl"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "concorrenza/amdahl",
+      "title": "Legge di Amdahl e algoritmi parallelizzabili",
+      "summary": "Speedup massimo = 1/(s+(1-s)/N), limitato dalla frazione seriale s. Ciò che rende parallelizzabile il parser è il linguaggio a righe indipendenti con unione associativa, non la tecnica Pratt.",
+      "turns": [
+        120,
+        126,
+        127,
+        136
+      ],
+      "projects": [
+        "chord-pratt-threads"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt-threads.c:858"
+      ],
+      "related": [
+        "algebra-fp/associativity-parallelism"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "concorrenza/bug-200k-stack-overflow",
+      "title": "Il bug delle 200.000 righe",
+      "summary": "L'albero è una spina sinistra lunga quanto il file: eval/freeObject ricorsivi superano gli 8 MB di stack del main. Verificato: free ricorsiva → exit 139 a 200k single. Risolto con evalAST e freeObject iterativi.",
+      "turns": [
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135
+      ],
+      "projects": [
+        "chord-pratt-threads"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt-threads.c:737",
+        "chord-pratt/chord-pratt-threads.c:361"
+      ],
+      "related": [
+        "pratt-alberi/stack-overflow-ricorsione",
+        "pratt-alberi/dfs-iterativa",
+        "pratt-alberi/free-iterativa"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "concorrenza/mmap-file-grandi",
+      "title": "mmap e streaming per file grandi",
+      "summary": "mmap carica le pagine on demand; l'alternativa è un buffer a finestra con memmove del residuo. Nel tuo caso il guadagno è marginale: l'AST pesa circa 470 MB per 11 MB di input, e il lexer si basa sul \\0 finale.",
+      "turns": [
+        137
+      ],
+      "projects": [
+        "chord-pratt-threads"
+      ],
+      "code_refs": [
+        "chord-pratt/chord-pratt-threads.c:824"
+      ],
+      "related": [
+        "memoria-c/mmap"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "concorrenza/mutex",
+      "title": "Mutex e sezione critica",
+      "summary": "lock/unlock fanno entrare un thread alla volta. Dentro vanno solo operazioni brevi in memoria, mai I/O di rete (turno 229). Lo schema giusto: lavoro locale e lock solo per aggiornare lo stato condiviso.",
+      "turns": [
+        113,
+        214,
+        216,
+        227,
+        229
+      ],
+      "projects": [
+        "thread-basics"
+      ],
+      "code_refs": [
+        "networking/mutex_example.c:67",
+        "networking/client_http.c:579"
+      ],
+      "related": [
+        "concorrenza/condition-variable"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "concorrenza/condition-variable",
+      "title": "Condition variable",
+      "summary": "Fa dormire un thread finché una condizione su dati condivisi diventa vera. Sempre insieme al mutex e sempre dentro un while (risvegli spuri, signal persi). pthread_cond_wait rilascia e riprende il mutex in modo atomico.",
+      "turns": [
+        214,
+        227,
+        229
+      ],
+      "projects": [
+        "thread-basics"
+      ],
+      "code_refs": [
+        "networking/condition_variables.c:61",
+        "networking/client_http.c:337",
+        "networking/client_http.c:815"
+      ],
+      "related": [
+        "concorrenza/mutex",
+        "audio/ring-buffer",
+        "audio/multithread-produttore-consumatore"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "concorrenza/recv-bloccante-thread-rete",
+      "title": "recv bloccante: thread di rete separato",
+      "summary": "Un thread di rete separato può restare bloccato su recv mentre l'audio thread continua a consumare il ring buffer. I thread qui servono a disaccoppiare tempi diversi, non a calcolare più in fretta.",
+      "turns": [
+        179,
+        227
+      ],
+      "projects": [],
+      "code_refs": [
+        "networking/client_http.c:760",
+        "networking/client_http.c:812"
+      ],
+      "related": [
+        "concorrenza/condition-variable",
+        "audio/multithread-produttore-consumatore"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "concorrenza/thread-pool-vs-event-loop",
+      "title": "Thread pool vs event loop",
+      "summary": "Per 99 download: K worker che prendono un indice da un contatore protetto da mutex e scrivono ognuno nel proprio slot, oppure un solo thread con socket non bloccanti e kqueue/epoll (l'analogo di Promise.all).",
+      "turns": [
+        214,
+        215,
+        216,
+        217
+      ],
+      "projects": [],
+      "code_refs": [
+        "networking/client_http.c:1000"
+      ],
+      "related": [
+        "actor-model/thread-pool-vs-event-loop",
+        "actor-model/poll-epoll-kqueue"
+      ],
+      "difficulty": 2
+    }
+  ],
+  "projects": [
+    {
+      "id": "chord-pratt-threads",
+      "title": "Chord Pratt multithread (MapReduce su 2 pthread)",
+      "path": "chord-pratt/chord-pratt-threads.c",
+      "status": "working",
+      "last_modified": "2026-05-27",
+      "build": "cc -W -Wall -g chord-pratt/chord-pratt-threads.c -o $BUILD/cpt",
+      "run": "$BUILD/cpt chord-pratt/stress_test2.txt [--multi]",
+      "works": [
+        "single e --multi su test, 50k, 100k, 200k e 600k righe",
+        "nessuna race (TSan), nessun errore ASan/UBSan, 0 leak",
+        "evalAST e freeObject iterativi: niente stack overflow",
+        "speedup 1,4-1,66× rieseguito su Intel, coerente con i CSV dell'M1"
+      ],
+      "missing": [
+        "segfault con --multi se dopo la metà non c'è nessun \\n (buf2 NULL, righe 788/847)",
+        "l'output multi ha una WORD vuota in più (finto EOF dopo lo split)",
+        "evalAST delle metà seriale nel main (858-859); reduce con realloc +1 (862-866)",
+        "run_test.sh usa un a.out vecchio (7 maggio) senza --multi; non controlla i crash e non scarta il warm-up",
+        "split fisso a 2 thread"
+      ],
+      "next_step": "Correggere split (fallback senza \\n) e aggiungere un test diff tra l'XML single e quello multi, che deve risultare identico.",
+      "concepts": [
+        "concorrenza/pthread-create-join",
+        "concorrenza/split-confine-riga",
+        "concorrenza/mapreduce-monoide",
+        "concorrenza/ownership-merge",
+        "concorrenza/race-condition",
+        "concorrenza/misurare-tempo-monotono",
+        "concorrenza/bash-bc-statistica",
+        "concorrenza/risultati-benchmark",
+        "concorrenza/amdahl",
+        "concorrenza/bug-200k-stack-overflow",
+        "concorrenza/mmap-file-grandi"
+      ]
+    },
+    {
+      "id": "thread-basics",
+      "title": "Thread basics: mutex e condition variable (esempi LLNL)",
+      "path": "networking/mutex_example.c, networking/condition_variables.c",
+      "status": "done",
+      "last_modified": "2026-07-05",
+      "build": "cc -W -Wall -g networking/mutex_example.c -o $BUILD/mutex_example && cc -W -Wall -g networking/condition_variables.c -o $BUILD/condvar",
+      "run": "$BUILD/mutex_example; $BUILD/condvar",
+      "works": [
+        "mutex_example: Sum = 400, 0 warning, 0 leak",
+        "condition_variables: segnale a count=12, finale 145 in ~10 s, 0 leak",
+        "TSan pulito (con return 0 nel main); togliendo il mutex TSan rileva la race"
+      ],
+      "missing": [
+        "pthread_exit(NULL) nel main blocca TSan su macOS",
+        "mancano esercizi propri (produttore/consumatore con not_empty/not_full)"
+      ],
+      "next_step": "Scrivere un mini produttore/consumatore su un ring buffer da 8 int con due condition variable e verificarlo con TSan.",
+      "concepts": [
+        "concorrenza/mutex",
+        "concorrenza/condition-variable",
+        "concorrenza/race-condition",
+        "concorrenza/pthread-create-join"
+      ]
+    }
+  ],
+  "gemini_errors": [
+    {
+      "turn": 113,
+      "claim": "Usa i C11 threads di Beej (<threads.h>) compilando con -lpthreads.",
+      "correction": "<threads.h> non esiste nell'SDK macOS (verificato: file not found), quindi servono i pthread. Il flag è -lpthread e su macOS non serve."
+    },
+    {
+      "turn": 125,
+      "claim": "bc senza -l tronca $DIFF^2 a 0: la deviazione standard risulta sempre 0.",
+      "correction": "Nel suo script DIFF eredita la scale 20 dalla MEAN calcolata con -l, e ^ mantiene la scale della base: risultato identico con o senza -l (verificato)."
+    },
+    {
+      "turn": 126,
+      "claim": "Il multi è 3 volte più stabile perché lo scheduler non lo interrompe.",
+      "correction": "La conclusione viene da un solo run: old_benchmarks.csv (stesso file) mostra single ±0,0058 e multi ±0,0082. Inoltre tra le parti seriali omette evalAST, che gira nel main dopo il join."
+    },
+    {
+      "turn": 127,
+      "claim": "Il recursive descent è intrinsecamente sequenziale/P-completo, e Game of Life è sequenziale.",
+      "correction": "La parallelizzabilità dipende dal linguaggio (righe indipendenti), non dalla tecnica di parsing. Game of Life è parallelo dentro ogni generazione."
+    },
+    {
+      "turn": 131,
+      "claim": "Il blocco per minuti è dovuto a realloc +1 in O(N^2) (1,25 miliardi di copie).",
+      "correction": "Smentito: il codice esatto del turno 130 ricompilato gira 50k righe in 0,15 s e 600k in 1,98 s."
+    },
+    {
+      "turn": 134,
+      "claim": "Nel codice c'è while(stack->list.len) con listPopObj su un PObj**.",
+      "correction": "Il codice del turno 133 usava già j, quindi il bug era inventato. La causa reale (freeObject ricorsiva) arriva al turno 135; verificato exit 139 a 200k."
+    },
+    {
+      "turn": 136,
+      "claim": "A 600k l'efficienza cala perché il reduce cresce (Amdahl).",
+      "correction": "Il reduce cresce in proporzione all'input, quindi la frazione seriale è costante (~2% misurato sia a 100k che a 600k) e Amdahl prevede lo stesso speedup."
+    },
+    {
+      "turn": 137,
+      "claim": "mmap: zero modifiche al codice, il SO libera da solo le pagine vecchie.",
+      "correction": "Il buffer mappato non ha il \\0 finale e split scrive nel buffer (serve MAP_PRIVATE). Le pagine vengono scartate solo sotto pressione di memoria, e l'AST pesa ~470 MB per 11 MB di input, quindi il guadagno è marginale."
+    },
+    {
+      "turn": 214,
+      "claim": "99 thread consumano quasi 1 GB di RAM (2-8 MB di stack ciascuno).",
+      "correction": "Lo stack è memoria virtuale allocata su richiesta; su macOS un thread secondario ha 512 KB (verificato). Il problema vero è il carico sul server e la gestione."
+    },
+    {
+      "turn": 216,
+      "claim": "4 thread per non saturare la CPU dell'M1; scaricare tutti i 99 chunk e poi suonare.",
+      "correction": "I download sono I/O-bound: il numero di worker dipende da rete e server. Aspettare tutti i chunk contraddice lo streaming live. Il codice del turno 215 usa epoll, che è solo Linux (su macOS serve kqueue)."
+    },
+    {
+      "turn": 229,
+      "claim": "Leggere un int a 32 bit senza lock può corrompersi a livello di CPU.",
+      "correction": "Un int allineato non viene letto a metà su x86/ARM. Il problema è che una data race è UB in C (riordino, valori vecchi). La conclusione (usare il lock) resta valida."
+    }
+  ],
+  "open_questions": [
+    "Causa reale del blocco del turno 131: non riproducibile con il codice del turno 130.",
+    "Perché lo speedup si ferma a 1,4-1,7 con 2 thread: contesa su malloc? banda di memoria? Da misurare con Instruments.",
+    "Come scala con N thread invece di 2?",
+    "Includere la release nel timer (a 600k costa più del parsing)?",
+    "Scartare il warm-up e usare la deviazione standard campionaria (N-1)?",
+    "client_http.c: il network thread non esce mai, quindi join e pulizia sono irraggiungibili; network_threshold_cv non viene mai distrutta."
+  ],
+  "side_topics": [
+    {
+      "title": "Risorse thread: Beej (C e IPC), tutorial LLNL POSIX Threads; processi (fork) vs thread",
+      "turns": [
+        113
+      ]
+    },
+    {
+      "title": "MIT 6.824 Distributed Systems e MapReduce",
+      "turns": [
+        119
+      ]
+    },
+    {
+      "title": "Imparare bash: Learn X in Y minutes, devhints",
+      "turns": [
+        123
+      ]
+    },
+    {
+      "title": "Generare stress test con un ciclo bash e cat >>",
+      "turns": [
+        122
+      ]
+    },
+    {
+      "title": "Streaming con buffer a finestra scorrevole (memmove + refill)",
+      "turns": [
+        137
+      ]
+    },
+    {
+      "title": "-Wl,-stack_size per uno stack più grande nel main su macOS",
+      "turns": [
+        128
+      ]
+    }
+  ],
+  "self_check": [
+    {
+      "q": "Cosa fa pthread_join e cosa succede se il main usa ctx1.ast senza averlo chiamato?",
+      "concept": "concorrenza/pthread-create-join",
+      "difficulty": 1
+    },
+    {
+      "q": "Perché a pthread_create si passa ctx e non &ctx quando ctx è già un Ctx*?",
+      "concept": "concorrenza/pthread-create-join",
+      "difficulty": 1
+    },
+    {
+      "q": "Perché clock() non va bene per misurare lo speedup di un programma multithread? Cosa sono real/user/sys?",
+      "concept": "concorrenza/misurare-tempo-monotono",
+      "difficulty": 1
+    },
+    {
+      "q": "Perché #define THREADS 0 + #ifdef THREADS compila comunque il ramo multithread?",
+      "concept": "concorrenza/misurare-tempo-monotono",
+      "difficulty": 1
+    },
+    {
+      "q": "Perché lo split cerca un \\n invece di tagliare a len/2? Cosa succede oggi se il file è una sola riga?",
+      "concept": "concorrenza/split-confine-riga",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché memcpy(buf2, buf+index+1, len-index) copia anche il terminatore e len-(index+1) no?",
+      "concept": "concorrenza/split-confine-riga",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché nel reduce si fa retain(line) e non retain(result2)? Ricostruisci il refcount di una LINE del thread 2.",
+      "concept": "concorrenza/ownership-merge",
+      "difficulty": 2
+    },
+    {
+      "q": "Che differenza c'è tra inserire result2 in result1 e concatenare le liste? Quale delle due è l'operazione del monoide?",
+      "concept": "concorrenza/mapreduce-monoide",
+      "difficulty": 2
+    },
+    {
+      "q": "Lo script stampa 'Parse error: bad token': chi lo emette e cosa ti dice sul binario?",
+      "concept": "concorrenza/bash-bc-statistica",
+      "difficulty": 1
+    },
+    {
+      "q": "Con speedup 1,6 su 2 thread, qual è l'efficienza? Con il 10% seriale, quale speedup massimo con infiniti thread?",
+      "concept": "concorrenza/amdahl",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché un linguaggio con commenti /* */ su più righe non si parallelizzerebbe con lo stesso split?",
+      "concept": "concorrenza/amdahl",
+      "difficulty": 3
+    },
+    {
+      "q": "Perché la versione multi produce una <word> vuota in più rispetto alla single, e come la correggeresti?",
+      "concept": "concorrenza/split-confine-riga",
+      "difficulty": 3
+    },
+    {
+      "q": "Perché pthread_cond_wait va dentro un while e non dentro un if? Cosa fa al mutex mentre il thread dorme?",
+      "concept": "concorrenza/condition-variable",
+      "difficulty": 2
+    },
+    {
+      "q": "Perché la fetch di rete dentro il mutex del ring buffer blocca l'audio? Cosa deve stare nella sezione critica?",
+      "concept": "concorrenza/mutex",
+      "difficulty": 2
+    },
+    {
+      "q": "99 download: thread pool o event loop? Costi e rischi di ciascuno, e perché non 99 thread?",
+      "concept": "concorrenza/thread-pool-vs-event-loop",
+      "difficulty": 3
+    }
+  ]
+}
