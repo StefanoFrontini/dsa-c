@@ -16,6 +16,14 @@
     Cache-Control = "public, max-age=0, must-revalidate"
     Content-Type = "text/markdown; charset=utf-8"
 
+# Turni della conversazione con Gemini (tools/split_turns.py): markdown, come le note.
+# Vale anche per turns/index.json: il sito lo legge come testo e lo analizza da sé.
+[[headers]]
+  for = "/turns/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Content-Type = "text/markdown; charset=utf-8"
+
 [[headers]]
   for = "/data/*"
   [headers.values]

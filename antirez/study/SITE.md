@@ -21,13 +21,17 @@ Pagine (routing hash, nessun redirect necessario):
   (`#/area/<id>/<ancora>` porta a un titolo o a un concetto, es. `#/area/parsing/recursive-descent`)
 - `#/project/<id>` scheda del progetto
 - `#/errori` (o `#/errori/<area>`) tabella degli errori di Gemini, filtrabile
+- `#/turni` indice dei turni della conversazione con Gemini (data, aree, inizio della domanda), filtrabile;
+  link "Conversazione con Gemini" nel footer
+- `#/turno/<n>` testo originale di un turno: avviso "non rivisto", "Citato in" (concetti ed errori dei JSON che
+  citano il turno), turno precedente/successivo, "Indietro" (torna alla pagina di partenza, alla stessa altezza)
 
 ## Deploy su Netlify
 
 1. Su Netlify: *Add new site → Import an existing project → GitHub*, scegli `StefanoFrontini/dsa-c`, branch `master`.
 2. Le impostazioni sono già in `netlify.toml` nella root del repo: `publish = "antirez/study"`, nessun comando di build.
    Lascia vuoti "Build command" e "Publish directory" nell'interfaccia (vince il file).
-3. Ogni push su `master` ripubblica il sito. Note, schede e JSON hanno `Cache-Control: max-age=0, must-revalidate`
+3. Ogni push su `master` ripubblica il sito. Note, schede, turni e JSON hanno `Cache-Control: max-age=0, must-revalidate`
    (una correzione si vede al primo ricaricamento); `assets/` ha 5 minuti di cache.
 
 ## Dove vivono i dati
@@ -39,6 +43,7 @@ Pagine (routing hash, nessun redirect necessario):
 | Schede progetto | `projects/<id>.md` | `# Titolo — stato: X` → badge |
 | Dati strutturati | `data/<area>.json` | concetti, progetti, errori, `self_check` (se aggiungi `a` la risposta compare a scomparsa) |
 | Elenco dei file del repo | `assets/repo-files.json` | rigeneralo con `tools/update-repo-files.sh` dopo aver aggiunto file |
+| Turni della conversazione | `turns/NNN.md`, `turns/index.json` | generati dall'export, vedi sotto |
 
 I concetti della nota vengono abbinati a quelli del JSON per titolo; se i titoli differiscono, per posizione
 (funziona finché il numero di `###` coincide con `concepts`).
@@ -49,6 +54,32 @@ Link al codice: ogni `` `percorso:riga` `` (anche `:a-b`, `:a,b`, o senza riga) 
 (`actor/poll_input.c`) vengono risolti sul file giusto, e i file che non esistono (segmenti `.ts` di esempio,
 la cartella di build) restano testo; se un nome è ambiguo (`test.txt`) si sceglie il file della cartella del
 progetto, altrimenti resta testo. `:86` senza file resta testo. `notes/x.md` e `projects/y.md` diventano link interni.
+
+## Turni della conversazione (`turns/`)
+
+L'export completo della conversazione con Gemini (`antirez/Gemini-*.md`) è troppo grande perché GitHub lo mostri,
+quindi il sito lo serve diviso in turni: `turns/001.md` … `turns/336.md` (un file per turno: `## User:` con la
+domanda e `## Gemini:` con la risposta, ognuno con la sua riga `> M/D/YYYY ora`) e `turns/index.json`
+(`{source, turns: [{n, date: "AAAA-MM-GG", preview}]}`). Turno 1 = prima domanda, la stessa numerazione delle note.
+Se l'export cambia, rigenerali dalla root del repo (cancella e riscrive tutti i `turns/*.md`):
+
+```
+python3 antirez/study/tools/split_turns.py
+```
+
+- Pagina del turno: la domanda è mostrata come testo semplice (a capo e rientri preservati, perché il codice
+  incollato non ha i ```` ``` ````; oltre 40 righe parte compressa), la risposta passa per la stessa pipeline
+  delle note (marked + highlight.js, titoli abbassati di un livello). I "Thinking steps" restano in blockquote.
+  Nell'export i delimitatori dei blocchi di codice sono scritti `` `\u200B`\u200B` `` (spazi a larghezza zero fra i
+  backtick): il sito li riporta a ```` ``` ```` prima del rendering, i file in `turns/` restano come sono.
+- Link ai turni (`assets/turns.js`): nelle note, nelle schede, nelle risposte dei quiz e nei testi dei JSON le
+  forme "turno 33", "(turni 44-45)", "**Turno 79**:", "Turni: 1-2, 24-26, 31", "turni 128 e 134", "Turni 39 vs 40",
+  "Turni: 280 (codice completo), 270" diventano link (in un intervallo, entrambi gli estremi). Un numero senza la
+  parola turno/turni resta testo, così come i numeri dentro `code`, blocchi di codice, link già esistenti e
+  parentesi ("turno 136 (200k e 600k)"), e i numeri fuori da 1..N. Il tooltip mostra data e inizio della domanda.
+- Dai JSON: la riga "Turni" in "Progetti, collegamenti e codice" sotto ogni concetto (`concepts[].turns`) e la
+  colonna "Turno" della pagina errori (`gemini_errors[].turn`) sono link.
+- Senza `turns/index.json` il sito funziona lo stesso: i link non hanno anteprima e `#/turni` mostra un errore.
 
 ## Progressi (localStorage)
 

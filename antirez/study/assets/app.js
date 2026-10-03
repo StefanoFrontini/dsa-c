@@ -1,11 +1,13 @@
 // SPA con routing hash: #/ (dashboard), #/area/<id>[/<ancora>], #/project/<id>,
-// #/errori[/<area>]. Nessuna build: ES modules caricati direttamente dal browser.
+// #/errori[/<area>], #/turni, #/turno/<n>. Nessuna build: ES modules caricati
+// direttamente dal browser.
 
 import { AREAS, STATUSES, REVIEW_AFTER_DAYS, REVIEW_LIMIT } from './areas.js';
 import * as store from './store.js';
-import { loadAllAreas, loadNote, loadProjectNote, loadRepoFiles, LoadError } from './data.js';
+import { loadAllAreas, loadNote, loadProjectNote, loadRepoFiles, loadTurnIndex, loadTurn, LoadError } from './data.js';
 import { configure, codeRefElement, resolveRef, linkCodeRefs } from './codelinks.js';
 import { renderDocument, renderMarkdown, renderInline, libsReady } from './md.js';
+import { configureTurns, linkTurnRefs, turnLink, turnInfo, turnCount, turnHref, validTurn } from './turns.js';
 
 const main = document.getElementById('main');
 let site = null; // dati di tutte le aree, caricati una volta
@@ -97,6 +99,7 @@ function richText(str, ctx) {
   if (s.includes('`') || /\*\*|\[.+\]\(/.test(s)) {
     const span = renderInline(s);
     linkCodeRefs(span, ctx);
+    linkTurnRefs(span);
     return span;
   }
   const frag = document.createDocumentFragment();
@@ -110,6 +113,7 @@ function richText(str, ctx) {
     last = m.index + text.length;
   }
   frag.append(s.slice(last));
+  linkTurnRefs(frag);
   return frag;
 }
 
@@ -205,7 +209,12 @@ function storageWarning() {
 
 async function ensureSite() {
   if (site) return site;
-  const [repoFiles, { areas, errors }] = await Promise.all([loadRepoFiles(), loadAllAreas()]);
+  const [repoFiles, { areas, errors }, turnIndex] = await Promise.all([
+    loadRepoFiles(),
+    loadAllAreas(),
+    // l'indice dei turni è facoltativo: senza, i link ai turni non hanno anteprima
+    loadTurnIndex().catch((e) => (console.warn(e.message), null)),
+  ]);
   if (!areas.length && errors.length) throw errors[0];
   const byId = new Map(areas.map((a) => [a.id, a]));
   const projects = new Map();
@@ -220,7 +229,8 @@ async function ensureSite() {
     projectIds: [...projects.keys()],
     codeRefs: areas.flatMap((a) => a.concepts.flatMap((c) => c.code_refs)),
   });
-  site = { areas, errors, byId, projects, concepts };
+  configureTurns(turnIndex);
+  site = { areas, errors, byId, projects, concepts, turnIndex };
   return site;
 }
 
@@ -296,6 +306,7 @@ function quizItem(area, i, item, { showArea = false, onChange } = {}) {
   if (item.a) {
     const body = renderMarkdown(String(item.a));
     linkCodeRefs(body, ctx);
+    linkTurnRefs(body);
     li.append(h('details', { class: 'quiz-answer' }, h('summary', null, 'Mostra la risposta'), body));
   }
   sync();
@@ -599,7 +610,7 @@ async function viewArea(id) {
   const header = h('header', { class: 'page-head' },
     h('p', { class: 'eyebrow' }, h('a', { href: '#/' }, 'Percorso'), ` › area ${idx + 1} di ${AREAS.length}`),
     h('h1', { tabindex: '-1' }, title),
-    metaLine ? h('p', { class: 'doc-meta' }, metaLine.textContent) : area ? h('p', { class: 'doc-meta' }, fmtPeriod(area.period)) : null,
+    metaLine ? h('p', { class: 'doc-meta' }, ...metaLine.childNodes) : area ? h('p', { class: 'doc-meta' }, fmtPeriod(area.period)) : null,
     area && area.summary ? h('p', { class: 'lead' }, area.summary) : null,
     progressSlot,
     area && area.projects.length
@@ -658,6 +669,10 @@ function conceptBar(c, key, area, ctx, onChange) {
     if (c.code_refs.length) {
       extra.push(h('div', { class: 'concept-row' }, h('span', { class: 'row-label' }, 'Codice'),
         h('span', { class: 'refs' }, c.code_refs.map((r) => codeRefElement(r, ctx)))));
+    }
+    if (c.turns.length) {
+      extra.push(h('div', { class: 'concept-row' }, h('span', { class: 'row-label' }, 'Turni'),
+        h('span', { class: 'turn-refs' }, c.turns.map((n, i) => [i ? ', ' : '', turnLink(n)]))));
     }
     if (extra.length) {
       bar.append(h('details', { class: 'concept-more' }, h('summary', null, 'Progetti, collegamenti e codice'), ...extra));
@@ -742,14 +757,14 @@ function viewErrors(filterArea) {
     const shown = rows.filter((r) => (!fa || r.area.id === fa) && (!q || norm(`${r.claim} ${r.correction} ${r.turn}`).includes(q)));
     tbody.replaceChildren(...shown.map((r) => h('tr', null,
       h('td', { 'data-label': 'Area' }, h('a', { href: `#/area/${r.area.id}` }, r.area.id)),
-      h('td', { 'data-label': 'Turno', class: 'nowrap' }, String(r.turn ?? '')),
+      h('td', { 'data-label': 'Turno', class: 'nowrap' }, r.turn == null ? '' : turnLink(Number(r.turn), String(r.turn))),
       h('td', { 'data-label': 'Gemini' }, richText(r.claim, ctxOf(r.area))),
       h('td', { 'data-label': 'Correzione' }, richText(r.correction, ctxOf(r.area))),
     )));
     count.textContent = `${plural(shown.length, 'voce', 'voci')} su ${rows.length}`;
     const target = fa ? `#/errori/${fa}` : '#/errori';
     if (location.hash !== target) {
-      history.replaceState(null, '', target);
+      history.replaceState(history.state, '', target);
       current.key = routeKey(parseRoute());
     }
   }
@@ -761,7 +776,7 @@ function viewErrors(filterArea) {
     h('header', { class: 'page-head' },
       h('p', { class: 'eyebrow' }, h('a', { href: '#/' }, 'Percorso'), ' › pagina secondaria'),
       h('h1', { tabindex: '-1' }, 'Errori e imprecisioni di Gemini'),
-      h('p', { class: 'lead' }, 'Tutte le voci "Possibili errori o imprecisioni di Gemini" dei file ', h('code', null, 'data/*.json'), ', verificate sul codice o su server reali. Il turno è quello della conversazione originale.'),
+      h('p', { class: 'lead' }, 'Tutte le voci "Possibili errori o imprecisioni di Gemini" dei file ', h('code', null, 'data/*.json'), ', verificate sul codice o su server reali. Il turno è quello della ', h('a', { href: '#/turni' }, 'conversazione originale'), ': il numero apre il testo di Gemini.'),
     ),
     h('div', { class: 'filters' },
       h('div', { class: 'field' }, h('label', { for: 'f-area' }, 'Area'), select),
@@ -769,6 +784,230 @@ function viewErrors(filterArea) {
     ),
     count,
     h('div', { class: 'table-wrap', tabindex: '0', role: 'region', 'aria-label': 'Errori di Gemini' }, table),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Turni della conversazione con Gemini
+
+// Chi cita il turno `n`: concetti (concepts[].turns), errori di Gemini (turn) e aree
+// (area.turns, più quelle dei concetti e degli errori).
+function turnCitations(n) {
+  const concepts = [];
+  const errors = [];
+  const areas = new Set();
+  for (const a of site.areas) {
+    if (a.turns.includes(n)) areas.add(a);
+    for (const c of a.concepts) if (c.turns.includes(n)) (concepts.push({ c, a }), areas.add(a));
+    for (const e of a.gemini_errors) if (Number(e.turn) === n) (errors.push({ e, a }), areas.add(a));
+  }
+  return { concepts, errors, areas: site.areas.filter((a) => areas.has(a)) };
+}
+
+// Un turno esportato: "## User:\n\n> data\n\ndomanda…\n## Gemini:\n\n> data\n\nrisposta…".
+function splitTurn(md) {
+  const take = (part, head) => {
+    const lines = part.replace(head, '').replace(/^\s*\n/, '').split('\n');
+    let time = '';
+    const m = /^>\s*(\d+\/\d+\/\d{4})\s+(\d+:\d+)/.exec(lines[0] || '');
+    if (m) {
+      time = m[2];
+      lines.shift();
+    }
+    return { time, text: lines.join('\n').replace(/^\s*\n/, '').trimEnd() };
+  };
+  const g = /^## Gemini:.*$/m.exec(md);
+  const user = take(g ? md.slice(0, g.index) : md, /^## User:.*$/m);
+  const gemini = g ? take(md.slice(g.index), /^## Gemini:.*$/m) : null;
+  return { user, gemini };
+}
+
+const LONG_QUESTION = 40; // righe oltre le quali la domanda parte compressa
+
+// La domanda è testo semplice (spesso codice incollato senza ```): niente markdown,
+// a capo e rientri preservati.
+function turnQuestion(text) {
+  const lines = text.split('\n').length;
+  const code = /^\s*(#include|#define|typedef |struct |static |int |void |char |\}|\/\/|\/\*)/m.test(text);
+  const box = h('div', { class: `turn-question${code ? ' is-code' : ''}`, id: 'domanda-testo' }, text);
+  if (lines <= LONG_QUESTION) return box;
+  box.classList.add('is-collapsed');
+  const btn = h('button', { type: 'button', class: 'btn btn-quiet turn-expand', 'aria-expanded': 'false', 'aria-controls': 'domanda-testo' });
+  const sync = () => {
+    const open = !box.classList.contains('is-collapsed');
+    btn.setAttribute('aria-expanded', String(open));
+    btn.textContent = open ? 'Comprimi la domanda' : `Mostra tutta la domanda (${lines} righe)`;
+  };
+  btn.addEventListener('click', () => {
+    box.classList.toggle('is-collapsed');
+    sync();
+  });
+  sync();
+  return h('div', null, box, btn);
+}
+
+// I titoli della risposta scendono di un livello: h2 sono "Domanda" e "Risposta".
+function demoteHeadings(root) {
+  for (const el of root.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+    const level = Math.min(6, Number(el.tagName[1]) + 1);
+    const nh = h(`h${level}`, { id: el.id || null });
+    nh.append(...el.childNodes);
+    el.replaceWith(nh);
+  }
+}
+
+// "Indietro": alla pagina da cui si è arrivati (nota, errori, indice), altrimenti al percorso.
+function goBack(e) {
+  e.preventDefault();
+  if (navDepth > 0) history.back();
+  else location.hash = '#/';
+}
+// Turno precedente/successivo: sostituisce la voce della cronologia, così "Indietro"
+// riporta alla pagina di partenza anche dopo aver sfogliato più turni.
+function replaceNav(e) {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  replacingNav = true;
+  location.replace(e.currentTarget.getAttribute('href'));
+}
+
+async function viewTurn(raw) {
+  const n = /^\d+$/.test(raw || '') ? Number(raw) : NaN;
+  const total = turnCount();
+  const outOfRange = !validTurn(n);
+  let md = null;
+  if (!outOfRange) {
+    try {
+      md = await loadTurn(n);
+    } catch (e) {
+      if (!(e instanceof LoadError && /404/.test(e.detail))) throw e;
+    }
+  }
+  if (md == null) {
+    document.title = 'Turno non trovato — Study';
+    return h('div', { class: 'page' },
+      h('h1', { tabindex: '-1' }, 'Turno non trovato'),
+      h('p', null, outOfRange
+        ? `"${raw}" non è un turno della conversazione${total ? `: i turni vanno da 1 a ${total}` : ''}.`
+        : [`Il file del turno ${n} non c'è: rigenera i turni con `, h('code', null, 'python3 antirez/study/tools/split_turns.py'), '.']),
+      h('p', null, h('a', { href: '#/turni' }, 'Tutti i turni'), ' · ', h('a', { href: '#/' }, 'Torna al percorso')),
+    );
+  }
+
+  const info = turnInfo(n);
+  // Nell'export i delimitatori dei blocchi di codice hanno spazi a larghezza zero fra i
+  // backtick (`\u200B`\u200B`): senza ripulirli marked non vede i blocchi di codice.
+  const { user, gemini } = splitTurn(md.replace(/`\u200B`\u200B`/g, '```'));
+  const cites = turnCitations(n);
+  const areaLinks = (list) => list.map((a, i) => [i ? (i === list.length - 1 ? ' e ' : ', ') : '', h('a', { href: `#/area/${a.id}` }, a.title)]);
+
+  let answer;
+  if (gemini && gemini.text) {
+    answer = renderDocument(gemini.text, { docPath: `turns/${String(n).padStart(3, '0')}.md`, route: `turno/${n}`, ctx: null, turns: false });
+    demoteHeadings(answer);
+  } else answer = h('p', { class: 'muted' }, "Nell'export non c'è la risposta di Gemini a questo turno.");
+
+  const prev = n > 1 ? n - 1 : null;
+  const next = !total || n < total ? n + 1 : null;
+  const pnLink = (m, cls, label) => h('a', { href: turnHref(m), class: cls, onclick: replaceNav, title: turnInfo(m) ? turnInfo(m).preview : null },
+    h('span', { class: 'muted small' }, label), h('span', null, `Turno ${m}`));
+
+  const cited = [];
+  for (const { c, a } of cites.concepts) {
+    cited.push(h('li', null, h('a', { href: conceptHref(c.id) }, c.title), h('span', { class: 'muted' }, ` — ${a.title}`)));
+  }
+  for (const { e, a } of cites.errors) {
+    cited.push(h('li', { class: 'cite-error' },
+      h('a', { href: `#/errori/${a.id}` }, 'Errore di Gemini'), h('span', { class: 'muted' }, ` (${a.title}): `),
+      richText(e.claim, areaCtx(a))));
+  }
+
+  document.title = `Turno ${n} — Study`;
+  return h('div', { class: 'page page-turn' },
+    h('article', { class: 'doc doc-single' },
+      h('header', { class: 'page-head' },
+        h('p', { class: 'eyebrow' }, h('a', { href: '#/' }, 'Percorso'), ' › ', h('a', { href: '#/turni' }, 'Conversazione con Gemini')),
+        h('h1', { tabindex: '-1' }, `Turno ${n}`),
+        h('p', { class: 'doc-meta' },
+          info && info.date ? h('time', { datetime: info.date }, fmtDate(info.date)) : null,
+          user.time ? `, ore ${user.time}` : null,
+          total ? ` · ${n} di ${total}` : null),
+        h('nav', { class: 'turn-nav', 'aria-label': 'Navigazione fra i turni' },
+          h('a', { href: '#/', class: 'turn-back', onclick: goBack }, '← Indietro'),
+          h('span', { class: 'turn-steps' },
+            prev ? h('a', { href: turnHref(prev), onclick: replaceNav, title: `Turno ${prev}` }, '‹ precedente') : null,
+            next ? h('a', { href: turnHref(next), onclick: replaceNav, title: `Turno ${next}` }, 'successivo ›') : null),
+        ),
+        h('div', { class: 'callout callout-source', role: 'note' },
+          h('p', null, h('strong', null, 'Testo originale di Gemini, non rivisto:'), ' può contenere errori. Per i concetti corretti valgono le note',
+            cites.areas.length ? [' (', areaLinks(cites.areas), ')'] : [' del ', h('a', { href: '#/' }, 'percorso')], '.')),
+        cited.length
+          ? h('section', { class: 'cited', 'aria-labelledby': 'h-cited' },
+            h('h2', { id: 'h-cited' }, 'Citato in'),
+            h('ul', null, cited))
+          : h('p', { class: 'muted small' }, 'Nessun concetto o errore delle note cita questo turno.'),
+      ),
+      h('div', { class: 'prose turn-body' },
+        h('h2', { class: 'turn-role', id: 'domanda' }, 'Domanda di Stefano'),
+        user.text ? turnQuestion(user.text) : h('p', { class: 'muted' }, '(domanda vuota)'),
+        h('h2', { class: 'turn-role', id: 'risposta' }, 'Risposta di Gemini', gemini && gemini.time ? h('span', { class: 'muted small' }, ` · ${gemini.time}`) : null),
+        ...answer.childNodes,
+      ),
+      h('nav', { class: 'prev-next', 'aria-label': 'Turni vicini' },
+        prev ? pnLink(prev, 'pn-prev', '← Turno precedente') : h('span'),
+        next ? pnLink(next, 'pn-next', 'Turno successivo →') : h('span'),
+      ),
+    ),
+  );
+}
+
+function viewTurnIndex() {
+  const turns = site.turnIndex && Array.isArray(site.turnIndex.turns) ? site.turnIndex.turns : null;
+  document.title = 'Conversazione con Gemini — Study';
+  const head = h('header', { class: 'page-head' },
+    h('p', { class: 'eyebrow' }, h('a', { href: '#/' }, 'Percorso'), ' › pagina secondaria'),
+    h('h1', { tabindex: '-1' }, 'Conversazione con Gemini'),
+    h('p', { class: 'lead' }, 'I turni originali, uno per pagina: la domanda e la risposta di Gemini così come sono state esportate, senza correzioni. Le note sono la versione rivista.'),
+  );
+  if (!turns) {
+    return h('div', { class: 'page page-turns' }, head,
+      h('div', { class: 'callout callout-error', role: 'alert' }, h('p', null, 'turns/index.json non si è caricato: rigenera i turni con ', h('code', null, 'python3 antirez/study/tools/split_turns.py'), '.')));
+  }
+  // Aree di ogni turno (area.turns), mostrate accanto alla data.
+  const areasOf = new Map();
+  for (const a of site.areas) for (const t of a.turns) areasOf.set(t, [...(areasOf.get(t) || []), a]);
+
+  const items = turns.map((t) => {
+    const areas = areasOf.get(t.n) || [];
+    const li = h('li', { class: 'turn-item' },
+      h('a', { href: turnHref(t.n), class: 'turn-item-link' },
+        h('span', { class: 'turn-n' }, `Turno ${t.n}`),
+        h('span', { class: 'turn-date' }, t.date ? fmtDate(t.date) : ''),
+        areas.length ? h('span', { class: 'turn-areas' }, areas.map((a) => a.title).join(' · ')) : null,
+        h('span', { class: 'turn-preview' }, t.preview || ''),
+      ),
+    );
+    return { li, text: norm(`turno ${t.n} ${t.date || ''} ${fmtDate(t.date)} ${areas.map((a) => a.title).join(' ')} ${t.preview || ''}`) };
+  });
+  const list = h('ol', { class: 'turn-list' }, items.map((x) => x.li));
+  const search = h('input', { type: 'search', id: 'f-turn', placeholder: 'es. refcount, pthread, 111, giu', autocomplete: 'off' });
+  const count = h('p', { class: 'muted', role: 'status', 'aria-live': 'polite' });
+  function update() {
+    const q = norm(search.value);
+    let shown = 0;
+    for (const x of items) {
+      const on = !q || x.text.includes(q);
+      x.li.hidden = !on;
+      if (on) shown++;
+    }
+    count.textContent = `${plural(shown, 'turno', 'turni')} su ${items.length}`;
+  }
+  search.addEventListener('input', update);
+  update();
+  return h('div', { class: 'page page-turns' }, head,
+    h('div', { class: 'filters' }, h('div', { class: 'field' }, h('label', { for: 'f-turn' }, 'Cerca nelle domande'), search)),
+    count,
+    list,
   );
 }
 
@@ -792,6 +1031,8 @@ function parseRoute() {
   if (page === 'area' && id) return { page: 'area', id, anchor: rest.join('/') };
   if (page === 'project' && id) return { page: 'project', id };
   if (page === 'errori') return { page: 'errori', id };
+  if (page === 'turni' && !id) return { page: 'turni' };
+  if (page === 'turno' && id) return { page: 'turno', id, anchor: rest.join('/') };
   return { page: 'notfound' };
 }
 const routeKey = (r) => `${r.page}/${r.id || ''}`;
@@ -810,7 +1051,7 @@ function scrollToAnchor(anchor) {
 function markNav(route) {
   for (const a of document.querySelectorAll('[data-nav]')) {
     const group = route.page === 'errori' ? 'errori' : 'dashboard';
-    const on = a.dataset.nav === group && route.page !== 'notfound';
+    const on = a.dataset.nav === group && !['notfound', 'turni', 'turno'].includes(route.page);
     if (on) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   }
@@ -819,9 +1060,11 @@ function markNav(route) {
 async function render() {
   const route = parseRoute();
   const key = routeKey(route);
+  const savedScroll = trackHistory();
   markNav(route);
-  if (key === current.key && route.page === 'area') {
-    scrollToAnchor(route.anchor) || window.scrollTo(0, 0);
+  if (key === current.key && (route.page === 'area' || route.page === 'turno')) {
+    if (savedScroll !== undefined) window.scrollTo(0, savedScroll);
+    else scrollToAnchor(route.anchor) || window.scrollTo(0, 0);
     return;
   }
   if (key === current.key && route.page === 'errori') return;
@@ -836,6 +1079,8 @@ async function render() {
     else if (route.page === 'area') view = await viewArea(route.id);
     else if (route.page === 'project') view = await viewProject(route.id);
     else if (route.page === 'errori') view = viewErrors(route.id);
+    else if (route.page === 'turni') view = viewTurnIndex();
+    else if (route.page === 'turno') view = await viewTurn(route.id);
     else view = viewNotFound();
   } catch (e) {
     console.error(e);
@@ -846,7 +1091,8 @@ async function render() {
   main.replaceChildren(...[libsWarning(), view].filter(Boolean));
   main.removeAttribute('aria-busy');
   setupToc();
-  if (!scrollToAnchor(route.anchor)) {
+  if (savedScroll !== undefined) window.scrollTo(0, savedScroll);
+  else if (!scrollToAnchor(route.anchor)) {
     window.scrollTo(0, 0);
     // Dopo una navigazione il focus va al titolo (utile con lettori di schermo).
     const h1 = main.querySelector('h1');
@@ -855,6 +1101,39 @@ async function render() {
   firstRender = false;
 }
 let firstRender = true;
+
+// Cronologia: ogni voce del sito ha la sua profondità in history.state (0 = prima pagina
+// aperta), così "Indietro" nei turni sa se c'è una pagina del sito a cui tornare. Le
+// posizioni di scorrimento delle pagine lasciate vengono ricordate: tornando indietro
+// (bottone o tasto del browser) la nota riappare al punto in cui la si era lasciata.
+let navDepth = 0;
+let replacingNav = false; // location.replace (turno precedente/successivo)
+let lastEntry = null; // profondità della pagina mostrata (chiave di scrollPos)
+const scrollPos = new Map();
+try {
+  history.scrollRestoration = 'manual';
+} catch {
+  /* non supportato: pazienza */
+}
+function trackHistory() {
+  if (lastEntry !== null) scrollPos.set(lastEntry, window.scrollY);
+  const st = history.state;
+  let traversal = false;
+  if (st && Number.isInteger(st.depth)) {
+    navDepth = st.depth;
+    traversal = !firstRender;
+  } else {
+    if (!firstRender && !replacingNav) navDepth++;
+    try {
+      history.replaceState({ ...(st && typeof st === 'object' ? st : {}), depth: navDepth }, '');
+    } catch {
+      /* ignora */
+    }
+  }
+  replacingNav = false;
+  lastEntry = navDepth;
+  return traversal ? scrollPos.get(lastEntry) : undefined;
+}
 
 function rerender() {
   current.key = null;

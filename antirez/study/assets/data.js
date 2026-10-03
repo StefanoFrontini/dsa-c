@@ -48,6 +48,9 @@ function cached(path, kind) {
 export const loadAreaData = (id) => cached(`data/${id}.json`, 'json');
 export const loadNote = (id) => cached(`notes/${id}.md`, 'text');
 export const loadProjectNote = (id) => cached(`projects/${id}.md`, 'text');
+// Turni della conversazione con Gemini (generati da tools/split_turns.py).
+export const loadTurnIndex = () => cached('turns/index.json', 'json');
+export const loadTurn = (n) => cached(`turns/${String(n).padStart(3, '0')}.md`, 'text');
 
 // Carica tutti i JSON delle aree. Le aree che non si caricano compaiono in `errors`
 // invece di bloccare la pagina.

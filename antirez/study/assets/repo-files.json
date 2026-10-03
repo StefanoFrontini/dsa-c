@@ -1,6 +1,7 @@
 {
 "generated": "2026-10-03",
 "files": [
+"Gemini-Reference Counting e Ownership in C-20261003-1108.md",
 "bst.c",
 "bst2.c",
 "chord-pratt/benchmarks.csv",

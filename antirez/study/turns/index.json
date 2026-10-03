@@ -1,0 +1,1685 @@
+{
+ "source": "Gemini-Reference Counting e Ownership in C-20261003-1108.md",
+ "turns": [
+  {
+   "n": 1,
+   "date": "2026-03-14",
+   "preview": "Con riferimento a questo programma in C potresti aiutarmi a capire il concetto di reference counting e ownership? In sostanza mi devo sempre chiedere mentre svi"
+  },
+  {
+   "n": 2,
+   "date": "2026-03-14",
+   "preview": "Ok per vedere come viene gestito l'ownership all'interno della funzione exec. Sempre in basicMathFunctions quando scrivo: ctxStackPush(ctx, createIntObject(resu"
+  },
+  {
+   "n": 3,
+   "date": "2026-03-14",
+   "preview": "In passato avevo scritto un piccolo compiler in Typescript seguendo il corso Nand To Tetris: lì avevo creato una struttura Tokenizer e una funzione advance() e "
+  },
+  {
+   "n": 4,
+   "date": "2026-03-23",
+   "preview": "come esercizio ho provato a creare un parser in un altro contesto. Innanzitutto vedi bug o memory leaks? /* A chord sheet is a text where chords a written with "
+  },
+  {
+   "n": 5,
+   "date": "2026-03-24",
+   "preview": "Ho corretto i bug. In caso di errore volevo continuare il parsing per due motivi: 1. lato frontend volevo mostrare tutti gli errori e per ogni errore volevo mos"
+  },
+  {
+   "n": 6,
+   "date": "2026-03-24",
+   "preview": "se invece non volessi fare error recovery e volessi propagare l'errore verso l'alto e interrompere l'analisi al primo errore?"
+  },
+  {
+   "n": 7,
+   "date": "2026-03-24",
+   "preview": "Il compilatore C segue questo schema? Mi sembra che mostri tutti gli errori e non solo il primo"
+  },
+  {
+   "n": 8,
+   "date": "2026-03-24",
+   "preview": "A livello architetturale ho visto che nel progetto toyforth le parsing functions vengono associate ad un token e registrate in una lista di puntatori. Durante i"
+  },
+  {
+   "n": 9,
+   "date": "2026-03-24",
+   "preview": "Dopo aver letto il libro \"Writing a compiler in GO\" di Thorsten Ball avevo provato a scrivere il Song Parser usando la tecnica del Pratt Parsing. In effetti ave"
+  },
+  {
+   "n": 10,
+   "date": "2026-03-24",
+   "preview": "Directory Structure: --- ├── 📁 ast │ ├── 📄 ast.ts │ ├── 📄 chordExpression.ts │ ├── 📄 expression.ts │ ├── 📄 expressionStatement.ts │ ├── 📄 infixExpression.ts │ ├"
+  },
+  {
+   "n": 11,
+   "date": "2026-03-24",
+   "preview": "ok guardiamo"
+  },
+  {
+   "n": 12,
+   "date": "2026-03-24",
+   "preview": "Da questi esercizi sto cercando di crearmi una mappa mentale su come costruire i parser: a volte è sufficiente costruire un AST altre volte invece una volta cos"
+  },
+  {
+   "n": 13,
+   "date": "2026-03-24",
+   "preview": "nel corso Nand To Tetris avevo scritto un Jack Compiler che nella fase intermedia generava codice per la virtual machine: Directory Structure: --- ├── 📄 .gitign"
+  },
+  {
+   "n": 14,
+   "date": "2026-03-24",
+   "preview": "si anche il toyforth usa una struttura dati basata sullo stack nella fase di execution. Anche la risoluzione delle operazioni matematiche nel Jack Compiler mi h"
+  },
+  {
+   "n": 15,
+   "date": "2026-03-24",
+   "preview": "ok mostrami a grandi linee l'algoritmo Shunting-yard per capire i concetti che ha usato"
+  },
+  {
+   "n": 16,
+   "date": "2026-03-24",
+   "preview": "l'algoritmo per la trasformazione da infix a postfix usato nel Jack Compiler non gestiva la precedenza degli operatori invece l'algoritmo Shunting-yard si"
+  },
+  {
+   "n": 17,
+   "date": "2026-03-24",
+   "preview": "al fine di consolidare questi concetti (anche per alcuni colleghi sviluppatori) potrebbe essere utile fare una presentazione/talk sulle diverse tecniche di pars"
+  },
+  {
+   "n": 18,
+   "date": "2026-03-24",
+   "preview": "Ok per buttare giù una scaletta. Stavo pensando che React potrebbe consumare l'output del Chord Parser in due modi: dopo che l'AST è stato \"appiattito\" (array d"
+  },
+  {
+   "n": 19,
+   "date": "2026-03-24",
+   "preview": "Potrebbe essere utile inserire anche una sezione in cui il parsing viene fatto senza Pratt Parsing ma analizzando le regole grammaticali, Recursive Descent Pars"
+  },
+  {
+   "n": 20,
+   "date": "2026-03-24",
+   "preview": "Ok per la slide. Stavo pensando che per esercizio potrei provare a fare un Chord Parser usando l'algoritmo di Shunting-yard"
+  },
+  {
+   "n": 21,
+   "date": "2026-03-24",
+   "preview": "Se confermiamo la scaletta del talk mi sembra di capire che dovrei sviluppare queste librerie in typescript che poi potrei condividere alla fine del talk: Chord"
+  },
+  {
+   "n": 22,
+   "date": "2026-03-26",
+   "preview": "volevo implementare l'algoritmo di shunting-yard in C. Per quanto riguarda l'architettura della struttura dati Queue, potrei implementarla con un Ring Buffer ma"
+  },
+  {
+   "n": 23,
+   "date": "2026-03-26",
+   "preview": "se uso un array dinamico per la coda allora potrei definire un'unica struttura dati con due metodi listPush() e listPop() che potrei usare sia per la Stack Mach"
+  },
+  {
+   "n": 24,
+   "date": "2026-03-31",
+   "preview": "Ecco una implementazione dell'algoritmo di shunting-yard in C. Ci sono bug o memory leaks? Per quanto riguarda il refcount ho ragionato così: quando faccio il p"
+  },
+  {
+   "n": 25,
+   "date": "2026-03-31",
+   "preview": "Per quanto riguarda il punto 3. se decidessi di fare retain sempre fuori dalle funzioni di utility come potrei modificare il codice?"
+  },
+  {
+   "n": 26,
+   "date": "2026-03-31",
+   "preview": "ecco il codice aggiornato: #include <assert.h> #include <ctype.h> #include <stdint.h> #include <stdio.h> #include <stdlib.h> #include <string.h> #include <unist"
+  },
+  {
+   "n": 27,
+   "date": "2026-03-31",
+   "preview": "Stavo pensando che imparare il C potrebbe essermi utile anche lato frontend: potrei creare dei servizi in C che una volta compilati in webassembly potrei usare "
+  },
+  {
+   "n": 28,
+   "date": "2026-03-31",
+   "preview": "ok fammi vedere un semplice esempio"
+  },
+  {
+   "n": 29,
+   "date": "2026-03-31",
+   "preview": "Molto interessante mi piacerebbe impadronirmi sempre più di queste tecniche. Se la funzione C ritornasse uno struct CsObj come ad es. l'AST generato dal Chord P"
+  },
+  {
+   "n": 30,
+   "date": "2026-03-31",
+   "preview": "Visto che il mio scopo è didattico penso che andrò con il primo approccio così mi impratichisco anche su come il C allinea gli struct e su come javascript legge"
+  },
+  {
+   "n": 31,
+   "date": "2026-03-31",
+   "preview": "come si chiama free() in wasm?"
+  },
+  {
+   "n": 32,
+   "date": "2026-03-31",
+   "preview": "E' possible anche creare un componente React ricorsivo che legge l'AST direttamente dal buffer di wasm, giusto? Sarebbe più efficiente, giusto?"
+  },
+  {
+   "n": 33,
+   "date": "2026-04-01",
+   "preview": "ho provato ad implementare le parentesi tonde nello shunting-yard. Ci sono bug? Ho dato alle parentesi tonde la precedenza più bassa (pari a 0). E' corretto? In"
+  },
+  {
+   "n": 34,
+   "date": "2026-04-01",
+   "preview": "in questa implementazione il numero -2 viene parsato direttamente dal parser come numero negativo. Avrei potuto implementare lo shunting-yard parsando il numero"
+  },
+  {
+   "n": 35,
+   "date": "2026-04-03",
+   "preview": "ci sono dei bug? #include <assert.h> #include <ctype.h> #include <stdint.h> #include <stdio.h> #include <stdlib.h> #include <string.h> #include <unistd.h> #defi"
+  },
+  {
+   "n": 36,
+   "date": "2026-04-12",
+   "preview": "che ne pensi di questa implementazione in C del chord parser basato sull'algoritmo di shunting-yard? Può funzionare? Ci sono bug? #include <assert.h> #include <"
+  },
+  {
+   "n": 37,
+   "date": "2026-04-13",
+   "preview": "Quando dici: “t->str.ptr = \"emptyChord\"; // Questo vive nella memoria Read-Only!” Con read-only intendo la memoria stack? Avevo scritto il testo “emptyChord” pe"
+  },
+  {
+   "n": 38,
+   "date": "2026-04-13",
+   "preview": "Stavo pensando alle analogie tra il concetto di moltiplicazione di due entità primitive, la stack machine e la programmazione funzionale: mentre lo implementavo"
+  },
+  {
+   "n": 39,
+   "date": "2026-04-13",
+   "preview": "potresti spiegarmi brevemente la definizione di monoide e come questa definizione si applica la a questo progetto del chord parser?"
+  },
+  {
+   "n": 40,
+   "date": "2026-04-13",
+   "preview": "Molto interessante il parallelismo con la teoria matematica dei monoidi. Nell'implementazione del parser avevo pensato a questa analogia con una equazione matem"
+  },
+  {
+   "n": 41,
+   "date": "2026-04-13",
+   "preview": "Per trattare in maniera più pulita i casi speciali in cui il testo della canzone è semplicemente un lyric o un chord: ad es. aaa oppure [C] oppure: aaa \\n oppur"
+  },
+  {
+   "n": 42,
+   "date": "2026-04-13",
+   "preview": "proviamo ad implementare i token neutri all'interno del ciclo while principale dove al momento vengono iniettati gli emptyChordToken, emptyLyricToken e WORD_MUL"
+  },
+  {
+   "n": 43,
+   "date": "2026-04-13",
+   "preview": "fantastico! potresti darmi una versione aggiornata di tutto il codice?"
+  },
+  {
+   "n": 44,
+   "date": "2026-04-13",
+   "preview": "ho provato a parsare questo testo: [A]aaa[B]bbb [C]ccc[D]ddd ma nel terminale dopo la frase Result is: non vedo stampato nulla"
+  },
+  {
+   "n": 45,
+   "date": "2026-04-13",
+   "preview": "inserite le modifiche ma ho questi errori: FATAL ERROR: Expected LINE in WORD_MULT, got 2 FATAL ERROR: Expected LINE in WORD_MULT, got 0 FATAL ERROR: Expected L"
+  },
+  {
+   "n": 46,
+   "date": "2026-04-13",
+   "preview": "ok funziona. Potresti spiegarmi meglio come la sentinella creata con createEmptySongToken si lega con la successiva sentinella line?"
+  },
+  {
+   "n": 47,
+   "date": "2026-04-13",
+   "preview": "nel caso speciale [A]aaa quindi un testo senza l'operatore \\n?"
+  },
+  {
+   "n": 48,
+   "date": "2026-04-13",
+   "preview": "Ho scritto queste due funzioni molto simili per fare il push: void listPush(Token *l, Token *ele) { l->list.ele = xrealloc(l->list.ele, sizeof(Token *) * (l->li"
+  },
+  {
+   "n": 49,
+   "date": "2026-04-13",
+   "preview": "vorrei ora provare ad implementare il Pratt Parsing in C di una semplice espressione matematica ad es. 2 * 3 + 1 *4. Senza scrivere codice potresti aiutarmi a r"
+  },
+  {
+   "n": 50,
+   "date": "2026-04-13",
+   "preview": "Prima di continuare con il Pratt Parsing stavo riflettendo sull'esercizio fatto prima e la connessione tra le due operazioni monoidali e gli Algebraic Data Type"
+  },
+  {
+   "n": 51,
+   "date": "2026-04-13",
+   "preview": "Stavo pensando che per il talk potrei far vedere una versione del chord parser shunting-yard in typescript molto simile a quella vista insieme in C (quindi con "
+  },
+  {
+   "n": 52,
+   "date": "2026-04-13",
+   "preview": "forse mostrare codice in C sarebbe eccessivo penso ( sia per loro che forse non lo conoscono sia per me che sono alle prime armi -) ). Potrei far vedere due ver"
+  },
+  {
+   "n": 53,
+   "date": "2026-04-13",
+   "preview": "Quando inizio a parlare di come una canzone con testo e accordi può essere vista come una espressione matematica potrei far vedere che una normale espressione m"
+  },
+  {
+   "n": 54,
+   "date": "2026-04-13",
+   "preview": "vorrei ridurre al minimo il codice. Se hai dei suggerimenti illustrativi li accetto volentieri"
+  },
+  {
+   "n": 55,
+   "date": "2026-04-14",
+   "preview": "Per quanto riguarda il primo punto quale potrebbe essere una Regex che ad un primo approccio una sviluppatore potrebbe usare?"
+  },
+  {
+   "n": 56,
+   "date": "2026-04-14",
+   "preview": "quale potrebbe essere il codice React \"spaghetti\"?"
+  },
+  {
+   "n": 57,
+   "date": "2026-04-16",
+   "preview": "un altro punto a favore del parsing strutturale penso sia la facilità di implementazione di un meccanismo di error recovery: supponiamo che nel frontend voglia "
+  },
+  {
+   "n": 58,
+   "date": "2026-04-17",
+   "preview": "nel caso di utilizzo di tecniche di parsing che vedono il testo con accordi come ad una equazione di testo hai detto che in typescript potrei usare i web worker"
+  },
+  {
+   "n": 59,
+   "date": "2026-04-17",
+   "preview": "la comunicazione tra web worker e main thread può avvenire solo tramite un processo di serializzazione e deserializzazione? l'AST generato dal web worker deve e"
+  },
+  {
+   "n": 60,
+   "date": "2026-04-17",
+   "preview": "se invece volessi fare una slide sui web workers potrei creare una \"canzone\" da ad esempio 10.000 o 100.000 righe e far vedere quanto tempo ci mette il renderin"
+  },
+  {
+   "n": 61,
+   "date": "2026-04-18",
+   "preview": "se creassi due web worker ognuno dei quali lavora su una stringa da 50.000 righe e poi unissi il risultato finale i tempi di esecuzione sarebbero diversi rispet"
+  },
+  {
+   "n": 62,
+   "date": "2026-04-18",
+   "preview": "stavo pensando all'analogia tra il chord parser e un parser di file markdown. Che tipo di tecniche vengono usate per il parsing del markdown? Vengono usate alcu"
+  },
+  {
+   "n": 63,
+   "date": "2026-04-18",
+   "preview": "ok"
+  },
+  {
+   "n": 64,
+   "date": "2026-04-18",
+   "preview": "come possiamo strutturarla?"
+  },
+  {
+   "n": 65,
+   "date": "2026-04-18",
+   "preview": "anche le tecniche di parsing dell'html usate dal browser sono simili?"
+  },
+  {
+   "n": 66,
+   "date": "2026-04-18",
+   "preview": "Volevo trattare principalmente le tecniche di Recursive Descent Parsing (definizione della grammatica, una funzione di parsing per ogni regola grammaticale) in "
+  },
+  {
+   "n": 67,
+   "date": "2026-04-18",
+   "preview": "ok"
+  },
+  {
+   "n": 68,
+   "date": "2026-04-18",
+   "preview": "il testo di questa discussione sta diventando molto lungo. Potresti esportare tutto il testo in un file .txt?"
+  },
+  {
+   "n": 69,
+   "date": "2026-04-18",
+   "preview": "non volevo un riassunto ma tutto il testo di domande e risposte che abbiamo avuto finora in modo da caricarlo in word e studiarlo meglio"
+  },
+  {
+   "n": 70,
+   "date": "2026-04-18",
+   "preview": "sotto ad ogni tua risposta vedo 3 punti che se ci clicco mi permettono di esportare il testo delle tue risposte in Documenti: \"Esporta in Documenti\". E' esattam"
+  },
+  {
+   "n": 71,
+   "date": "2026-04-18",
+   "preview": "Anche il parsing del CSS da parte del browser utilizza tecniche simili a quelle che abbiamo visto?"
+  },
+  {
+   "n": 72,
+   "date": "2026-04-18",
+   "preview": "potresti farmi un riassunto delle tecniche di parsing usate per javascript?"
+  },
+  {
+   "n": 73,
+   "date": "2026-04-18",
+   "preview": "ok"
+  },
+  {
+   "n": 74,
+   "date": "2026-04-25",
+   "preview": "Ho iniziato ad implementare in C il parsing di una semplice espressione matematica tramite il Pratt parsing. Per ora il programma gestisce solo numeri interi e "
+  },
+  {
+   "n": 75,
+   "date": "2026-04-25",
+   "preview": "visto che suggerisci di non allocare i token nell'heap, avrebbe senso non allocare nell'heap anche i PObj dell'ast? Qual è la regola per decidere quando allocar"
+  },
+  {
+   "n": 76,
+   "date": "2026-04-25",
+   "preview": "ok spiegami il concetto di arena allocator"
+  },
+  {
+   "n": 77,
+   "date": "2026-04-25",
+   "preview": "ho provato a fare ad allocare i token nello stack piuttosto che nell'heap. Vedi bug? #include <assert.h> #include <ctype.h> #include <stdint.h> #include <stdio."
+  },
+  {
+   "n": 78,
+   "date": "2026-04-25",
+   "preview": "quando parli di array statico per la parsing table intendi la creazione della tabella nello stack nella funzione createContext()?"
+  },
+  {
+   "n": 79,
+   "date": "2026-04-25",
+   "preview": "ecco la versione con la tabella di parsing allocata staticamente: #include <assert.h> #include <ctype.h> #include <stdint.h> #include <stdio.h> #include <stdlib"
+  },
+  {
+   "n": 80,
+   "date": "2026-04-26",
+   "preview": "Ho messo in fondo la rulesTables ma ora ho questi errori: cc -W -Wall math-pratt.c && ./a.out ./test.txt ─╯ math-pratt.c:311:10: error: use of undeclared identi"
+  },
+  {
+   "n": 81,
+   "date": "2026-04-26",
+   "preview": "potresti generarmi il file completo in modo da poterlo copiare e incollare interamente?"
+  },
+  {
+   "n": 82,
+   "date": "2026-04-26",
+   "preview": "per quanto riguarda il contesto è necessario allocarlo nell'heap oppure potrei istanziarlo nello stack?"
+  },
+  {
+   "n": 83,
+   "date": "2026-04-26",
+   "preview": "Se volessi usare una funzione di inizializzazione del contesto e allocare il contesto nello stack potrei fare così? void initContext(pCtx *ctx, char *buf) { ctx"
+  },
+  {
+   "n": 84,
+   "date": "2026-04-27",
+   "preview": "Ho provato ad implementare il meno unario? Ho assegnato al segno meno sia una prefix che una infin function. Pensavo di dover assegnare una precedenza superiore"
+  },
+  {
+   "n": 85,
+   "date": "2026-04-28",
+   "preview": "ho provato ad implementare gli operatori OPEN_PAREN e CLOSE_PAREN. Sembra funzionare ma non so se è la modalità corretta. #include <assert.h> #include <ctype.h>"
+  },
+  {
+   "n": 86,
+   "date": "2026-04-28",
+   "preview": "ho implementato le modifiche da te suggerite ma con questa espressione il parser si blocca. #include <assert.h> #include <ctype.h> #include <stdint.h> #include "
+  },
+  {
+   "n": 87,
+   "date": "2026-04-28",
+   "preview": "ho provato questa stringa: (1 + 2) * 3 La stringa: (1+2)*3 invece funziona"
+  },
+  {
+   "n": 88,
+   "date": "2026-04-28",
+   "preview": "ho provato ad implementare evalAST. Che ne pensi a livello architetturale? Ci sono bug? L'algoritmo di evalAST è depth-first search, giusto? #include <assert.h>"
+  },
+  {
+   "n": 89,
+   "date": "2026-04-28",
+   "preview": "potresti farmi un riassunto dei possibili modi di attraversare un albero?"
+  },
+  {
+   "n": 90,
+   "date": "2026-04-28",
+   "preview": "Posso usare il Post-Order per generare una notazione postFix? Ok per scrivere una funzione che che usa la DFS per stampare l'albero nel terminale come se fosse "
+  },
+  {
+   "n": 91,
+   "date": "2026-04-28",
+   "preview": "Vorrei provare a stampare l'albero con una notazione XML. Ad es. -1+2*3 potrebbe essere stampato così: <infix> <negation> <number>1</number> </negation> <op>+</"
+  },
+  {
+   "n": 92,
+   "date": "2026-04-28",
+   "preview": "ok per scrivere una variante che esporta in json. Per serializzazione si intende la trasformazione di una struttura dati in memoria in un flusso di byte lineare"
+  },
+  {
+   "n": 93,
+   "date": "2026-04-28",
+   "preview": "in una presentazione per frontenders le rappresentazioni di un albero tramite XML e JSON mi sembrano entrambe efficaci: i frontenders lavorano tutti i giorni co"
+  },
+  {
+   "n": 94,
+   "date": "2026-04-28",
+   "preview": "Dalla prospettiva del parsing è corretto dire che la differenza tra statement e espressione in un linguaggio di programmazione è che lo statement viene parsato "
+  },
+  {
+   "n": 95,
+   "date": "2026-04-28",
+   "preview": "Quandi dici: \"tecnicamente, è possibile parsare anche le espressioni usando solo il Recursive Descent\" è ciò che abbiamo fatto quando abbiamo usato tecniche di "
+  },
+  {
+   "n": 96,
+   "date": "2026-04-29",
+   "preview": "potresti spiegarmi cosa fa la funzione snprintf in printAST_recursive? la dichiarazione: char newPrefix[1024]; alloca una struttura di 1024 bytes nello stack, g"
+  },
+  {
+   "n": 97,
+   "date": "2026-04-29",
+   "preview": "avrei potuto dichiarare char newPrefix[1024]; in printTree e poi passare il puntatore a printAST_recursive?"
+  },
+  {
+   "n": 98,
+   "date": "2026-04-29",
+   "preview": "invece di snprintf avrei potuto usare memcpy, giusto?"
+  },
+  {
+   "n": 99,
+   "date": "2026-04-29",
+   "preview": "se volessi serializzare l'albero in formato json e scriverlo su disco, dovrei modificare la funzione printJSON in modo da allocare un buffer e nello switch stat"
+  },
+  {
+   "n": 100,
+   "date": "2026-04-29",
+   "preview": "i parser JSON usano di solito il Recursive Descent dopo aver definito la grammatica oppure è possibile usare tecniche di parsing come il Pratt parsing o shuntin"
+  },
+  {
+   "n": 101,
+   "date": "2026-04-29",
+   "preview": "se scrivessi un parser in C e poi lo compilassi in webassembly sarebbe più efficiente di JSON.parse() in Javascript?"
+  },
+  {
+   "n": 102,
+   "date": "2026-05-05",
+   "preview": "La prossima volta quando non ti è chiaro a cosa mi riferisco invece di inventare una risposta come questa fammi una domanda per capire meglio il contesto (ad es"
+  },
+  {
+   "n": 103,
+   "date": "2026-05-05",
+   "preview": "un vantaggio di trattare il testo come un'equazione algebrica è che in una ipotetica canzone di 100.000 righe potrei \"spezzare\" la canzone in più threads (ognun"
+  },
+  {
+   "n": 104,
+   "date": "2026-05-05",
+   "preview": "Non conosco molto la teoria Finite State Machine, ho provato ad implementarla anche per capire in quale contesto mi può essere utile. In sostanza devo mappare g"
+  },
+  {
+   "n": 105,
+   "date": "2026-05-05",
+   "preview": "Facendo questi esercizi con diverse tecniche di parsing mi sono accorto che la distinzione tra ciò che fa il lexer e cosa fa il parser non è così netta: a volte"
+  },
+  {
+   "n": 106,
+   "date": "2026-05-05",
+   "preview": "- [Screenshot 2026-05-05 alle 22.13.43.png](https://lh3.googleusercontent.com/gg/AJWXcNdpA_SLEGyqZK7bidT4PJ5PForBiko817SL7Sp1IkRfNAGu4rW3s1RRq8lLkJwx-50FROY4v8x"
+  },
+  {
+   "n": 107,
+   "date": "2026-05-05",
+   "preview": "non volevo fare dei video ma solo far vedere delle animazioni che mi aiutassero a spiegare i concetti. La web app anche per la presentazione sarebbe molto bella"
+  },
+  {
+   "n": 108,
+   "date": "2026-05-05",
+   "preview": "ragionandoci meglio il mio obiettivo primario è diventare un programmatore migliore (imparare il C, typescript, CSS, ecc..) e solo in seconda battuta fare la pr"
+  },
+  {
+   "n": 109,
+   "date": "2026-05-06",
+   "preview": "ho letto che i javascript generators sono simili alle state machine. E' un concetto che mi può tornare utile durante la scrittura degli algoritmi di parsing in "
+  },
+  {
+   "n": 110,
+   "date": "2026-05-06",
+   "preview": "Ho inserito retain(result) nel main. Nel funzioni readChord e readLyric del Lexer uso malloc. In alternativa potrei allocare la stringa nello stack? Il trade-of"
+  },
+  {
+   "n": 111,
+   "date": "2026-05-07",
+   "preview": "nel main() facciamo: retain(result) e poi release(result). Visto che il puntatore result viene allocato nello stack e poi quando il programma si chiude viene di"
+  },
+  {
+   "n": 112,
+   "date": "2026-05-07",
+   "preview": "vista la scalabilità orizzontale del codice Chord Parser con Pratt appena visto insieme vorrei provare a parsare la stringa di input con due threads, generare d"
+  },
+  {
+   "n": 113,
+   "date": "2026-05-07",
+   "preview": "volevo iniziare dalla risorsa web: Beej's Guide to C Programming / Interprocess Communication. Quali sono i capitoli importanti per il mio progetto? Dove si par"
+  },
+  {
+   "n": 114,
+   "date": "2026-05-25",
+   "preview": "ho provato ad usare i POSIX threads per fare il parsing dell'AST. Che ne pensi dell'implementazione? Ci sono race conditions/memory leaks/bug milgioramenti nell"
+  },
+  {
+   "n": 115,
+   "date": "2026-05-25",
+   "preview": "per quanto riguarda il bug 1 di proposito non avevo inserito il terminatore null in quanto nel main c'è questa riga di codice: buf[file_size] = 0; Quindi buf2 d"
+  },
+  {
+   "n": 116,
+   "date": "2026-05-25",
+   "preview": "Per quanto riguarda il punto 3 dato che come dici tu listPushObj(result1, result2); inserisce result2 all'interno della lista di result1, release(ctx1.ast) non "
+  },
+  {
+   "n": 117,
+   "date": "2026-05-25",
+   "preview": "Non mi è chiaro lo Scenario A. I nodi INFIX (gli operatori * e \\n) creati dal secondo thread non dovrebbero essere stati liberati quando faccio release(ctx1.ast"
+  },
+  {
+   "n": 118,
+   "date": "2026-05-25",
+   "preview": "Per quanto riguarda il punto 2. se faccio generare un oggetto song anche al thread2 non posso più usare la funzione listPushObj(result1, result2) per unire i du"
+  },
+  {
+   "n": 119,
+   "date": "2026-05-25",
+   "preview": "Ecco la nuova versione del codice. L'architettura MapReduce è stata un'altra bellissima scoperta di questo esercizio di tecniche di parsing che sto facendo: non"
+  },
+  {
+   "n": 120,
+   "date": "2026-05-25",
+   "preview": "come potrei valutare il guadagno di performance tra l'architettura multithread in C e quella single thread?"
+  },
+  {
+   "n": 121,
+   "date": "2026-05-26",
+   "preview": "per quanto riguarda lo step 2 potrei struttura l'ambiente di test in questo modo? #include <assert.h> #include <ctype.h> #include <pthread.h> #include <stdint.h"
+  },
+  {
+   "n": 122,
+   "date": "2026-05-26",
+   "preview": "#include <assert.h> #include <ctype.h> #include <pthread.h> #include <stdint.h> #include <stdio.h> #include <stdlib.h> #include <string.h> #include <sys/time.h>"
+  },
+  {
+   "n": 123,
+   "date": "2026-05-26",
+   "preview": "vorrei scrivere lo script automatizzato per raccogliere i dati statistici. Purtroppo non conosco bash. Dove potrei documentarmi? Se volessi iniziare dal calcolo"
+  },
+  {
+   "n": 124,
+   "date": "2026-05-26",
+   "preview": "script bash calcolo media. Che ne pensi? SUM=0; ITERATIONS=50 for ((i=1; i <= $ITERATIONS; i++)) do CUR_OUTPUT=$(./a.out ./test.txt | grep -Eo \"[0-9]+\\.[0-9]+\")"
+  },
+  {
+   "n": 125,
+   "date": "2026-05-26",
+   "preview": "ho inserito anche il test della deviazione standard, che ne pensi? #!/usr/bin/env bash SUM=0 SUM_SQUARED=0 ITERATIONS=50 for ((i=1; i <= ITERATIONS; i++)) do CU"
+  },
+  {
+   "n": 126,
+   "date": "2026-05-26",
+   "preview": "questi sono i risultati (stress_test2 -> 100.000 righe, Mac M1 8GB): Mode, Mean(sec), Standard deviation(sec) Single-Thread, 0.134166020, 0.028205677 Multi-Thre"
+  },
+  {
+   "n": 127,
+   "date": "2026-05-26",
+   "preview": "In generale si può dire che esistono algoritmi che possono essere parallelizzati con i threads grazie alle loro proprietà matematiche (ad es. monoide algebrico)"
+  },
+  {
+   "n": 128,
+   "date": "2026-05-27",
+   "preview": "ho provato a lanciare uno stress test con 200.000 righe ma ho diversi errori: Parse error: bad token <stdin>:1 come mai?"
+  },
+  {
+   "n": 129,
+   "date": "2026-05-27",
+   "preview": "proverei a riscrivere evalAST con un ciclo while per imparare a scrivere DFS in maniera iterativa. Quali sono i passaggi logici per l'implementazione?"
+  },
+  {
+   "n": 130,
+   "date": "2026-05-27",
+   "preview": "#include <assert.h> #include <ctype.h> #include <pthread.h> #include <stdint.h> #include <stdio.h> #include <stdlib.h> #include <string.h> #include <sys/time.h>"
+  },
+  {
+   "n": 131,
+   "date": "2026-05-27",
+   "preview": "c'è qualcosa che non va: con file di poche righe il benchmark sembra funzionare ma con un file di 50.000 righe il benchmark sembra girare a vuoto e anche dopo d"
+  },
+  {
+   "n": 132,
+   "date": "2026-05-27",
+   "preview": "#include <assert.h> #include <ctype.h> #include <pthread.h> #include <stdint.h> #include <stdio.h> #include <stdlib.h> #include <string.h> #include <sys/time.h>"
+  },
+  {
+   "n": 133,
+   "date": "2026-05-27",
+   "preview": "stesso problema. Ho anche messo 1 invece di 50 come ITERATIONS nello script bash: #include <assert.h> #include <ctype.h> #include <pthread.h> #include <stdint.h"
+  },
+  {
+   "n": 134,
+   "date": "2026-05-27",
+   "preview": "con 100.000 righe funziona ma con 200.000 righe ho questi errori: Parse error: bad token <stdin>:1 Parse error: bad expression <stdin>:1"
+  },
+  {
+   "n": 135,
+   "date": "2026-05-27",
+   "preview": "ho ricompilato e lanciato il test ma ci sono gli stessi errori: #include <assert.h> #include <ctype.h> #include <pthread.h> #include <stdint.h> #include <stdio."
+  },
+  {
+   "n": 136,
+   "date": "2026-05-27",
+   "preview": "Ecco i risultati a 200.000 righe: Mode, Mean(sec), Standard deviation(sec) Single-Thread, 0.275028480, 0.007593453 Multi-Thread, 0.171535580, 0.006630458 E a 60"
+  },
+  {
+   "n": 137,
+   "date": "2026-05-27",
+   "preview": "nel programma leggo prima tutto il file con fread e lo salvo in un unico buffer buf. Dopodiché inizio il parsing. Se il file da leggere è molto grande e non vog"
+  },
+  {
+   "n": 138,
+   "date": "2026-05-27",
+   "preview": "in futuro vorrei costruire un player musicale in C (streaming web radio) e mi interesserebbe capire l'architettura di questi software e appunto il concetto di s"
+  },
+  {
+   "n": 139,
+   "date": "2026-05-27",
+   "preview": "potrei anche creare un'applicazione web che sfrutta un modulo in C compilato in webassembly giusto?"
+  },
+  {
+   "n": 140,
+   "date": "2026-05-27",
+   "preview": "perché deve essere javascript a scaricare i chunk audio da internet? Non può farlo il modulo C usando il network thread?"
+  },
+  {
+   "n": 141,
+   "date": "2026-05-27",
+   "preview": "per riepilogare potrei: 1. scrivere un audio player che gira su MacOs; 2. compilare il codice di cui al punto 1. e senza modificare una riga di C compilarlo in "
+  },
+  {
+   "n": 142,
+   "date": "2026-06-03",
+   "preview": "Ho iniziato a leggere la guida di beej e scritto questo programma per impratichirmi con le strutture dati e le principali funzioni usato nel networking programm"
+  },
+  {
+   "n": 143,
+   "date": "2026-06-03",
+   "preview": "come mai ci sono due indirizzo ipv4? ./a.out ilsole24ore-radio.akamaized.net IP addresses for ilsole24ore-radio.akamaized.net: IPv4: 23.44.51.96 IPv4: 23.44.51."
+  },
+  {
+   "n": 144,
+   "date": "2026-06-03",
+   "preview": "se ad esempio mi trovo sotto la metropolitana e dopo un po' la connessione ad uno dei due server si interrompe, posso provare a collegarmi al secondo server di "
+  },
+  {
+   "n": 145,
+   "date": "2026-06-03",
+   "preview": "Software professionali come VLC VideoLAN fanno già questa ottimizzazione se si accorgono che ci sono due indirizzi IP?"
+  },
+  {
+   "n": 146,
+   "date": "2026-06-03",
+   "preview": "quando parli di Buffer di Cache stai parlando del Ring Buffer? Quando dici \"il download dei chunk riparte a razzo e riempie nuovamente la cache prima che si svu"
+  },
+  {
+   "n": 147,
+   "date": "2026-06-03",
+   "preview": "se il programma di radio24 è trasmesso in tempo reale e ho un ring buffer di 3 secondi significa che ascolto la trasmissione con 3 secondi di ritardo rispetto a"
+  },
+  {
+   "n": 148,
+   "date": "2026-06-03",
+   "preview": "potrei usare il time-shifting e poi mostrare nella UI un bottone \"Vai alla diretta\"."
+  },
+  {
+   "n": 149,
+   "date": "2026-06-03",
+   "preview": "una volta stabilita la connessione al server con la chiamata di sistema connect() come faccio a fare richieste http per scaricare la playlist e chunk? Qual è la"
+  },
+  {
+   "n": 150,
+   "date": "2026-06-03",
+   "preview": "se volessi usare openSSL dovrei scrivere un parser per l'header http, giusto? Ad esempio per gestire errori 400, giusto?"
+  },
+  {
+   "n": 151,
+   "date": "2026-06-03",
+   "preview": "per scrivere il parser dell'header potrei usare la tecnica del recursive descent (lexer + regole grammaticali)?"
+  },
+  {
+   "n": 152,
+   "date": "2026-06-03",
+   "preview": "ok diamo un'occhiata a come si struttura una Macchina a Stati Finiti (FSM) lineare per consumare l'header"
+  },
+  {
+   "n": 153,
+   "date": "2026-06-04",
+   "preview": "da riga di comando posso scaricare la playlist di radio24 per capire come è strutturato il file (ad es. vedere i nomi dei chunks)?"
+  },
+  {
+   "n": 154,
+   "date": "2026-06-04",
+   "preview": "╰─ curl -s https://ilsole24ore-radio.akamaized.net/hls/live/2035301/radio24/playlist-64000.m3u8 #EXTM3U #EXT-X-VERSION:3 #EXT-X-ALLOW-CACHE:NO ## Created with Z"
+  },
+  {
+   "n": 155,
+   "date": "2026-06-04",
+   "preview": "se inserisco questo url in Chrome posso ascoltare radio 24: https://ilsole24ore-radio.akamaized.net/hls/live/2035301/radio24/playlist-64000.m3u8. Il browser web"
+  },
+  {
+   "n": 156,
+   "date": "2026-06-04",
+   "preview": "anche nel mio progetto potrei usare ffmpeg, giusto? Era tra l'altro un software che volevo approfondire"
+  },
+  {
+   "n": 157,
+   "date": "2026-06-04",
+   "preview": "ok per vedere un esempio minimale di codice C che mostra come si inizializza un codec con libavcodec per capire la sintass"
+  },
+  {
+   "n": 158,
+   "date": "2026-06-04",
+   "preview": "se anche chrome integra un lettore audio direi che il mio progetto non è di grandissima utilità -))) Tuttavia penso che per me sarà un ottimo esercizio per impa"
+  },
+  {
+   "n": 159,
+   "date": "2026-06-04",
+   "preview": "Come funziona l'Adaptive Bitrate? Potrei usarlo per il mio progetto?"
+  },
+  {
+   "n": 160,
+   "date": "2026-06-04",
+   "preview": "se inserisco questo url in chrome sento la radio: https://ilsole24ore-radio.akamaized.net/hls/live/2035301/radio24/playlist.m3u8"
+  },
+  {
+   "n": 161,
+   "date": "2026-06-04",
+   "preview": "curl -s https://ilsole24ore-radio.akamaized.net/hls/live/2035301/radio24/playlist.m3u8 #EXTM3U #EXT-X-VERSION:3 #EXT-X-ALLOW-CACHE:NO ## Created with Z/IPStream"
+  },
+  {
+   "n": 162,
+   "date": "2026-06-04",
+   "preview": "Analizzando la playlist .m3u8 vedo che ci sono 99 chunks audio. Dato che un chunk audio è di 6.82667 secondi significa che potrei creare un ring buffer da 675 s"
+  },
+  {
+   "n": 163,
+   "date": "2026-06-04",
+   "preview": "ecco una serie di appunti presi per l'architettura del progetto. Hai osservazioni/integrazioni? # Architettura ## Network thread (ingestion) - apre connessione "
+  },
+  {
+   "n": 164,
+   "date": "2026-06-05",
+   "preview": "volevo arrivare a costruire il player audio attraverso una serie di progetti intermedi. Qui ho provato a costruire un echo client. L'ho provato a testare con tc"
+  },
+  {
+   "n": 165,
+   "date": "2026-06-05",
+   "preview": "riguardo al progetto 1, potresti spiegarmi cosa dice la specifica HTTP su come strutturare le principale stringhe di richiesta come GET e POST?"
+  },
+  {
+   "n": 166,
+   "date": "2026-06-05",
+   "preview": "potresti spiegarmi l'header user-agent? E' obbligatorio?"
+  },
+  {
+   "n": 167,
+   "date": "2026-06-05",
+   "preview": "#include <arpa/inet.h> #include <errno.h> #include <netdb.h> #include <netinet/in.h> #include <stdio.h> #include <stdlib.h> #include <string.h> #include <sys/so"
+  },
+  {
+   "n": 168,
+   "date": "2026-06-05",
+   "preview": "nella realtà come vengono gestiti siti web che posso avere pagine di grandi dimensioni? MAXDATASIZE viene allocato nell'heap? La funzione recv() viene wrappata "
+  },
+  {
+   "n": 169,
+   "date": "2026-06-05",
+   "preview": "#include <arpa/inet.h> #include <errno.h> #include <netdb.h> #include <netinet/in.h> #include <stdio.h> #include <stdlib.h> #include <string.h> #include <sys/so"
+  },
+  {
+   "n": 170,
+   "date": "2026-06-05",
+   "preview": "A che punto del ciclo di lettura recv() devo far partire il parser HTTP Header e Body? Non posso farlo parte al termine del ciclo while in quanto il file potreb"
+  },
+  {
+   "n": 171,
+   "date": "2026-06-17",
+   "preview": "Ho provato ad implementare la state machine per il parsing dell’header ma cercando di iniziare il parsing non appena i singoli chunk vengono salvati sul recv_bu"
+  },
+  {
+   "n": 172,
+   "date": "2026-06-18",
+   "preview": "ottima idea il byte stream iterator! /* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\"
+  },
+  {
+   "n": 173,
+   "date": "2026-06-21",
+   "preview": "ho aggiunto il body parsing html: /* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\r\\n"
+  },
+  {
+   "n": 174,
+   "date": "2026-06-21",
+   "preview": "vorrei provare a fare un test locale di questo body parser chunked encoded. Che server pubblico potrei usare?"
+  },
+  {
+   "n": 175,
+   "date": "2026-06-21",
+   "preview": "cc -W -Wall client_http.c && ./a.out ─╯ Connected with IPv4: 127.0.0.1! Sending msg, len: 88 Bytes sent: 88 Status Code Rilevato: 200 Header: [Content-Type] -> "
+  },
+  {
+   "n": 176,
+   "date": "2026-06-21",
+   "preview": "imparando a lavorare a questo basso livello (con le funzioni recv() e send() ) penso che non sarebbe molto difficile implementare altri protocolli di rete ad es"
+  },
+  {
+   "n": 177,
+   "date": "2026-06-21",
+   "preview": "dopo la scrittura del player audio volevo approfondire la parte server. Oltre a come scrivere un server in C asincrono single-threaded (simile a quello implemen"
+  },
+  {
+   "n": 178,
+   "date": "2026-06-21",
+   "preview": "supponiamo che il sensore IoT sia un microcontrollore, come viene gestita la mancanza temporanea di connessione? Se la connessione di rete si blocca i messaggi "
+  },
+  {
+   "n": 179,
+   "date": "2026-06-21",
+   "preview": "il fatto che la funzione recv sia bloccante è il motivo per cui nell'architettura dell'audio player è meglio creare un thread separato (network thread) rispetto"
+  },
+  {
+   "n": 180,
+   "date": "2026-06-21",
+   "preview": "Per il progetto MQTT broker il radix tree potrebbe essere usato al posto della struttura dati Trie?"
+  },
+  {
+   "n": 181,
+   "date": "2026-06-21",
+   "preview": "ho visto che nei database tradizionali si usa la struttura dati B-tree per i dati. In Redis invece non si usa questa struttura dati, giusto?"
+  },
+  {
+   "n": 182,
+   "date": "2026-06-21",
+   "preview": "potresti approfondire i Redis streams vs Kafka? C'è una relazione con l'architettura pub/sub o event driven?"
+  },
+  {
+   "n": 183,
+   "date": "2026-06-21",
+   "preview": "quando apro whatsapp web dopo qualche giorno che non lo apro il client scarica tutti messaggi che nel frattempo ho inviato dall'iphone. Anche whatsapp usa una u"
+  },
+  {
+   "n": 184,
+   "date": "2026-06-21",
+   "preview": "ok mostrami a grandi linee come potrei strutturare un sistema di code offline nel futuro broker MQTT."
+  },
+  {
+   "n": 185,
+   "date": "2026-06-23",
+   "preview": "ora proseguirei con il Progetto 2: Il Client HTTPS con OpenSSL (Porta 443). Potresti darmi una breve introduzione a OpenSSL, ai concetti crittografici che ci so"
+  },
+  {
+   "n": 186,
+   "date": "2026-06-23",
+   "preview": "oggi sto lavorando su un pc linux kubuntu. Aiutami ad installare le librerie in questo ambiente"
+  },
+  {
+   "n": 187,
+   "date": "2026-06-23",
+   "preview": "openssl version OpenSSL 3.5.3 16 Sep 2025 (Library: OpenSSL 3.5.3 16 Sep 2025) vedo una cartella openssl in /usr/include  /usr/include ························"
+  },
+  {
+   "n": 188,
+   "date": "2026-06-23",
+   "preview": "la cartella di linux /usr/include contiene tutti gli header files che posso includere in un mio programma in C con la sintassi <....h>? Quando scrivo un program"
+  },
+  {
+   "n": 189,
+   "date": "2026-06-23",
+   "preview": "esiste della documentazione OpenSSL dalla quale capire come inizializzare il contesto e quali funzioni usare per la lettura/scrittura?"
+  },
+  {
+   "n": 190,
+   "date": "2026-06-23",
+   "preview": "sudo apt install openssl-doc Errore: Pacchetto \"openssl-doc\" non trovato"
+  },
+  {
+   "n": 191,
+   "date": "2026-06-23",
+   "preview": "man 3 SSL_CTX_new Non c'è il manuale per SSL_CTX_new nella sezione 3"
+  },
+  {
+   "n": 192,
+   "date": "2026-06-23",
+   "preview": "/* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\r\\n \\r\\n */ #include <arpa/inet.h> #i"
+  },
+  {
+   "n": 193,
+   "date": "2026-06-23",
+   "preview": "/* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\r\\n \\r\\n */ #include <arpa/inet.h> #i"
+  },
+  {
+   "n": 194,
+   "date": "2026-06-27",
+   "preview": "Sto ora analizzando i chunk audio. Vedo che il server mi risponde con un content_length di 61288 per il primo chunk_audio (seg64000-06704574.ts). Mi sarei aspet"
+  },
+  {
+   "n": 195,
+   "date": "2026-06-27",
+   "preview": "se contestualmente a questo progetto (e all'altro in cui implemento un server in C) volessi continuare ad approfondire il C, lo stack tcp/ip e la sicurezza info"
+  },
+  {
+   "n": 196,
+   "date": "2026-06-28",
+   "preview": "ho creato il ring buffer e ho iniziato a salvarci i primi 99 chunk audio. Vedi dei bug? /* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: c"
+  },
+  {
+   "n": 197,
+   "date": "2026-06-28",
+   "preview": "Visto che ho salvato i primi chunk audio nel ring buffer vorrei “far suonare” l’audio. Attualmente sto sviluppando in un ambiente Ubuntu 24.04.4 su un server Or"
+  },
+  {
+   "n": 198,
+   "date": "2026-06-28",
+   "preview": "aiutami ad analizzare gli header di ffmpeg. Quali sono le funzioni di ffmpeg che dovrei usare e la documentazione da consultare?"
+  },
+  {
+   "n": 199,
+   "date": "2026-06-29",
+   "preview": "Nel file di esempio di ffmpeg avio_read_callback.c vedo la funzione read_packet è la callback function di cui parlavi? Nel main vedo questo codice: bd.ptr = buf"
+  },
+  {
+   "n": 200,
+   "date": "2026-06-30",
+   "preview": "Nel ring buffer l'indice head (meno un byte) rappresenta il punto in cui il network thread ha finito di scrivere l'ultimo byte del flusso audio compresso mentre"
+  },
+  {
+   "n": 201,
+   "date": "2026-06-30",
+   "preview": "supponiamo di aver scaricato tutti e 99 i chunk audio nel ring buffer e di iniziare la riproduzione audio dal primo chunk audio. Sono a 11 minuti dal tempo real"
+  },
+  {
+   "n": 202,
+   "date": "2026-06-30",
+   "preview": "Se volessi implementare i bottoni \"Torna indietro di 5 secondi\", \"Vai avanti di 5 secondi\" potrei usare una tecnica simile? Forse sarebbe più semplice implement"
+  },
+  {
+   "n": 203,
+   "date": "2026-06-30",
+   "preview": "come faccio ad installare i pacchetti openssl ffmpeg sdl3 pkg-config su una macchina linux kubuntu?"
+  },
+  {
+   "n": 204,
+   "date": "2026-06-30",
+   "preview": "Potresti darmi una mane nell'implementazione della fase di decoding? Questo è il file decode_audio.c: /* * Copyright (c) 2001 Fabrice Bellard * * Permission is "
+  },
+  {
+   "n": 205,
+   "date": "2026-06-30",
+   "preview": "Ho creato la build su Mac M1 e lanciato il programma. Non ci sono errori ma il programma termina velocemente e non sento alcun suono. /* HTTP/1.1 200 OK\\r\\n Con"
+  },
+  {
+   "n": 206,
+   "date": "2026-06-30",
+   "preview": "cc -W -Wall -O2 -I/opt/homebrew/Cellar/openssl@3/3.6.2/include -I/opt/homebrew/include -I/opt/homebrew/Cellar/ffmpeg/8.1.2/include client_http.c -L/opt/homebrew"
+  },
+  {
+   "n": 207,
+   "date": "2026-06-30",
+   "preview": "funziona! ma dopo qualche secondo... [AUDIO] Coda di decodifica completata. Riproduzione dei chunk in corso... [END] Riproduzione completata. [1] 88767 trace tr"
+  },
+  {
+   "n": 208,
+   "date": "2026-06-30",
+   "preview": "Ora va subito in segmentation fault: /* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\"
+  },
+  {
+   "n": 209,
+   "date": "2026-06-30",
+   "preview": "con 7Mb nello stack sembra funzionare! E' rischioso allocare 7MB di ring buffer nello stack?"
+  },
+  {
+   "n": 210,
+   "date": "2026-06-30",
+   "preview": "invece di allocare 15MB non posso allocare solo 7MB nell'heap? Di quanto si degradano le prestazioni passando dallo stack all'heap?"
+  },
+  {
+   "n": 211,
+   "date": "2026-06-30",
+   "preview": "al momento funziona benissimo. Puoi fare un check sulla grandezza di tutti i buffer? Per quanto riguarda MAXDATASIZE l'ho impostata a 8192, potrebbe andare bene"
+  },
+  {
+   "n": 212,
+   "date": "2026-06-30",
+   "preview": "quando si parla di cache locality e prefetch si parla dello stesso concetto?"
+  },
+  {
+   "n": 213,
+   "date": "2026-06-30",
+   "preview": "come impatta sulla progettazione del broker MQTT?"
+  },
+  {
+   "n": 214,
+   "date": "2026-06-30",
+   "preview": "per quanro riguarda l'audio player volevo implementare un bottone di play/pause, chunk avanti/chunk indietro, vai alla diretta e chiusura. Per quanto riguarda l"
+  },
+  {
+   "n": 215,
+   "date": "2026-07-01",
+   "preview": "pensavo che il concetto di event loop si potesse usare solo lato server, in realtà può essere usato anche lato client: apro 10 connessioni per i primi 10 chunk "
+  },
+  {
+   "n": 216,
+   "date": "2026-07-01",
+   "preview": "visto che al momento ho poca pratica con i threads inizierei con il thread pool, poi potrei provare ad implementare l'event loop in modo da impratichirmi per il"
+  },
+  {
+   "n": 217,
+   "date": "2026-07-01",
+   "preview": "potresti riscrivere gli step di cui sopra spiegando solo la logica e senza scrivere codice?"
+  },
+  {
+   "n": 218,
+   "date": "2026-07-01",
+   "preview": "se in futuro volessi portare l'audio player nel browser quale sarebbe l'architettura più efficiente? La parte di decodifica conviene farla in C tramite webassem"
+  },
+  {
+   "n": 219,
+   "date": "2026-07-01",
+   "preview": "ho sentito che ffmpeg cerca prima la decodifica via hardware e poi se il flusso non lo permette procede con il fallback software, ti risulta?"
+  },
+  {
+   "n": 220,
+   "date": "2026-07-01",
+   "preview": "Stavo leggendo i docs della libreria javascript XState e vedo che usa event-driven programming, state machines e actor model. In futuro mi piacerebbe esplorare "
+  },
+  {
+   "n": 221,
+   "date": "2026-07-01",
+   "preview": "Ho sentito che Erlang ( e Elixir) è molto usato in progetti dove viene usata la programmazione concorrente. Il motivo è che con Erlang è facile implementare l'a"
+  },
+  {
+   "n": 222,
+   "date": "2026-07-02",
+   "preview": "stavo cercando di capire il codice di ffmpeg: lo stream di bytes viene prima letto a \"frames\" dalla funzione av_read_frame, il frame viene trasformato in packet"
+  },
+  {
+   "n": 223,
+   "date": "2026-07-02",
+   "preview": "quando dici: [FRAME] ──> Due array separati di numeri float (Planar: Canale L e Canale R) , dal codice vedo un solo array però: decoded_frame->data"
+  },
+  {
+   "n": 224,
+   "date": "2026-07-02",
+   "preview": "come avviene la sincronizzazione tra la velocità di decodifica dei 6MB di dati presenti nel ring buffer (che immagino sia velocissima) e la velocità di riproduz"
+  },
+  {
+   "n": 225,
+   "date": "2026-07-02",
+   "preview": "potresti spiegarmi quali sono i concetti e le tecniche/tecnologia che permettono di catturare un'onda sonora, trasformarla in numeri e poi dai numeri a impulsi "
+  },
+  {
+   "n": 226,
+   "date": "2026-07-02",
+   "preview": "perchè dici: \"FFmpeg eleva questa precisione trasformandola in Float a 32-bit, mappando l'onda su una scala decimale infinitesimale tra $-1.0$ e $+1.0$.\"? ffmpe"
+  },
+  {
+   "n": 227,
+   "date": "2026-07-04",
+   "preview": "volevo iniziare a creare la versione multi-threading dell'audio player creando inizialmente due soli threads: il network thread che entra in loop infinito e sca"
+  },
+  {
+   "n": 228,
+   "date": "2026-07-06",
+   "preview": "sto provando a creare la versione multi-threaded ma nella funzione get_data quando provo ad accedere alle variabile del contesto come ad es. int head = ctx->par"
+  },
+  {
+   "n": 229,
+   "date": "2026-07-06",
+   "preview": "Adesso il player riempie il ring buffer solo di 4 chunk. Quando lo spazio disponibile scende sotto ad una certa soglia scatta la fetch del network thread che al"
+  },
+  {
+   "n": 230,
+   "date": "2026-07-06",
+   "preview": "/* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\r\\n \\r\\n */ #include <arpa/inet.h> #i"
+  },
+  {
+   "n": 231,
+   "date": "2026-07-06",
+   "preview": "/* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\r\\n \\r\\n */ #include <arpa/inet.h> #i"
+  },
+  {
+   "n": 232,
+   "date": "2026-07-06",
+   "preview": "/* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\r\\n \\r\\n */ #include <arpa/inet.h> #i"
+  },
+  {
+   "n": 233,
+   "date": "2026-07-06",
+   "preview": "/* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\r\\n \\r\\n */ #include <arpa/inet.h> #i"
+  },
+  {
+   "n": 234,
+   "date": "2026-07-06",
+   "preview": "/* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\r\\n \\r\\n */ #include <arpa/inet.h> #i"
+  },
+  {
+   "n": 235,
+   "date": "2026-07-06",
+   "preview": "- [Screenshot 2026-07-06 alle 17.45.00.png](https://lh3.googleusercontent.com/gg/AJWXcNfdy_j6bNBJ2tb8Cnm2KEvKkwyRvblQeyKlhdl4MWP1yT-q2RY4AoK8r_d7Fng2H6OP5U1OFds"
+  },
+  {
+   "n": 236,
+   "date": "2026-07-06",
+   "preview": "ho aggiornato il codice ma vedo che la memoria continua a crescere: /* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\"
+  },
+  {
+   "n": 237,
+   "date": "2026-07-06",
+   "preview": "aggiornato ma vedo comunque leaks: /* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\r\\"
+  },
+  {
+   "n": 238,
+   "date": "2026-07-06",
+   "preview": "il tasso di crescita del memory mi sembra si sia ridotto ma c'e ancora: /* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n "
+  },
+  {
+   "n": 239,
+   "date": "2026-07-06",
+   "preview": "memory leak ancora presente: /* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunked\\r\\n \\r\\n 5\\r\\n Wi\\rki\\r\\n 5\\r\\n pedia\\r\\n 0\\r\\n \\r\\n"
+  },
+  {
+   "n": 240,
+   "date": "2026-07-06",
+   "preview": "il leak c'è ancora. Non possiamo usare un tool apposito per capire il memory leak? /* HTTP/1.1 200 OK\\r\\n Content-Type: text/plain\\r\\n Transfer-Encoding: chunke"
+  },
+  {
+   "n": 241,
+   "date": "2026-07-06",
+   "preview": "leaks 97885 ─╯ Process: underground_radio [97885] Path: /Users/USER/*/underground_radio Load Address: 0x10ac29000 Identifier: underground_radio Version: 0 Code "
+  },
+  {
+   "n": 242,
+   "date": "2026-07-06",
+   "preview": "Analysis of sampling underground_radio (pid 97885) every 1 millisecond Process: underground_radio [97885] Path: /Users/USER/*/underground_radio Load Address: 0x"
+  },
+  {
+   "n": 243,
+   "date": "2026-07-06",
+   "preview": "Stavo pensando alle differenze/similitudini tra l’architettura di questo audio player e l’architettura “actor model”. Anche qui i threads si scambiano informazi"
+  },
+  {
+   "n": 244,
+   "date": "2026-07-06",
+   "preview": "nell'architettura actor model ogni attore deve sempre essere un thread? Oppure è possibile scrivere una architettura actor model anche senza creare threads?"
+  },
+  {
+   "n": 245,
+   "date": "2026-07-06",
+   "preview": "mi piacerebbe approfondire l'architettura 1: \"L'Actor Model in un Singolo Thread (L'Event Loop)\" provando a riscrivere l'audio player secondo questo paradigma. "
+  },
+  {
+   "n": 246,
+   "date": "2026-07-09",
+   "preview": "L'architettura actor model mi sembra adeguata anche per la programmazione vanilla javascript in ambito browser: in fondo anche nel browser esiste l'event loop d"
+  },
+  {
+   "n": 247,
+   "date": "2026-07-09",
+   "preview": "Qual è il vantaggio di usare queueMicrotask() - che mi sembra la coda usata dall'event loop per accodare le callback delle Promise - nella funzione send? avrei "
+  },
+  {
+   "n": 248,
+   "date": "2026-07-09",
+   "preview": "hai usato una classe per definire un attore. E' possibile anche usare un approccio più funzionale in cui ci sono solo funzioni e strutture dati come in C?"
+  },
+  {
+   "n": 249,
+   "date": "2026-07-09",
+   "preview": "studiando l'architettura actor model in stile funzionale mi sembra di aver scoperto una gemma preziosa. Voglio pertanto impratichirmi sempre più per cui dopo lo"
+  },
+  {
+   "n": 250,
+   "date": "2026-07-09",
+   "preview": "esiste unn framework frontend basato sull'actor model?"
+  },
+  {
+   "n": 251,
+   "date": "2026-07-09",
+   "preview": "se volessi in futuro sviluppare un video player quale potrebbe essere un progetto che potrei sviluppare? potrei ad esempio provare a riprodurre un file video ho"
+  },
+  {
+   "n": 252,
+   "date": "2026-07-10",
+   "preview": "il modello dell'actor model funzionale potrebbe essere applicato anche usando React? In questo caso non userei più useState ma le macchine a stati ed eventi dei"
+  },
+  {
+   "n": 253,
+   "date": "2026-07-10",
+   "preview": "Hai unito l'architettura Actor Model con l'architettura Pub/Sub?"
+  },
+  {
+   "n": 254,
+   "date": "2026-07-10",
+   "preview": "in una applicazione vanilla js dovrei gestire l'attività di rendering al posto di React. Dovrei creare un attore \"renderer\" che si occupa del rendering della UI"
+  },
+  {
+   "n": 255,
+   "date": "2026-07-10",
+   "preview": "potresti approfondire l'opzione 2 con attori granulari funzionali?"
+  },
+  {
+   "n": 256,
+   "date": "2026-07-10",
+   "preview": "e' possibile creare un attore renderer funzionale anche senza usare i web components?"
+  },
+  {
+   "n": 257,
+   "date": "2026-07-13",
+   "preview": "Nel modello Actor Model un attore è definito da una lista di stati e una una funzione di transizione che in base all’evento ricevuto modifica lo stato. Tuttavia"
+  },
+  {
+   "n": 258,
+   "date": "2026-07-13",
+   "preview": "stavo pensando che il network coordinator o un suo sottoposto dovrebbe gestire gli stati: IDLE, MASTER_PLAYLIST_DOWNLOADING, SUB_PLAYLIST_DOWNLOADING, CHUNK_AUD"
+  },
+  {
+   "n": 259,
+   "date": "2026-07-13",
+   "preview": "al momento sto scrivendo la versione actor model in C dell'audio player. E' possibile anche in C gestire il timer in maniera asincrona?"
+  },
+  {
+   "n": 260,
+   "date": "2026-07-14",
+   "preview": "Non mi è chiara la relazione tra la chiamata poll() e l'Event Loop. Dalla man pages di poll() mi sembra di capire che quando la funzione viene chiamata con un t"
+  },
+  {
+   "n": 261,
+   "date": "2026-07-14",
+   "preview": "se invece di usare SDL per l'interfaccia volessi creare un semplice interfaccia nel terminale (tasto \"a\" per Start e Stop, tasto \"q\" per Quit e tasto \"d\" per to"
+  },
+  {
+   "n": 262,
+   "date": "2026-07-15",
+   "preview": "dato che poll() è bloccante fino a quando non arriva un chunk dalla rete o l'utente preme un tasto, qualsiasi altra cosa faccia il mio programma si blocca: ad e"
+  },
+  {
+   "n": 263,
+   "date": "2026-07-15",
+   "preview": "approfondisci requestAnimationFrame mettendo in evidenza differenze/analogie rispetto a quanto visto ora con poll() in C"
+  },
+  {
+   "n": 264,
+   "date": "2026-07-15",
+   "preview": "Questo è un esempio d'uso che ho trovato nella man pages di poll(). Il mio audio player riceve dati crittografati che al momento decodifico con SSL_read. Nel co"
+  },
+  {
+   "n": 265,
+   "date": "2026-07-15",
+   "preview": "se sono su linux dovrei usare epoll() invece di poll()?"
+  },
+  {
+   "n": 266,
+   "date": "2026-07-15",
+   "preview": "nella man pages di poll() vedo codice come questo: pfds[j].revents & POLLIN) ? \"POLLIN\" : \"\" Viene usato il bitwise AND per capire se l'evento è POLLIN, POLLHUP"
+  },
+  {
+   "n": 267,
+   "date": "2026-07-15",
+   "preview": "browser come chrome utilizzano chiamate di sistema come poll() per gestire il networking?"
+  },
+  {
+   "n": 268,
+   "date": "2026-07-15",
+   "preview": "anche chrome usa un Actor Model?"
+  },
+  {
+   "n": 269,
+   "date": "2026-07-16",
+   "preview": "con web worker si intende un thread separato all'interno dello stesso processo, giusto? anche il modulo WebAssembly è un thread (e non un processo) separato, gi"
+  },
+  {
+   "n": 270,
+   "date": "2026-07-25",
+   "preview": "volevo leggere il libro Structure and Interpretation of Computer Programs (ho visto che ci sono anche dei video youtube). Che benefici potrei avere come program"
+  },
+  {
+   "n": 271,
+   "date": "2026-08-03",
+   "preview": "ho visto che ci sono app come radio garden che permettono di ascoltare praticamente tutte le radio del mondo. Come sono riusciti a trovare gli url di tutte le w"
+  },
+  {
+   "n": 272,
+   "date": "2026-08-03",
+   "preview": "creare un'app basata sui flussi audio radio web è pertanto legale?"
+  },
+  {
+   "n": 273,
+   "date": "2026-08-03",
+   "preview": "se dopo aver completato il progetto in C del mio audio player per radio24 volessi riscriverlo con tecnologia web e pubblicarlo com mini app di telegram potrei f"
+  },
+  {
+   "n": 274,
+   "date": "2026-08-03",
+   "preview": "potrei iniziare a sviluppare l'aggregatore generico per sviluppare la tecnologia e poi potrei pensare di contattare gli editori. Potrei iniziare inserendo poche"
+  },
+  {
+   "n": 275,
+   "date": "2026-08-05",
+   "preview": "in radio-browser.info vedo che per radio24 hanno un link shoutcast http://shoutcast.radio24.it:8000/ che è diverso dal link che ho usato io nell mia bozza di pr"
+  },
+  {
+   "n": 276,
+   "date": "2026-08-05",
+   "preview": "Quindi Radio24 ad esempio mantiene due flussi , uno HLS e uno shoutcast?"
+  },
+  {
+   "n": 277,
+   "date": "2026-08-05",
+   "preview": "con il formato shoutcast però non potrei tornare \"indietro nel tempo\", cioè se sono in metro e la connessione non c'è più quando poi ritorno non posso proseguir"
+  },
+  {
+   "n": 278,
+   "date": "2026-08-16",
+   "preview": "- sicp-lecture-8.pdf (application/pdf) Ho letto i primi capitoli di SICP e volevo fare pratica con uno dei concetti fondamentali del libro: ovvero creare un lin"
+  },
+  {
+   "n": 279,
+   "date": "2026-08-16",
+   "preview": "se volessi esplorare il paradigma funzionale sarebbe più facile installare un ambiente LISP su MacOS con librerie che permettano di disegnare pixel e linee oppu"
+  },
+  {
+   "n": 280,
+   "date": "2026-08-25",
+   "preview": "ecco l'implementazione di Picture Language in javascript. Sarebbe possibile sostituire i \"george points\" con una immagine jpeg? Data una immagine jpeg dovrei tr"
+  },
+  {
+   "n": 281,
+   "date": "2026-08-25",
+   "preview": "e' possibile caricare immagini da un percorso locale? const canvas = document.getElementById(\"canvas\") as HTMLCanvasElement | null; if (!canvas) throw new Error"
+  },
+  {
+   "n": 282,
+   "date": "2026-08-25",
+   "preview": "come mai l'immagine è capovolta e devo usare il combinatore flip_vert per vederla correttamente nel browser? const canvas = document.getElementById(\"canvas\") as"
+  },
+  {
+   "n": 283,
+   "date": "2026-08-25",
+   "preview": "l’insieme degli elementi “painter” e i combinatori geometrici beside e below che hanno la proprietà di chiusura (ovvero combinando due painter ottengo un altro "
+  },
+  {
+   "n": 284,
+   "date": "2026-08-25",
+   "preview": "che tipo di algebra è quella costituita da elementi primitivi come beside e below e operazione di combinazione come square_of_four che combina i combinatori geo"
+  },
+  {
+   "n": 285,
+   "date": "2026-08-25",
+   "preview": "il concetto matematico di gruppo è applicabile a questo tipo di algebra presentato in SICP? Oltre alla proprietà di chiusura e elemento neutro l'algebra dovrebb"
+  },
+  {
+   "n": 286,
+   "date": "2026-08-25",
+   "preview": "La lezione che dovrei trarre da questo capitolo di SICP è che strutturare i programmi sfruttando funzioni che possono essere combinate con operatori che rispett"
+  },
+  {
+   "n": 287,
+   "date": "2026-08-27",
+   "preview": "una introduzione alla logica combinatoria potrebbe essere il libro di raymond smullyan \"to mock a mockingbird\"?"
+  },
+  {
+   "n": 288,
+   "date": "2026-08-28",
+   "preview": "Leggendo SICP mi sembra di aver capito che un linguaggio è definito da: - Elementi primitivi - Mezzi di combinazione - Mezzi di astrazione - Gli elementi primit"
+  },
+  {
+   "n": 289,
+   "date": "2026-08-28",
+   "preview": "nella versione javascript di SICP vedo al capitolo 4 la funzione \"parse\". Non mi sembra nel testo ci sia l'implementazione di questa funzione. E' un esercizio p"
+  },
+  {
+   "n": 290,
+   "date": "2026-09-08",
+   "preview": "Sto facendo un esercizio del libro To mock a mocking bird e devo dimostrare che l’eagle può essere derivato dal bluebird Blackbird: B1xyzw = x(yaw Blubird Bxyz "
+  },
+  {
+   "n": 291,
+   "date": "2026-09-08",
+   "preview": "quindi si può dire che B(BB) = BBBB(BB)?"
+  },
+  {
+   "n": 292,
+   "date": "2026-09-08",
+   "preview": "scusami volevo dire che B(BBB) = BBBB(BB) = E"
+  },
+  {
+   "n": 293,
+   "date": "2026-09-08",
+   "preview": "Conoscere questi combinatori e le loro relazioni come mi può essere utile nella programmazione? In particolare nella scelta dell'architettura da applicare al pr"
+  },
+  {
+   "n": 294,
+   "date": "2026-09-08",
+   "preview": "Si possono usare i combinatori anche in C che non è un linguaggio dove le funzioni sono first-class citizen? In Javascript mi sembra più semplice usare i combin"
+  },
+  {
+   "n": 295,
+   "date": "2026-09-09",
+   "preview": "Se provo a derivare il bird bunting da B ottengo: B2xyzwv=x(yzwv)=x((yzw)v)=Bx(yzw)v=EBxyzwv => B2=EB=B(BBB)B Ma anche: B2xyzwv=x(yzwv)=x((yzw)v)=Bx(yzw)v=B1Bxy"
+  },
+  {
+   "n": 296,
+   "date": "2026-09-09",
+   "preview": "la dimostrazione 2 può essere così corretta: B2xyzwv=x(yzwv)=x((yzw)v)=Bx(yzw)v=B1(Bx)yzwv=BB1Bxyzwv => B2=BB1B=B(BBB)B"
+  },
+  {
+   "n": 297,
+   "date": "2026-09-21",
+   "preview": "se volessi usare alcuni concetti visti nel libro to mock e a mocking bird potrei ad esempio applicare il Bluebird per comporre i painter del picture language, c"
+  },
+  {
+   "n": 298,
+   "date": "2026-09-21",
+   "preview": "se volessi comporre più funzioni potrei \"nestare\" più Blubird, giusto? B(B(flip_horiz)(flip_vert))(rotate90)"
+  },
+  {
+   "n": 299,
+   "date": "2026-09-21",
+   "preview": "se volessi comporre più funzioni potrei \"nestare\" più Blubird, giusto? B(B(flip_horiz)(flip_vert))(rotate90)"
+  },
+  {
+   "n": 300,
+   "date": "2026-09-21",
+   "preview": "se invece avessi voluto ottenere rotate90(flip_horiz(flip_vert(p)) avrei dovuto comporre così: Bf3(Bf1f2)p, giusto?"
+  },
+  {
+   "n": 301,
+   "date": "2026-09-21",
+   "preview": "se avessi voluto ottenere Bf3(Bf1f2) partendo da B(Bf1f2)f3 avrei potuto usare il thrush, giusto? BT(Bf1f2) = Bf3(Bf1f2)"
+  },
+  {
+   "n": 302,
+   "date": "2026-09-21",
+   "preview": "il combinatore B può essere applicato anche alle trasformazioni beside e below?"
+  },
+  {
+   "n": 303,
+   "date": "2026-09-21",
+   "preview": "avevo scritto la funzione beside cosi: function beside( painter1: (frame: Pair) => void, painter2: (frame: Pair) => void, ): (frame: Pair) => void { const split"
+  },
+  {
+   "n": 304,
+   "date": "2026-09-21",
+   "preview": "in typescript è più corretto scrivere il Blubird come hai fatto tu oppure così? const B = <U, V>(x: (arg: U) => V) => <T>(y: (arg: T) => U) => (z: T): V => x(y("
+  },
+  {
+   "n": 305,
+   "date": "2026-09-21",
+   "preview": "anche questa riscrittura di beside con il currying è corretta? const beside2 = (p1: Painter) => (p2: Painter): Painter => { const split_point = make_vector(0.5,"
+  },
+  {
+   "n": 306,
+   "date": "2026-09-21",
+   "preview": "come posso scrivere il Cardinal in Typescript? Così può andare? const C = <T, U, V>(x: (arg: T) => (arg: U) => V) => (y: U) => (z: T): V => x(z)(y);"
+  },
+  {
+   "n": 307,
+   "date": "2026-09-22",
+   "preview": "const M = (x: any): any => x(x) Per quanto riguarda il Mocking Bird posso scriverlo così in Typescript?"
+  },
+  {
+   "n": 308,
+   "date": "2026-09-22",
+   "preview": "come potrei usare il mocking bird nel picture language?"
+  },
+  {
+   "n": 309,
+   "date": "2026-09-22",
+   "preview": "al posto di const smaller = self(self)(p)(depth - 1) avrei potuto usare il MockingBird? const smaller = M(self)(p)(deph - 1)"
+  },
+  {
+   "n": 310,
+   "date": "2026-09-22",
+   "preview": "se M(self) typescript mi dà questo errore: Diagnostics: 1. Object is of type 'unknown'. [2571]"
+  },
+  {
+   "n": 311,
+   "date": "2026-09-22",
+   "preview": "// Mettiamo il pittore p a sinistra, e a destra mettiamo p sopra il livello ricorsivo return beside(p)(below(p)(smaller)) Il livello ricorsivo mi sembra si form"
+  },
+  {
+   "n": 312,
+   "date": "2026-09-22",
+   "preview": "Una implementazione del Warbler potrebbe essere questa in typescript? // Warbler Wxy = xyy const W = <T, V>(x: (arg: T) => (arg: T) => V) => (y: T): V => x(y)(y"
+  },
+  {
+   "n": 313,
+   "date": "2026-09-22",
+   "preview": "Per quanto riguarda il Robin può andare bene questa implementazione in ts? // Robin Rxyz = yzx const R = <U, V>(x: U) => <T>(y: (arg: T) => (arg: U) => V) => (z"
+  },
+  {
+   "n": 314,
+   "date": "2026-09-22",
+   "preview": "potresti farmi un esempio nel picture language?"
+  },
+  {
+   "n": 315,
+   "date": "2026-09-22",
+   "preview": "L'implementazione del Thrush è ok? // Thrush Txy = yx const T = <T>(x: T) => <V>(y: (arg: T) => V): V => y(x)"
+  },
+  {
+   "n": 316,
+   "date": "2026-09-22",
+   "preview": "ecco l'implementazione del Finch. Può andare bene? // Finch Fxyz = zyx const F = <U>(x: U) => <T>(y: T) => <V>(z: (arg: T) => (arg: U) => V) => z(y)(x)"
+  },
+  {
+   "n": 317,
+   "date": "2026-09-23",
+   "preview": "una implementazione del Lark potrebbe essere questa? // Lark Lxy = x(yy) const L = <T, U, V>(x: (arg: T) => U => V) => (y: (arg: T) => U => (arg: T) => U): V =>"
+  },
+  {
+   "n": 318,
+   "date": "2026-09-23",
+   "preview": "Ho implementato il lark così: const L = <R, V>(x: (arg: R) => V) => (y: any): V => x(y(y)); E poi const invertedFractal = L(flip_vert)(make_fractal)(frame1) Pur"
+  },
+  {
+   "n": 319,
+   "date": "2026-09-23",
+   "preview": "questa è la funzione make_fractal: type Step = (p: Painter) => (depth: number) => Painter; const make_fractal = (self: SelfApplicable<Step>): Step => (p: Painte"
+  },
+  {
+   "n": 320,
+   "date": "2026-09-23",
+   "preview": "il Dove può essere scritto in questo modo? // Dove Dxyzw = xy(zw) const D = <R, U, V>(x: (arg: R) => (arg: U) => V) => (y: R) => <T>(z: (arg: T) => U) => (w: T)"
+  },
+  {
+   "n": 321,
+   "date": "2026-09-23",
+   "preview": "// Blackbird B1xyzw = x(yzw) const B1 = <V, R>(x: (arg: V) => R) => <T, U>(y: (arg: T) => (arg: U) => V) => (z: T) => (w: U) => x(y(z)(w));"
+  },
+  {
+   "n": 322,
+   "date": "2026-09-23",
+   "preview": "// Eagle Exyzwv = xy(zwv) const E = <R, U, Q>(x: (arg: R) => (arg: U) => Q) => (y: R) => <T, Z>(z: (arg: T) => (arg: Z) => U) => (w: T) => (v: Z): Q => x(y)(z(w"
+  },
+  {
+   "n": 323,
+   "date": "2026-09-23",
+   "preview": "// Dovekies D2xyzwv = x(yz)(wv) const D2 = <V, U, Q>(x: (arg: V) => (arg: U) => Q) => <R>(y: (arg: R) => V) => (z: R) => <T>(w: (arg: T) => U) => (v: T): Q => x"
+  },
+  {
+   "n": 324,
+   "date": "2026-09-24",
+   "preview": "// Starling Sxyz = xz(yz) const S = <T, U, V>(x: (arg: T) => (arg: U) => V) => (y: (arg: T) => U) => (z: T) => x(z)(y(z));"
+  },
+  {
+   "n": 325,
+   "date": "2026-09-24",
+   "preview": "// Violet Starling VSxyz = x(yz)z const VS = <U, T, V>(x: (arg: U) => (arg: T) => V) => (y: (arg: T) => U) => (z: T): V => x(y(z))(z);"
+  },
+  {
+   "n": 326,
+   "date": "2026-09-24",
+   "preview": "// Zebra Dove ZDxyzw = x(yz)w x(y(z))(w) const ZD = <U, R, V>(x: (arg: U) => (arg: R) => V) => <T>(y: (arg: T) => U) => (z: T) => (w: R): V => x(y(z))(w);"
+  },
+  {
+   "n": 327,
+   "date": "2026-09-24",
+   "preview": "// Psi xyzw = x(yz)(yw) const P = <U, V>(x: (arg: U) => (arg: U) => V) => <T>(y: (arg: T) => U) => (z: T) => (w: T) => x(y(z))(y(w));"
+  },
+  {
+   "n": 328,
+   "date": "2026-09-24",
+   "preview": "// Phoenix xyzw = x(yw)(zw) x(y(w))(z(w)) const Phoenix = <U, V>(x: (arg: U) => (arg: U) => V) => <T>(y: (arg: T) => U) => (z: (arg: T) => U) => (w: T) => x(y(w"
+  },
+  {
+   "n": 329,
+   "date": "2026-09-24",
+   "preview": "// Pheasant xyzwv = x(ywv)(zwv) const Pheasant = <R, U, V>(x: (arg: R) => (arg: U) => V) => <T, Z>(y: (arg: T) => (arg: Z) => R) => (z: (arg: T) => (arg: Z) => "
+  },
+  {
+   "n": 330,
+   "date": "2026-09-24",
+   "preview": "// Eastern Nicator xyzw = xy(zyw) const EasternNic = <T, U, V>(x: (arg: T) => (arg: U) => V) => (y: T) => <Z>(z: (arg: T) => (arg: Z) => U) => (w: Z) => x(y)(z("
+  },
+  {
+   "n": 331,
+   "date": "2026-09-24",
+   "preview": "// Western Nicator xyzw = x(yzw)w x(y(z)(w))(w) const WesternNic = <U, Z, V>(x: (arg: U) => (arg: Z) => V) => <T>(y: (arg: T) => (arg: Z) => U) => (z: T) => (w:"
+  },
+  {
+   "n": 332,
+   "date": "2026-09-30",
+   "preview": "nell'epilogo di To Mock a Mocking Bird si parla dell'isomorfismo tra la classe dei combinatori con base S e K e la classe dei computer programs. Mi chiedevo qua"
+  },
+  {
+   "n": 333,
+   "date": "2026-09-30",
+   "preview": "L'inesistenza dell'uccello ideale è un altro modo di enunciare il teorema di incompletezza di Goedel?"
+  },
+  {
+   "n": 334,
+   "date": "2026-09-30",
+   "preview": "quando dici che il verificatore eBPF vieta i cicli indefiniti significa che non è possibile usare la ricorsione?"
+  },
+  {
+   "n": 335,
+   "date": "2026-09-30",
+   "preview": "Nel libro To Mock a Micking Bird non mi sembra si parli del combinatore Y, giusto?"
+  },
+  {
+   "n": 336,
+   "date": "2026-10-01",
+   "preview": "Qual è il combinatore che rende un sistema di combinatori Turing-completo? E' sufficiente avere una base del sistema dei combinatori che non prevede ad es. il m"
+  }
+ ]
+}

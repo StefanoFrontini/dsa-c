@@ -4,6 +4,7 @@
 
 import { REPO } from './areas.js';
 import { githubUrl, linkCodeRefs } from './codelinks.js';
+import { linkTurnRefs } from './turns.js';
 
 const marked = window.marked;
 const hljs = window.hljs;
@@ -147,12 +148,14 @@ export function wrapTables(root) {
   }
 }
 
-// Pipeline completa per una nota o una scheda.
-export function renderDocument(src, { docPath, route, ctx }) {
+// Pipeline completa per una nota o una scheda. `turns: false` lascia come testo i
+// riferimenti "turno N" (nei turni stessi, dove sono parole di Gemini).
+export function renderDocument(src, { docPath, route, ctx, turns = true }) {
   const root = renderMarkdown(src);
   addHeadingIds(root);
   rewriteLinks(root, docPath, { route });
   linkCodeRefs(root, ctx);
+  if (turns) linkTurnRefs(root);
   highlight(root);
   wrapTables(root);
   return root;
