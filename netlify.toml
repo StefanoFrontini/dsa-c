@@ -1,0 +1,34 @@
+# Sito di studio statico: nessuna build, si pubblica così com'è la cartella antirez/study.
+[build]
+  publish = "antirez/study"
+
+# Contenuti che cambiano spesso (note, schede, dati): sempre rivalidati, così una
+# correzione pushata si vede al primo ricaricamento.
+[[headers]]
+  for = "/notes/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Content-Type = "text/markdown; charset=utf-8"
+
+[[headers]]
+  for = "/projects/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Content-Type = "text/markdown; charset=utf-8"
+
+[[headers]]
+  for = "/data/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# JS/CSS del sito: cache breve (5 minuti) perché i file non hanno hash nel nome.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=300, must-revalidate"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

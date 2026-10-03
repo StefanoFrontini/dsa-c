@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Study — percorso</title>
+  <meta name="description" content="Note di studio su C, parsing, concorrenza, networking, actor model, SICP e logica combinatoria, con stato dei progetti e quiz di autoverifica.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232c5d8f'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' font-weight='700' text-anchor='middle' fill='white'%3E%7B%7D%3C/text%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+
+  <link id="hljs-light" rel="stylesheet" media="(prefers-color-scheme: light)"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.2/styles/github.min.css"
+        integrity="sha512-0aPQyyeZrWj9sCA46UlmWgKOP0mUipLQ6OZXu8l4IcAmD2u31EPEy9VcIMvl7SoAaKe8bLXZhYoMaE/in+gcgA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link id="hljs-dark" rel="stylesheet" media="(prefers-color-scheme: dark)"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.2/styles/github-dark.min.css"
+        integrity="sha512-rO+olRTkcf304DQBxSWxln8JXCzTHlKnIdnMUwYvQa9/Jd4cQaNkItIUj6Z4nvW1dqK0SKXLbn9h4KwZTNtAyw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="assets/style.css">
+
+  <script>
+    // Tema scelto a mano (salvato in localStorage "study.v1"), applicato prima del rendering.
+    try {
+      var t = JSON.parse(localStorage.getItem('study.v1') || '{}').theme;
+      if (t === 'light' || t === 'dark') {
+        document.documentElement.dataset.theme = t;
+        document.getElementById('hljs-light').media = t === 'light' ? 'all' : 'not all';
+        document.getElementById('hljs-dark').media = t === 'dark' ? 'all' : 'not all';
+      }
+    } catch (e) {}
+  </script>
+
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/marked/18.0.14/lib/marked.umd.min.js"
+          integrity="sha512-trN9mtGYvoySPVI909KTnwbJI9AkKPydRCV/qAsUG1+q39hhpKltEag9b5JpdjeIZn5i8IH62hHRFdbKwMFh9w=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.2/highlight.min.js"
+          integrity="sha512-VSPLUv/n1Bmn+4zoxBNwpuFAO3//79I0Aax/qHDx24R47vylPcc9PrHDCqlePwHnh3joiM7/YTQhcXyQAAxvPQ=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <!-- I moduli vengono eseguiti dopo gli script "defer" qui sopra, nell'ordine del documento. -->
+  <script type="module" src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Vai al contenuto</a>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true">{}</span> Study</a>
+      <nav class="site-nav" aria-label="Principale">
+        <a href="#/" data-nav="dashboard">Percorso</a>
+        <a href="#/errori" data-nav="errori" class="nav-quiet">Errori di Gemini</a>
+      </nav>
+      <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Cambia tema">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2v16a8 8 0 0 1 0-16Z"/></svg>
+        <span class="theme-label">automatico</span>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" class="site-main">
+    <noscript><p>Questo sito ha bisogno di JavaScript per leggere le note.</p></noscript>
+    <p class="loading">Caricamento…</p>
+  </main>
+  <script>
+    // Da file:// il browser non carica né i moduli JS né le note: lo spieghiamo subito.
+    (function () {
+      var main = document.getElementById('main');
+      var help = '<div class="callout callout-error" role="alert"><h2>Il sito va servito via HTTP</h2>' +
+        '<p>Avvia un server locale dalla cartella <code>antirez/study</code>:</p>' +
+        '<pre><code>cd antirez/study\npython3 -m http.server 8000</code></pre>' +
+        '<p>poi apri <a href="http://localhost:8000/">http://localhost:8000/</a>.</p></div>';
+      if (location.protocol === 'file:') { main.innerHTML = help; return; }
+      setTimeout(function () {
+        if (main.querySelector('.loading')) {
+          main.innerHTML = '<div class="callout callout-error" role="alert"><h2>Il sito non è partito</h2>' +
+            '<p>Lo script <code>assets/app.js</code> non si è caricato o è andato in errore: guarda la console del browser. ' +
+            'In locale verifica che il server sia avviato (<code>python3 -m http.server</code> dentro <code>antirez/study</code>).</p></div>';
+        }
+      }, 10000);
+    })();
+  </script>
+
+  <footer class="site-footer">
+    <div class="site-footer-inner">
+      <p>Note in <code>notes/</code>, schede in <code>projects/</code>, dati in <code>data/</code>.
+        Codice: <a href="https://github.com/StefanoFrontini/dsa-c/tree/master/antirez" target="_blank" rel="noopener">StefanoFrontini/dsa-c</a>.</p>
+      <p><a href="#/errori" class="nav-quiet">Errori di Gemini</a></p>
+    </div>
+  </footer>
+</body>
+</html>
