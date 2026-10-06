@@ -17,41 +17,70 @@ export const the_empty_stream = null;
 
 /** Costruisce uno stream. `tail` è un thunk: NON va chiamato qui. (Tappa 2: memoizzalo.) */
 export function cons_stream<T>(head: T, tail: () => Stream<T>): Stream<T> {
-  return todo(1);
+  return {
+    head,
+    tail
+  }
+  // return todo(1);
 }
 
 export function stream_head<T>(s: Stream<T>): T {
-  return todo(1);
+  if (s === the_empty_stream) throw new Error("Stream is empty");
+  return s.head;
+  // return todo(1);
 }
 
 /** Forza la coda: è qui che il calcolo ritardato viene eseguito. */
 export function stream_tail<T>(s: Stream<T>): Stream<T> {
-  return todo(1);
+  if (s === the_empty_stream) throw new Error("Stream is empty");
+  return s.tail();
+  // return todo(1);
 }
 
 /** L'elemento di indice n (0 = la testa). */
 export function stream_ref<T>(s: Stream<T>, n: number): T {
-  return todo(1);
+  // if (s === the_empty_stream) throw new Error("Stream is empty");
+  return n === 0 ? stream_head(s) : stream_ref(stream_tail(s), n - 1);
+  // return todo(1);
 }
 
 /** I primi n elementi in un array (meno se lo stream finisce prima). Non forzare più del necessario. */
 export function take<T>(s: Stream<T>, n: number): T[] {
-  return todo(1);
+  // if (s === the_empty_stream) throw new Error("Stream is empty");
+  function iter(stream: Stream<T>, count: number, acc: T[]): T[] {
+    return count === 0 ? acc : iter(stream_tail(stream), count - 1, [...acc, stream_head(stream)])
+
+  }
+  return iter(s, n, [])
+  // return todo(1);
 }
 
 export function array_to_stream<T>(xs: readonly T[]): Stream<T> {
-  return todo(1);
+  function iter(len: number, i: number, s: Stream<T>): Stream<T> {
+    return len === 0 ? s : iter(len - 1, i + 1, cons_stream(xs[i], () => s))
+
+  }
+  return iter(xs.length, 0, the_empty_stream);
+  // return todo(1);
 }
 
 /** low, low+1, ..., high (vuoto se low > high). */
 export function stream_enumerate_interval(low: number, high: number): Stream<number> {
-  return todo(1);
+  return low > high ? the_empty_stream : cons_stream(low, () => stream_enumerate_interval(low + 1, high))
+  // function iter(l: number, h: number, s: Stream<number>): Stream<number> {
+  //   return l > h ? s : iter(l + 1, h, cons_stream(l, () => s))
+  // }
+  // return iter(low, high, the_empty_stream)
+  // return todo(1);
 }
 
 /** n, n+1, n+2, ... all'infinito. */
 export function integers_from(n: number): Stream<number> {
-  return todo(1);
+  return cons_stream(n, () => integers_from(n + 1))
+  // return todo(1);
 }
+
+console.log(take(integers_from(5), 3))
 
 // ---------------------------------------------------------------------------
 // Tappa 2 — memoizzazione (SICP JS 3.5.1, "memo")
