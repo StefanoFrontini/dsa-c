@@ -3,7 +3,15 @@
 // Percorso e suggerimenti: ../README.md. Test: `npm test` oppure `node --test test/01-basi.test.ts`.
 
 /** Uno stream è vuoto (null) oppure una testa già calcolata e una coda *ritardata*. */
-export type Stream<T> = null | { readonly head: T; readonly tail: () => Stream<T> };
+export type Stream<T> = null | {
+  readonly head: T;
+  readonly tail: () => Stream<T>;
+};
+
+// type Pair = {
+//   head: number | Pair | null;
+//   tail: number | Pair | null;
+// };
 
 function todo(tappa: number): never {
   throw new Error(`TODO tappa ${tappa}: da implementare`);
@@ -19,68 +27,66 @@ export const the_empty_stream = null;
 export function cons_stream<T>(head: T, tail: () => Stream<T>): Stream<T> {
   return {
     head,
-    tail
-  }
-  // return todo(1);
+    tail: memo(tail),
+  };
 }
 
 export function stream_head<T>(s: Stream<T>): T {
   if (s === the_empty_stream) throw new Error("Stream is empty");
   return s.head;
-  // return todo(1);
 }
 
 /** Forza la coda: è qui che il calcolo ritardato viene eseguito. */
 export function stream_tail<T>(s: Stream<T>): Stream<T> {
   if (s === the_empty_stream) throw new Error("Stream is empty");
   return s.tail();
-  // return todo(1);
 }
 
 /** L'elemento di indice n (0 = la testa). */
 export function stream_ref<T>(s: Stream<T>, n: number): T {
-  // if (s === the_empty_stream) throw new Error("Stream is empty");
   return n === 0 ? stream_head(s) : stream_ref(stream_tail(s), n - 1);
-  // return todo(1);
 }
 
 /** I primi n elementi in un array (meno se lo stream finisce prima). Non forzare più del necessario. */
 export function take<T>(s: Stream<T>, n: number): T[] {
-  // if (s === the_empty_stream) throw new Error("Stream is empty");
   function iter(stream: Stream<T>, count: number, acc: T[]): T[] {
-    return count === 0 ? acc : iter(stream_tail(stream), count - 1, [...acc, stream_head(stream)])
-
+    return count === 0 || stream === the_empty_stream
+      ? acc
+      : iter(
+          count === 1 ? the_empty_stream : stream_tail(stream),
+          count - 1,
+          (acc.push(stream_head(stream)), acc),
+        );
   }
-  return iter(s, n, [])
-  // return todo(1);
+  return iter(s, n, []);
 }
 
 export function array_to_stream<T>(xs: readonly T[]): Stream<T> {
-  function iter(len: number, i: number, s: Stream<T>): Stream<T> {
-    return len === 0 ? s : iter(len - 1, i + 1, cons_stream(xs[i], () => s))
-
+  function iter(i: number): Stream<T> {
+    return i >= xs.length
+      ? the_empty_stream
+      : cons_stream(xs[i], () => iter(i + 1));
   }
-  return iter(xs.length, 0, the_empty_stream);
-  // return todo(1);
+  return iter(0);
 }
 
 /** low, low+1, ..., high (vuoto se low > high). */
-export function stream_enumerate_interval(low: number, high: number): Stream<number> {
-  return low > high ? the_empty_stream : cons_stream(low, () => stream_enumerate_interval(low + 1, high))
-  // function iter(l: number, h: number, s: Stream<number>): Stream<number> {
-  //   return l > h ? s : iter(l + 1, h, cons_stream(l, () => s))
-  // }
-  // return iter(low, high, the_empty_stream)
-  // return todo(1);
+export function stream_enumerate_interval(
+  low: number,
+  high: number,
+): Stream<number> {
+  return low > high
+    ? the_empty_stream
+    : cons_stream(low, () => stream_enumerate_interval(low + 1, high));
 }
 
 /** n, n+1, n+2, ... all'infinito. */
 export function integers_from(n: number): Stream<number> {
-  return cons_stream(n, () => integers_from(n + 1))
-  // return todo(1);
+  return cons_stream(n, () => integers_from(n + 1));
 }
 
-console.log(take(integers_from(5), 3))
+// console.log(array_to_stream(take(integers_from(5), 3)));
+console.log(take(array_to_stream(["x", "y", "z"]), 10));
 
 // ---------------------------------------------------------------------------
 // Tappa 2 — memoizzazione (SICP JS 3.5.1, "memo")
@@ -88,7 +94,15 @@ console.log(take(integers_from(5), 3))
 
 /** Restituisce un thunk che chiama `f` solo la prima volta e poi restituisce sempre lo stesso valore. */
 export function memo<T>(f: () => T): () => T {
-  return todo(2);
+  let already_run = false;
+  let result: T;
+  return () => {
+    if (!already_run) {
+      result = f();
+      already_run = true;
+    }
+    return result;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -96,23 +110,56 @@ export function memo<T>(f: () => T): () => T {
 // ---------------------------------------------------------------------------
 
 /** Come `map`, ma su uno o più stream: f riceve un elemento da ciascuno. */
-export function stream_map<R>(f: (...args: any[]) => R, ...streams: Stream<any>[]): Stream<R> {
+export function stream_map2<R>(
+  f: (arg1: any, arg2: any) => R,
+  s1: Stream<R>,
+  s2: Stream<R>,
+): Stream<R> {
+  if (s1 === the_empty_stream || s2 === the_empty_stream)
+    return the_empty_stream;
+  return cons_stream(f(stream_head(s1), stream_head(s2)), () =>
+    stream_map2(f, stream_tail(s1), stream_tail(s2)),
+  );
+}
+export function stream_map<R>(
+  f: (...args: any[]) => R,
+  ...streams: Stream<any>[]
+): Stream<R> {
+  return streams.some((s) => s === the_empty_stream)
+    ? the_empty_stream
+    : cons_stream(f(...streams.map((s) => stream_head(s))), () =>
+        stream_map(
+          f,
+          ...streams.map((s) => stream_tail(s)),
+        ),
+      );
+}
+
+export function stream_filter<T>(
+  pred: (x: T) => boolean,
+  s: Stream<T>,
+): Stream<T> {
   return todo(3);
 }
 
-export function stream_filter<T>(pred: (x: T) => boolean, s: Stream<T>): Stream<T> {
+export function add_streams(
+  a: Stream<number>,
+  b: Stream<number>,
+): Stream<number> {
   return todo(3);
 }
 
-export function add_streams(a: Stream<number>, b: Stream<number>): Stream<number> {
+export function mul_streams(
+  a: Stream<number>,
+  b: Stream<number>,
+): Stream<number> {
   return todo(3);
 }
 
-export function mul_streams(a: Stream<number>, b: Stream<number>): Stream<number> {
-  return todo(3);
-}
-
-export function scale_stream(s: Stream<number>, factor: number): Stream<number> {
+export function scale_stream(
+  s: Stream<number>,
+  factor: number,
+): Stream<number> {
   return todo(3);
 }
 
@@ -178,12 +225,18 @@ export function euler_transform(s: Stream<number>): Stream<number> {
 }
 
 /** Stream di stream: s, t(s), t(t(s)), ... */
-export function make_tableau(transform: (s: Stream<number>) => Stream<number>, s: Stream<number>): Stream<Stream<number>> {
+export function make_tableau(
+  transform: (s: Stream<number>) => Stream<number>,
+  s: Stream<number>,
+): Stream<Stream<number>> {
   return todo(5);
 }
 
 /** La testa di ogni riga del tableau. */
-export function accelerated_sequence(transform: (s: Stream<number>) => Stream<number>, s: Stream<number>): Stream<number> {
+export function accelerated_sequence(
+  transform: (s: Stream<number>) => Stream<number>,
+  s: Stream<number>,
+): Stream<number> {
   return todo(5);
 }
 
@@ -204,12 +257,20 @@ export const sine_series: Stream<number> = null;
 // ---------------------------------------------------------------------------
 
 /** initial, initial + dt·i0, initial + dt·(i0+i1), ... L'integrando arriva come thunk. */
-export function integral(delayed_integrand: () => Stream<number>, initial: number, dt: number): Stream<number> {
+export function integral(
+  delayed_integrand: () => Stream<number>,
+  initial: number,
+  dt: number,
+): Stream<number> {
   return todo(6);
 }
 
 /** Risolve dy/dt = f(y) con y(0) = y0: y e dy si definiscono a vicenda. */
-export function solve(f: (y: number) => number, y0: number, dt: number): Stream<number> {
+export function solve(
+  f: (y: number) => number,
+  y0: number,
+  dt: number,
+): Stream<number> {
   return todo(6);
 }
 
@@ -218,7 +279,10 @@ export function solve(f: (y: number) => number, y0: number, dt: number): Stream<
 // ---------------------------------------------------------------------------
 
 /** +1 se il segnale passa da negativo a ≥ 0, -1 se passa da ≥ 0 a negativo, altrimenti 0. */
-export function sign_change_detector(current: number, previous: number): number {
+export function sign_change_detector(
+  current: number,
+  previous: number,
+): number {
   return todo(7);
 }
 
@@ -233,6 +297,8 @@ export function smooth(s: Stream<number>): Stream<number> {
 }
 
 /** Es. 3.76: zero_crossings del segnale prima lisciato con smooth. */
-export function smoothed_zero_crossings(sense_data: Stream<number>): Stream<number> {
+export function smoothed_zero_crossings(
+  sense_data: Stream<number>,
+): Stream<number> {
   return todo(7);
 }
