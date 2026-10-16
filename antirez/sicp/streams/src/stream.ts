@@ -86,7 +86,7 @@ export function integers_from(n: number): Stream<number> {
 }
 
 // console.log(array_to_stream(take(integers_from(5), 3)));
-console.log(take(array_to_stream(["x", "y", "z"]), 10));
+// console.log(take(array_to_stream(["x", "y", "z"]), 10));
 
 // ---------------------------------------------------------------------------
 // Tappa 2 — memoizzazione (SICP JS 3.5.1, "memo")
@@ -110,10 +110,10 @@ export function memo<T>(f: () => T): () => T {
 // ---------------------------------------------------------------------------
 
 /** Come `map`, ma su uno o più stream: f riceve un elemento da ciascuno. */
-export function stream_map2<R>(
-  f: (arg1: any, arg2: any) => R,
-  s1: Stream<R>,
-  s2: Stream<R>,
+export function stream_map2<A, B, R>(
+  f: (arg1: A, arg2: B) => R,
+  s1: Stream<A>,
+  s2: Stream<B>,
 ): Stream<R> {
   if (s1 === the_empty_stream || s2 === the_empty_stream)
     return the_empty_stream;
@@ -128,39 +128,51 @@ export function stream_map<R>(
   return streams.some((s) => s === the_empty_stream)
     ? the_empty_stream
     : cons_stream(f(...streams.map((s) => stream_head(s))), () =>
-        stream_map(
-          f,
-          ...streams.map((s) => stream_tail(s)),
-        ),
+        stream_map(f, ...streams.map((s) => stream_tail(s))),
       );
 }
-
 export function stream_filter<T>(
   pred: (x: T) => boolean,
   s: Stream<T>,
 ): Stream<T> {
-  return todo(3);
+  while (!(s === the_empty_stream || pred(stream_head(s)))) {
+    s = stream_tail(s);
+  }
+  return s === the_empty_stream
+    ? the_empty_stream
+    : cons_stream(stream_head(s), () => stream_filter(pred, stream_tail(s)));
+}
+
+export function stream_filter2<T>(
+  pred: (x: T) => boolean,
+  s: Stream<T>,
+): Stream<T> {
+  return s === the_empty_stream
+    ? the_empty_stream
+    : pred(stream_head(s))
+      ? cons_stream(stream_head(s), () => stream_filter2(pred, stream_tail(s)))
+      : stream_filter(pred, stream_tail(s));
 }
 
 export function add_streams(
   a: Stream<number>,
   b: Stream<number>,
 ): Stream<number> {
-  return todo(3);
+  return stream_map((x: number, y: number) => x + y, a, b);
 }
 
 export function mul_streams(
   a: Stream<number>,
   b: Stream<number>,
 ): Stream<number> {
-  return todo(3);
+  return stream_map((x: number, y: number) => x * y, a, b);
 }
 
 export function scale_stream(
   s: Stream<number>,
   factor: number,
 ): Stream<number> {
-  return todo(3);
+  return stream_map((x: number) => x * factor, s);
 }
 
 // ---------------------------------------------------------------------------
