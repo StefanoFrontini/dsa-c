@@ -12,6 +12,7 @@ export const AREAS = [
   'audio',
   'actor-model',
   'sicp-combinatori',
+  'sicp-streams',
 ];
 
 // Dove puntano i link al codice. I percorsi nelle note sono relativi ad `antirez/`.

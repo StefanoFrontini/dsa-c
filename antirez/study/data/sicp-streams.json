@@ -1,0 +1,220 @@
+{
+  "area": {
+    "id": "sicp-streams",
+    "title": "Stream (SICP 3.5) in TypeScript",
+    "summary": "Il capitolo 3.5 di SICP implementato a tappe con test: coda ritardata e valutazione eager, memoizzazione e memoria, map/filter pigri, closure, stream infiniti definiti implicitamente (integers, fibs, primes), poi serie, ritardo esplicito e segnali come ponte verso il player audio in C.",
+    "period": "2026-10-03/2026-10-19",
+    "turns": []
+  },
+  "concepts": [
+    {
+      "id": "sicp-streams/thunk-eager",
+      "title": "Coda ritardata (thunk) e valutazione eager",
+      "summary": "JS valuta gli argomenti prima della chiamata: la lambda della coda la scrive il chiamante (cons_stream(n, () => integers_from(n + 1))), altrimenti stack overflow.",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams/src/stream.ts",
+        "sicp/streams/test/01-basi.test.ts",
+        "sicp/streams/streams.ts"
+      ],
+      "related": [
+        "sicp-combinatori/mockingbird-ricorsione"
+      ],
+      "difficulty": 1
+    },
+    {
+      "id": "sicp-streams/memo",
+      "title": "Memoizzazione delle code e memoria",
+      "summary": "memo con flag separato dal valore; le celle forzate restano in memoria solo finché qualcuno tiene la testa; senza memo si paga in tempo, non in memoria.",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams/src/stream.ts",
+        "sicp/streams/test/02-memo.test.ts"
+      ],
+      "related": [
+        "memoria-c/refcount-retain-release"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-streams/map-filter",
+      "title": "stream_map, stream_filter e la pigrizia",
+      "summary": "map applica f alla testa subito e ritarda il resto; filter deve cercare subito una testa valida, meglio con un ciclo (stack costante) e un solo test del predicato per elemento.",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams/src/stream.ts",
+        "sicp/streams/test/03-operazioni.test.ts"
+      ],
+      "related": [],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-streams/closure-variabile",
+      "title": "Closure: si cattura la variabile, non il valore",
+      "summary": "La lambda della coda legge s quando viene eseguita: funziona perché nasce dopo il ciclo; ogni chiamata ha il suo s. In C la closure è una struct con i valori copiati.",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams/src/stream.ts"
+      ],
+      "related": [],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-streams/infiniti-impliciti",
+      "title": "Stream infiniti e definizioni implicite",
+      "summary": "ones, integers, fibs, factorials si riferiscono a se stessi nella coda; integers implicito costa come integers_from ma dipende dalla memo (senza: quadratico, fibs esponenziale).",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams/src/stream.ts",
+        "sicp/streams/test/04-infiniti.test.ts"
+      ],
+      "related": [],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-streams/primes-circolare",
+      "title": "primes e is_prime: definizione circolare",
+      "summary": "primes come costante memoizzata è una cache condivisa; non si blocca perché la testa 2 è data e is_prime legge solo primi con p² ≤ n, già calcolati; senza il 2 esplicito: ReferenceError (TDZ).",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams/src/stream.ts",
+        "sicp/streams/test/04-infiniti.test.ts"
+      ],
+      "related": [],
+      "difficulty": 3
+    }
+  ],
+  "projects": [
+    {
+      "id": "sicp-streams",
+      "title": "SICP 3.5 Streams in TypeScript (percorso a tappe)",
+      "path": "sicp/streams/src/stream.ts, sicp/streams/test/",
+      "status": "in-progress",
+      "last_modified": "2026-10-19",
+      "build": "cd sicp/streams && npm run typecheck (tsc --noEmit) → nessun errore",
+      "run": "cd sicp/streams && node --test test/01-basi.test.ts … test/04-infiniti.test.ts → 23/23",
+      "works": [
+        "tappa 1: cons_stream con coda ritardata, take che non forza oltre il necessario, array_to_stream, integers_from",
+        "tappa 2: memo con flag separato, cons_stream memoizzato",
+        "tappa 3: stream_map su più stream, stream_filter iterativo (un test del predicato per elemento), add/mul/scale_streams",
+        "tappa 4: ones, integers, fibs, sieve, primes/is_prime, merge + hamming, factorials"
+      ],
+      "missing": [
+        "tappe 5-7: partial_sums, serie, acceleratore di Eulero, integral/solve, zero crossing",
+        "esercizi aperti: animazione del picture language, generatori, stream in C"
+      ],
+      "next_step": "Tappa 5 (node --test test/05-sequenze.test.ts), partendo da partial_sums.",
+      "concepts": [
+        "sicp-streams/thunk-eager",
+        "sicp-streams/memo",
+        "sicp-streams/map-filter",
+        "sicp-streams/closure-variabile",
+        "sicp-streams/infiniti-impliciti",
+        "sicp-streams/primes-circolare"
+      ]
+    }
+  ],
+  "gemini_errors": [],
+  "open_questions": [
+    "In C: dove vivono flag e valore memoizzato, chi possiede la coda calcolata e quando la si libera (refcount o arena)?"
+  ],
+  "side_topics": [],
+  "self_check": [
+    {
+      "q": "Perché `integers_from(n) = make_stream(n, integers_from(n + 1))` va in stack overflow? Dove deve stare la lambda?",
+      "concept": "sicp-streams/thunk-eager",
+      "difficulty": 1,
+      "a": "JavaScript è eager: valuta gli argomenti **prima** di chiamare la funzione, quindi `integers_from(n + 1)` parte prima che `make_stream` possa avvolgerlo in `() => t`, e così all'infinito. La lambda deve scriverla il chiamante: `cons_stream(n, () => integers_from(n + 1))`. Lo stesso motivo per cui `M(make_fractal)` non va in loop: la chiamata ricorsiva sta dentro una funzione che parte solo quando serve."
+    },
+    {
+      "q": "Quante volte `stream_ref(integers_from(1), 1000)` chiama `integers_from`? E senza memo, quante code forzano due `take(s, 10)` sullo stesso `s`?",
+      "concept": "sicp-streams/thunk-eager",
+      "difficulty": 1,
+      "a": "1001 volte: una per la testa e una per ognuna delle 1000 code forzate. Senza memo ogni `take(s, 10)` forza 9 code (dopo il decimo elemento non serve la coda) e la seconda chiamata le ricalcola tutte: 9 + 9 = 18 chiamate a `integers_from` oltre a quella che ha costruito `s`."
+    },
+    {
+      "q": "Perché `memo` ha bisogno di un flag separato dal valore?",
+      "concept": "sicp-streams/memo",
+      "difficulty": 1,
+      "a": "Perché il risultato della coda può essere un valore \"falso\": lo stream vuoto è `null`, e un thunk qualunque può restituire `0` o `undefined`. Con `if (value === undefined)` come test una coda che vale `undefined` verrebbe ricalcolata ogni volta. Il flag `already_run` dice se `f` è già stata chiamata, indipendentemente da cosa ha restituito."
+    },
+    {
+      "q": "Con la memo, perché `const s = integers_from(1); stream_ref(s, 1_000_000)` occupa memoria per un milione di celle e `stream_ref(integers_from(1), 1_000_000)` no?",
+      "concept": "sicp-streams/memo",
+      "difficulty": 2,
+      "a": "Ogni coda memoizzata tiene un riferimento alla cella successiva, quindi la catena è raggiungibile dalla testa. Finché `s` esiste il GC non può liberare nessuna delle celle forzate. Se nessuno tiene la testa, le celle già superate diventano irraggiungibili e vengono liberate (purché `stream_ref` sia iterativo: una versione ricorsiva tiene ogni cella nel proprio frame e con un milione di chiamate va comunque in stack overflow). Senza memo ogni cella tiene solo il thunk: il costo è il ricalcolo, non la memoria. In C la stessa domanda diventa: chi possiede la cella e chi la libera (refcount o arena)."
+    },
+    {
+      "q": "Es. 3.51 con `x = stream_map(display, stream_enumerate_interval(0, 10))`: cosa stampano la definizione di `x`, `stream_ref(x, 5)` e poi `stream_ref(x, 7)`? E senza memo?",
+      "concept": "sicp-streams/map-filter",
+      "difficulty": 2,
+      "a": "La definizione stampa `0`: `stream_map` applica `f` alla testa quando costruisce la cella. `stream_ref(x, 5)` forza 5 code e stampa `1 2 3 4 5` (lo 0 non si ristampa, la cella esiste già). `stream_ref(x, 7)` trova memoizzate le code fino alla 5 e stampa solo `6 7`. Senza memo ogni `stream_tail` ricostruisce le celle e richiama `display`: la seconda chiamata stampa `1 2 3 4 5 6 7`."
+    },
+    {
+      "q": "Perché la funzione passata a `stream_map` per stampare (`display`) deve restituire il valore?",
+      "concept": "sicp-streams/map-filter",
+      "difficulty": 1,
+      "a": "Il valore restituito da `f` diventa la testa della cella del nuovo stream. `console.log` restituisce `undefined`: le stampe sarebbero identiche (dipendono da quando `f` viene chiamata) ma lo stream conterrebbe solo `undefined`, e TypeScript inferirebbe `Stream<void>`. Per questo `display` è `(v) => (console.log(v), v)`: l'operatore virgola valuta la stampa per l'effetto e restituisce `v`."
+    },
+    {
+      "q": "Perché `stream_map(display, s)` da solo non stampa tutti gli elementi?",
+      "concept": "sicp-streams/map-filter",
+      "difficulty": 1,
+      "a": "Costruire lo stream valuta solo la prima testa. Gli altri elementi vengono calcolati, e quindi stampati, solo quando qualcuno forza le code una dopo l'altra fino a `null`, come fa `stream_for_each`. Su uno stream infinito non termina: è chi consuma a decidere quanto calcolare (`take`, `stream_ref`), come `getNextByte` nel player audio che tira i byte quando servono."
+    },
+    {
+      "q": "Perché nel ramo \"scarta\" di `stream_filter` non si può mettere la lambda? Perché la versione ricorsiva fallisce con 10.000 elementi scartati e quella con il ciclo no?",
+      "concept": "sicp-streams/map-filter",
+      "difficulty": 2,
+      "a": "`stream_filter` deve restituire `null` oppure una cella con una testa che soddisfa il predicato: se la testa corrente non va bene non c'è ancora niente da mettere nella cella, quindi bisogna cercare subito. Per questo `stream_filter(x => false, integers_from(1))` non può terminare (nemmeno in Haskell). La versione ricorsiva fa una chiamata non ancora ritornata per ogni elemento scartato e JavaScript non ottimizza le chiamate in coda: `RangeError` già con 10.000 elementi. Con `while (s !== null && !pred(stream_head(s))) s = stream_tail(s);` lo stack è costante; anche lo heap lo è se nessuno tiene la testa, perché riassegnare `s` rende irraggiungibili le celle scartate (con `const n = integers_from(1); stream_filter(x => false, n)` invece la memoria cresce)."
+    },
+    {
+      "q": "Cosa succede se `stream_filter` chiama il predicato due volte sullo stesso elemento?",
+      "concept": "sicp-streams/map-filter",
+      "difficulty": 2,
+      "a": "Il risultato è giusto ma il lavoro no: con un predicato costoso (`is_prime`) o con effetti collaterali la differenza si vede. Il test della pigrizia conta le chiamate a `is_prime` per il secondo primo tra 10.000 e 1.000.000 e si aspetta 10: con un `if` che testa la testa e poi un `while` che la ritesta (e una ricorsione finale che ritesta l'elemento trovato) ne risultano di più e il test fallisce. Un solo ciclo iniziale seguito da un solo `return` testa ogni elemento una volta."
+    },
+    {
+      "q": "Nella versione con il ciclo la lambda della coda usa `s`, che il ciclo riassegna: perché funziona?",
+      "concept": "sicp-streams/closure-variabile",
+      "difficulty": 2,
+      "a": "Riassegnare `s` non crea una nuova variabile: la closure cattura **la variabile** (non il suo valore) e la legge quando viene eseguita. Funziona perché la lambda viene creata **dopo** il ciclo e `s` non viene più riassegnata, quindi quando la coda viene forzata `s` contiene ancora la cella trovata. Se dopo `cons_stream` il codice riassegnasse `s`, la coda leggerebbe il valore nuovo. Variabili nuove nascono con ogni *chiamata* di `stream_filter` (parametri nuovi), per questo celle diverse non interferiscono. Prova: `let s = 1; const f = () => s; s = 2; f()` restituisce 2. In C una closure è una struct con i valori copiati: tenere un puntatore a una variabile sullo stack di una funzione già ritornata è un bug."
+    },
+    {
+      "q": "`integers` implicito e `integers_from(1)`: che differenza c'è in lavoro e memoria se tieni la testa e chiedi l'elemento 1.000.000? E senza memo?",
+      "concept": "sicp-streams/infiniti-impliciti",
+      "difficulty": 2,
+      "a": "Stesso ordine di grandezza: circa un milione di celle e un milione di passi in entrambi i casi. Non ci sono due stream: lo stream prodotto da `add_streams(ones, integers)` **è** la coda di `integers`; `ones` è una sola cella che punta a se stessa, e per la cella k si legge la cella k-1 già memoizzata. Cambia la costante: ogni passo è un `stream_map` con un'addizione e due `stream_tail` già memoizzati, e ogni cella è un po' più grossa (la closure tiene i riferimenti agli stream di ingresso). La differenza vera è la memo: senza, ogni cella di `integers` ricalcola la catena precedente (quadratico; `fibs` diventa esponenziale), mentre `integers_from` funziona lo stesso perché ogni cella sa già il suo numero. In più `integers` è una costante del modulo: le sue celle non vengono mai liberate."
+    },
+    {
+      "q": "Che vantaggio ha `primes` come costante memoizzata per `is_prime`?",
+      "concept": "sicp-streams/primes-circolare",
+      "difficulty": 2,
+      "a": "Il risparmio è nel **calcolo**, non nell'allocazione: trovare un primo richiede di filtrare i candidati con `is_prime`, cioè altre divisioni. Con la costante memoizzata ogni primo viene trovato una volta in tutta la vita del programma e tutte le chiamate a `is_prime` (dei test o del filtro dentro `primes`) rileggono gratis le celle: una cache dei risultati condivisa fra chiamate. Se ogni chiamata ricostruisse il suo stream dei primi, ognuna dovrebbe ritrovare i primi piccoli chiamando `is_prime`, che ricostruirebbe il suo stream, e così via. Prezzo: quelle celle non vengono mai liberate (memoria contro tempo)."
+    },
+    {
+      "q": "Perché la definizione circolare `primes`/`is_prime` non si blocca? Cosa succede senza il 2 esplicito?",
+      "concept": "sicp-streams/primes-circolare",
+      "difficulty": 3,
+      "a": "La testa 2 è scritta a mano, quindi la prima cella esiste prima che `is_prime` venga chiamata. `is_prime(n)` si ferma al primo `p` con `p * p > n` e legge solo primi più piccoli di n. Quando `primes` cerca il primo successivo a pₖ, i candidati sono minori di pₖ² (il primo successivo è già minore di 2·pₖ, postulato di Bertrand), quindi `is_prime` si ferma al più a pₖ, dentro le celle già calcolate: per i candidati vicino a 7919 servono i primi fino a 89, prodotti molto prima. Senza il 2 (`primes = stream_filter(is_prime, integers_from(2))`) il filtro chiama subito `is_prime(2)`, che legge `primes` mentre la sua inizializzazione è in corso: `ReferenceError: Cannot access 'primes' before initialization` (temporal dead zone di `const`). Infine `is_prime` è esportata: deve rispondere `false` per `n < 2`, altrimenti `2 * 2 > n` la fa rispondere `true` per 0, 1 e i negativi."
+    }
+  ]
+}

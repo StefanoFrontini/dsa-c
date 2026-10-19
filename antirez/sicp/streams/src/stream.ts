@@ -182,37 +182,84 @@ export function scale_stream(
 // ---------------------------------------------------------------------------
 
 /** 1, 1, 1, ... (implicito) */
-export const ones: Stream<number> = null;
+export const ones: Stream<number> = cons_stream(1, () => ones);
 
 /** 1, 2, 3, ... (implicito: con ones e add_streams, senza integers_from) */
-export const integers: Stream<number> = null;
+export const integers: Stream<number> = cons_stream(1, () =>
+  add_streams(ones, integers),
+);
+
+// /** n, n+1, n+2, ... all'infinito. */
+// export function integers_from(n: number): Stream<number> {
+//   return cons_stream(n, () => integers_from(n + 1));
+// }
 
 /** 0, 1, 1, 2, 3, 5, ... (implicito: con add_streams su fibs stesso) */
-export const fibs: Stream<number> = null;
+export const fibs: Stream<number> = cons_stream(0, () =>
+  cons_stream(1, () => add_streams(stream_tail(fibs), fibs)),
+);
+
+export function is_divisible(x: number, y: number): boolean {
+  return x % y === 0;
+}
 
 /** Crivello di Eratostene: sieve(integers_from(2)) = 2, 3, 5, 7, ... */
 export function sieve(s: Stream<number>): Stream<number> {
-  return todo(4);
+  return cons_stream(stream_head(s), () =>
+    sieve(
+      stream_filter((x) => !is_divisible(x, stream_head(s)), stream_tail(s)),
+    ),
+  );
+}
+function square(x: number): number {
+  return x * x;
 }
 
 /** 2, 3, 5, 7, ... (implicito: usa is_prime, che a sua volta usa primes) */
-export const primes: Stream<number> = null;
+export const primes: Stream<number> = cons_stream(2, () =>
+  stream_filter(is_prime, integers_from(3)),
+);
 
 /** Primalità controllando solo i divisori primi fino a √n, presi da `primes`. */
 export function is_prime(n: number): boolean {
-  return todo(4);
+  if (n <= 1) return false;
+  function iter(ps: Stream<number>): boolean {
+    return square(stream_head(ps)) > n
+      ? true
+      : is_divisible(n, stream_head(ps))
+        ? false
+        : iter(stream_tail(ps));
+  }
+  return iter(primes);
 }
 
 /** Es. 3.56: fonde due stream crescenti senza ripetizioni. */
 export function merge(a: Stream<number>, b: Stream<number>): Stream<number> {
-  return todo(4);
+  if (a === the_empty_stream) return b;
+  else if (b === the_empty_stream) return a;
+  else {
+    const a_head = stream_head(a);
+    const b_head = stream_head(b);
+    return a_head < b_head
+      ? cons_stream(a_head, () => merge(stream_tail(a), b))
+      : a_head > b_head
+        ? cons_stream(b_head, () => merge(a, stream_tail(b)))
+        : cons_stream(a_head, () => merge(stream_tail(a), stream_tail(b)));
+  }
 }
 
 /** Es. 3.56: i numeri senza fattori primi diversi da 2, 3, 5, in ordine. */
-export const hamming: Stream<number> = null;
+export const hamming: Stream<number> = cons_stream(1, () =>
+  merge(
+    scale_stream(hamming, 2),
+    merge(scale_stream(hamming, 3), scale_stream(hamming, 5)),
+  ),
+);
 
 /** Es. 3.54: 1, 2, 6, 24, ... (l'elemento n vale (n+1)!) con mul_streams. */
-export const factorials: Stream<number> = null;
+export const factorials: Stream<number> = cons_stream(1, () =>
+  mul_streams(stream_tail(integers), factorials),
+);
 
 // ---------------------------------------------------------------------------
 // Tappa 5 — sequenze (SICP JS 3.5.2-3.5.3, es. 3.55, 3.59)

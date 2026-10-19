@@ -25,6 +25,7 @@ le poche imprecisioni trovate (spiegazioni semplificate in modo scorretto) sono 
 | Audio player: decodifica e riproduzione | giu → lug | 194-242 | [audio](notes/audio.md) | 18 |
 | Actor model ed event loop | giu → lug | 220-221, 243-269 | [actor-model](notes/actor-model.md) | 20 |
 | SICP (picture language) e logica combinatoria | lug → ott | 270-336 | [sicp-combinatori](notes/sicp-combinatori.md) | 17 |
+| Stream (SICP 3.5) in TypeScript | ott → | — | [sicp-streams](notes/sicp-streams.md) | 6 |
 
 Percorso: memoria/refcount (toyforth) → parsing (chord parser in 3 tecniche) → monoidi → Pratt e alberi →
 MapReduce con i thread → networking e HLS → audio player multithread → actor model → SICP e combinatori → **stream (SICP 3.5)**.
@@ -35,7 +36,7 @@ MapReduce con i thread → networking e HLS → audio player multithread → act
 |---|---|---|---|---|
 | [audio-player-actor](projects/audio-player-actor.md) | 🔴 broken | 2026-07-17 | actor-model | Farlo compilare (9 errori), poi correggere il loop di `poll` (timeout in ms, fd duplicato, `read` da stdin, `ACTOR_NUM`) |
 | [chord-sheet-parser](projects/chord-sheet-parser.md) | 🔴 broken | 2026-03-24 | parsing | `:462` → `isStringConstant(l)`; rilasciare la WORD nel ramo d'errore di `parseWord` |
-| [sicp-streams](projects/sicp-streams.md) | ⚪ stub | 2026-09-21 | sicp-combinatori | `cons_stream` con coda ritardata e memoizzata, poi `stream_map`/`filter`, `integers`, crivello |
+| [sicp-streams](projects/sicp-streams.md) | 🟡 in-progress | 2026-10-19 | sicp-streams | Tappa 5: `partial_sums`, serie, acceleratore di Eulero |
 | [toyforth](projects/toyforth.md) | 🟡 in-progress | 2026-03-16 | memoria-c | `free(o->list.ele)` in `freeObject`, poi 0 leak con `leaks --atExit` |
 | [audio-player](projects/audio-player.md) | 🟢 working | 2026-07-07 | audio | Parsing del numero di sequenza (rompe a ~10.000.000, circa marzo 2027); verifica del certificato TLS |
 | [chord-pratt](projects/chord-pratt.md) | 🟢 working | 2026-05-27 | pratt-alberi | Portare `evalAST`/`freeObject` iterative (crash ≥200k righe); accettare UTF-8 (`città` → `citt`) |
