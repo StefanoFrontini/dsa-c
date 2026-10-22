@@ -1,5 +1,5 @@
 # Stream (SICP 3.5) in TypeScript
-Periodo: 2026-10-03 → in corso · Percorso a tappe con test in `sicp/streams/README.md` · Progetto: [sicp-streams](../projects/sicp-streams.md)
+Periodo: 2026-10-03 → in corso (tappe 1-5 fatte) · Percorso a tappe con test in `sicp/streams/README.md` · Progetto: [sicp-streams](../projects/sicp-streams.md)
 
 ## Mappa in breve
 - Uno stream è `null` oppure `{ head, tail }`: la testa è già un valore, la coda è un **thunk** (funzione senza argomenti) che calcola il resto solo quando viene forzata (`stream_tail`).
@@ -54,6 +54,21 @@ Periodo: 2026-10-03 → in corso · Percorso a tappe con test in `sicp/streams/R
 - Senza il 2 esplicito (`primes = stream_filter(is_prime, integers_from(2))`) il filtro chiama subito `is_prime(2)`, che legge `primes` mentre la costante è ancora in inizializzazione: `ReferenceError: Cannot access 'primes' before initialization` (temporal dead zone di `const`).
 - `is_prime` è esportata: deve rispondere `false` per `n < 2` (0, 1, negativi), altrimenti `2 * 2 > n` la fa rispondere `true`.
 
+### Sequenze di approssimazioni e acceleratori
+- `sqrt_stream(x)`: 1 seguito da `stream_map(improve, stream)` sullo stream stesso (Newton, `(g + x/g) / 2`). Per √2 le cifre corrette circa raddoppiano a ogni passo (0, 1, 3, 6, 12, 16). Con x = 0 la radice è doppia: il passo diventa `g / 2` e la convergenza è lineare.
+- Lo stream separa *cosa* si calcola da *quando fermarsi*: decide il consumatore (`take`, `stream_ref`, `stream_limit` dell'es. 3.64). Non si calcola meno che con un `while`, ma generatore e criterio si combinano liberamente e la sequenza diventa un valore da trasformare.
+- `pi_stream` = 4 · somme parziali di 1, −1/3, 1/5, … (dispari con `stream_map(n => 2*n - 1, integers)`, segni con `alternating_ones = cons_stream(1, () => stream_map(x => -x, alternating_ones))`). Errore circa 1/n: per 10 cifre servirebbero 10¹⁰ termini (e non basterebbero per gli arrotondamenti).
+- `euler_transform(s)`: il primo elemento usa S0, S1, S2, la coda è `euler_transform(stream_tail(s))` (finestra che scorre). Su `pi_stream` l'errore all'elemento 7 passa da 0,12 a 3,4·10⁻⁴.
+- `make_tableau(t, s)` è uno stream di stream (`s`, `t(s)`, `t(t(s))`, …) con la stessa forma di `sqrt_stream`; `accelerated_sequence` prende la testa di ogni riga. Su π: precisione macchina (≈10⁻¹⁵) in 8 elementi.
+- Oltre la precisione del double (64 bit, 53 di mantissa, 15-17 cifre) una riga diventa costante: `0 / 0 = NaN` dall'elemento 10, e il `NaN` si propaga a tutte le righe successive. Serve un consumatore che si fermi.
+- Tipi: `stream_map(stream_head, …)` inferisce `R = unknown` (la generica `T` non ha da dove essere dedotta); una lambda tipizzata evita il cast `as`.
+
+### Serie di potenze come stream di coefficienti
+- `partial_sums(s)`: `const ps_stream = cons_stream(stream_head(s), () => add_streams(stream_tail(s), ps_stream))`, con `null` per `s` vuoto. Dare un nome al risultato fa condividere le celle (lineare); chiamare `partial_sums(s)` nella coda crea uno stream nuovo a ogni livello (quadratico). Senza memo è quadratico in entrambi i casi.
+- `integrate_series(s)`: moltiplica elemento per elemento per 1, 1/2, 1/3, … (coefficiente di xⁿ → coefficiente di xⁿ⁺¹).
+- `exp_series = cons_stream(1, () => integrate_series(exp_series))`: 1, 1, 1/2, 1/6, … = 1/n!, senza fattoriali.
+- `cosine_series = cons_stream(1, () => integrate_series(scale_stream(sine_series, -1)))` e `sine_series = cons_stream(0, () => integrate_series(cosine_series))`: costanti cos 0 = 1 e sin 0 = 0; si usano a vicenda solo dentro le lambda, quindi l'ordine delle dichiarazioni non conta.
+
 ## Domande di autoverifica
 1. Perché `integers_from(n) = make_stream(n, integers_from(n + 1))` va in stack overflow? Dove deve stare la lambda?
 2. Quante volte `stream_ref(integers_from(1), 1000)` chiama `integers_from`? E senza memo, quante code forzano due `take(s, 10)` sullo stesso `s`?
@@ -68,3 +83,11 @@ Periodo: 2026-10-03 → in corso · Percorso a tappe con test in `sicp/streams/R
 11. `integers` implicito e `integers_from(1)`: che differenza c'è in lavoro e memoria per l'elemento 1.000.000? E senza memo?
 12. Che vantaggio ha `primes` come costante memoizzata per `is_prime`?
 13. Perché la definizione circolare `primes`/`is_prime` non si blocca? Cosa succede senza il 2 esplicito?
+14. In `partial_sums`, perché chiamare `partial_sums(s)` nella coda è quadratico e la versione con `const ps_stream` no? E senza memo?
+15. Con uno stream di approssimazioni chi decide quando fermarsi? Che vantaggio ha rispetto a un `while`?
+16. Perché `sqrt_stream(9)` raddoppia le cifre corrette e `sqrt_stream(0)` no?
+17. Con l'errore di `pi_stream` circa 1/n, quanti termini servono per 10 cifre di π? Basterebbero?
+18. Perché `accelerated_sequence(euler_transform, pi_stream)` dà `NaN` dall'elemento 10?
+19. Perché `stream_map(stream_head, …)` ha bisogno di `as Stream<number>`?
+20. Come si ottengono `exp_series`, `sine_series` e `cosine_series` senza fattoriali? Quali sono le costanti?
+21. Perché in `exp_series` la chiamata a `integrate_series` deve stare dentro la lambda?

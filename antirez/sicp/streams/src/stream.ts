@@ -267,20 +267,74 @@ export const factorials: Stream<number> = cons_stream(1, () =>
 
 /** Es. 3.55: s0, s0+s1, s0+s1+s2, ... */
 export function partial_sums(s: Stream<number>): Stream<number> {
-  return todo(5);
+  if (s === the_empty_stream) return the_empty_stream;
+  const ps_stream: Stream<number> = cons_stream(stream_head(s), () =>
+    add_streams(stream_tail(s), ps_stream),
+  );
+  return ps_stream;
+  // return stream_head(s) === the_empty_stream
+  //   ? the_empty_stream
+  //   : cons_stream(stream_head(s), () =>
+  //       add_streams(stream_tail(s), partial_sums(s)),
+  //     );
 }
+// export function partial_sums(s: Stream<number>): Stream<number> {
+//   function iter(stream: Stream<number>, acc: number): Stream<number> {
+//     return cons_stream(acc, () =>
+//       iter(stream_tail(stream), acc + stream_head(stream_tail(stream))),
+//     );
+//   }
+//   return iter(s, stream_head(s));
+// }
+// console.log(take(partial_sums(integers), 7));
 
 /** Approssimazioni successive di √x col metodo di Newton, partendo da 1. */
 export function sqrt_stream(x: number): Stream<number> {
-  return todo(5);
+  function average(a: number, b: number): number {
+    return (a + b) / 2;
+  }
+  function improve(g: number): number {
+    return average(g, x / g);
+  }
+  const stream: Stream<number> = cons_stream(1, () =>
+    stream_map(improve, stream),
+  );
+  return stream;
 }
+// console.log(take(sqrt_stream(2), 5))
+// function is_odd(x: number): boolean {
+//   return x % 2 !== 0;
+// }
 
 /** 4 · (1 - 1/3 + 1/5 - 1/7 + ...), come somme parziali. */
-export const pi_stream: Stream<number> = null;
+const alternating_ones: Stream<number> = cons_stream(1, () =>
+  stream_map((x) => -x, alternating_ones),
+);
+
+// const odds: Stream<number> = stream_filter(is_odd, integers);
+// const odds: Stream<number> = cons_stream(1, () =>
+//   add_streams(integers, stream_tail(integers)),
+// );
+const odds: Stream<number> = stream_map((x) => 2 * x - 1, integers);
+const odds_reciprocal: Stream<number> = stream_map((x) => 1 / x, odds);
+const alternating: Stream<number> = mul_streams(
+  odds_reciprocal,
+  alternating_ones,
+);
+
+export const pi_stream: Stream<number> = scale_stream(
+  partial_sums(alternating),
+  4,
+);
 
 /** Acceleratore di Eulero: S(n+1) - (S(n+1) - S(n))² / (S(n-1) - 2S(n) + S(n+1)). */
 export function euler_transform(s: Stream<number>): Stream<number> {
-  return todo(5);
+  const s0 = stream_ref(s, 0);
+  const s1 = stream_ref(s, 1);
+  const s2 = stream_ref(s, 2);
+  return cons_stream(s2 - square(s2 - s1) / (s0 + -2 * s1 + s2), () =>
+    euler_transform(stream_tail(s)),
+  );
 }
 
 /** Stream di stream: s, t(s), t(t(s)), ... */
@@ -288,7 +342,7 @@ export function make_tableau(
   transform: (s: Stream<number>) => Stream<number>,
   s: Stream<number>,
 ): Stream<Stream<number>> {
-  return todo(5);
+  return cons_stream(s, () => make_tableau(transform, transform(s)));
 }
 
 /** La testa di ogni riga del tableau. */
@@ -296,20 +350,34 @@ export function accelerated_sequence(
   transform: (s: Stream<number>) => Stream<number>,
   s: Stream<number>,
 ): Stream<number> {
-  return todo(5);
+  return stream_map(
+    (row: Stream<number>) => stream_head(row),
+    make_tableau(transform, s),
+  );
 }
+// console.log(take(euler_transform(ones), 10));
+// console.log(take(accelerated_sequence(euler_transform, pi_stream), 15));
 
 /** Es. 3.59: a0, a1, a2, ... → a0/1, a1/2, a2/3, ... (coefficienti dell'integrale, senza costante). */
 export function integrate_series(s: Stream<number>): Stream<number> {
-  return todo(5);
+  return mul_streams(
+    stream_map((x) => 1 / x, integers),
+    s,
+  );
 }
 
 /** Coefficienti di e^x (implicito: e^x è l'integrale di se stessa). */
-export const exp_series: Stream<number> = null;
+export const exp_series: Stream<number> = cons_stream(1, () =>
+  integrate_series(exp_series),
+);
 
 /** Coefficienti di cos x e sin x, definiti l'uno con l'altro: sin' = cos, cos' = -sin. */
-export const cosine_series: Stream<number> = null;
-export const sine_series: Stream<number> = null;
+export const cosine_series: Stream<number> = cons_stream(1, () =>
+  integrate_series(stream_map((x) => -x, sine_series)),
+);
+export const sine_series: Stream<number> = cons_stream(0, () =>
+  integrate_series(cosine_series),
+);
 
 // ---------------------------------------------------------------------------
 // Tappa 6 — ritardo esplicito (SICP JS 3.5.4)

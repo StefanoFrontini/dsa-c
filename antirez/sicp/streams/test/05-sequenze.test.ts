@@ -8,8 +8,10 @@ import {
 
 const close = (a: number, b: number, eps: number, msg?: string) =>
   assert.ok(Math.abs(a - b) < eps, msg ?? `${a} non è vicino a ${b} (eps ${eps})`);
-const closeAll = (as: number[], bs: number[], eps = 1e-12) =>
+const closeAll = (as: number[], bs: number[], eps = 1e-12) => {
+  assert.equal(as.length, bs.length, `${as.length} elementi invece di ${bs.length}`);
   as.forEach((a, i) => close(a, bs[i], eps, `elemento ${i}: ${a} invece di ${bs[i]}`));
+};
 
 describe("tappa 5 · sequenze", () => {
   it("es. 3.55: partial_sums", () => {

@@ -3,7 +3,7 @@
     "id": "sicp-streams",
     "title": "Stream (SICP 3.5) in TypeScript",
     "summary": "Il capitolo 3.5 di SICP implementato a tappe con test: coda ritardata e valutazione eager, memoizzazione e memoria, map/filter pigri, closure, stream infiniti definiti implicitamente (integers, fibs, primes), poi serie, ritardo esplicito e segnali come ponte verso il player audio in C.",
-    "period": "2026-10-03/2026-10-19",
+    "period": "2026-10-03/2026-10-22",
     "turns": []
   },
   "concepts": [
@@ -100,6 +100,41 @@
       ],
       "related": [],
       "difficulty": 3
+    },
+    {
+      "id": "sicp-streams/approssimazioni",
+      "title": "Sequenze di approssimazioni e acceleratori",
+      "summary": "Uno stream di approssimazioni (sqrt_stream, pi_stream) separa cosa si calcola da quando fermarsi; la sequenza diventa un valore che si può trasformare (euler_transform, tableau) fino alla precisione macchina, oltre la quale compare NaN.",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams/src/stream.ts",
+        "sicp/streams/test/05-sequenze.test.ts"
+      ],
+      "related": [
+        "sicp-streams/infiniti-impliciti"
+      ],
+      "difficulty": 2
+    },
+    {
+      "id": "sicp-streams/serie",
+      "title": "Serie di potenze come stream di coefficienti",
+      "summary": "partial_sums, integrate_series, exp_series, sine_series/cosine_series: definizioni implicite che condividono le celle (un nome per il risultato) e quindi costano in modo lineare, purché ci sia la memo.",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams/src/stream.ts",
+        "sicp/streams/test/05-sequenze.test.ts"
+      ],
+      "related": [
+        "sicp-streams/infiniti-impliciti",
+        "sicp-streams/memo"
+      ],
+      "difficulty": 2
     }
   ],
   "projects": [
@@ -108,27 +143,30 @@
       "title": "SICP 3.5 Streams in TypeScript (percorso a tappe)",
       "path": "sicp/streams/src/stream.ts, sicp/streams/test/",
       "status": "in-progress",
-      "last_modified": "2026-10-19",
+      "last_modified": "2026-10-22",
       "build": "cd sicp/streams && npm run typecheck (tsc --noEmit) → nessun errore",
-      "run": "cd sicp/streams && node --test test/01-basi.test.ts … test/04-infiniti.test.ts → 23/23",
+      "run": "cd sicp/streams && node --test test/01-basi.test.ts … test/05-sequenze.test.ts → 30/30",
       "works": [
         "tappa 1: cons_stream con coda ritardata, take che non forza oltre il necessario, array_to_stream, integers_from",
         "tappa 2: memo con flag separato, cons_stream memoizzato",
         "tappa 3: stream_map su più stream, stream_filter iterativo (un test del predicato per elemento), add/mul/scale_streams",
-        "tappa 4: ones, integers, fibs, sieve, primes/is_prime, merge + hamming, factorials"
+        "tappa 4: ones, integers, fibs, sieve, primes/is_prime, merge + hamming, factorials",
+        "tappa 5: partial_sums implicito (lineare), sqrt_stream, pi_stream, euler_transform, make_tableau/accelerated_sequence, integrate_series, exp/sine/cosine_series"
       ],
       "missing": [
-        "tappe 5-7: partial_sums, serie, acceleratore di Eulero, integral/solve, zero crossing",
+        "tappe 6-7: integral/solve (ritardo esplicito), zero crossing e smooth",
         "esercizi aperti: animazione del picture language, generatori, stream in C"
       ],
-      "next_step": "Tappa 5 (node --test test/05-sequenze.test.ts), partendo da partial_sums.",
+      "next_step": "Tappa 6 (node --test test/06-ritardo.test.ts): integral con l'integrando come thunk, poi solve.",
       "concepts": [
         "sicp-streams/thunk-eager",
         "sicp-streams/memo",
         "sicp-streams/map-filter",
         "sicp-streams/closure-variabile",
         "sicp-streams/infiniti-impliciti",
-        "sicp-streams/primes-circolare"
+        "sicp-streams/primes-circolare",
+        "sicp-streams/approssimazioni",
+        "sicp-streams/serie"
       ]
     }
   ],
@@ -215,6 +253,54 @@
       "concept": "sicp-streams/primes-circolare",
       "difficulty": 3,
       "a": "La testa 2 è scritta a mano, quindi la prima cella esiste prima che `is_prime` venga chiamata. `is_prime(n)` si ferma al primo `p` con `p * p > n` e legge solo primi più piccoli di n. Quando `primes` cerca il primo successivo a pₖ, i candidati sono minori di pₖ² (il primo successivo è già minore di 2·pₖ, postulato di Bertrand), quindi `is_prime` si ferma al più a pₖ, dentro le celle già calcolate: per i candidati vicino a 7919 servono i primi fino a 89, prodotti molto prima. Senza il 2 (`primes = stream_filter(is_prime, integers_from(2))`) il filtro chiama subito `is_prime(2)`, che legge `primes` mentre la sua inizializzazione è in corso: `ReferenceError: Cannot access 'primes' before initialization` (temporal dead zone di `const`). Infine `is_prime` è esportata: deve rispondere `false` per `n < 2`, altrimenti `2 * 2 > n` la fa rispondere `true` per 0, 1 e i negativi."
+    },
+    {
+      "q": "In `partial_sums`, perché `cons_stream(stream_head(s), () => add_streams(stream_tail(s), partial_sums(s)))` è quadratico e la versione con `const ps_stream = cons_stream(..., () => add_streams(stream_tail(s), ps_stream))` no? E senza memo?",
+      "concept": "sicp-streams/serie",
+      "difficulty": 2,
+      "a": "La chiamata `partial_sums(s)` nella coda costruisce uno **stream nuovo**, che non condivide celle con quello restituito, e la sua coda ne costruisce un altro: la cella k ricalcola le k-1 precedenti, O(n²) (misurato: 4,6 ms per n = 100, 300 ms per n = 1000). Con `ps_stream` la coda si riferisce allo stream che questa chiamata restituisce, come `integers`: la cella k legge la cella k-1 già memoizzata, O(n) (2,6 ms per n = 1000). La `const` non è ancora inizializzata quando scrivi la lambda, ma la lambda parte dopo. Senza memo anche la versione con `ps_stream` torna quadratica (210 ms per n = 1000, 760 ms per n = 2000): il nome evita di creare stream nuovi, la memo evita di ricalcolare le celle dello stesso stream. Servono tutti e due."
+    },
+    {
+      "q": "Con uno stream di approssimazioni chi decide quando fermarsi? Che vantaggio ha rispetto a un ciclo `while` con la condizione d'arresto, visto che i valori intermedi vanno calcolati comunque?",
+      "concept": "sicp-streams/approssimazioni",
+      "difficulty": 2,
+      "a": "Decide il consumatore (`take`, `stream_ref`, o `stream_limit(s, tolleranza)` dell'es. 3.64). Il lavoro è lo stesso: il vantaggio è la **composizione**. (1) Stesso generatore con criteri diversi (tolleranza assoluta o relativa, numero massimo di passi, primi valori per un grafico) senza toccare `sqrt_stream`. (2) Stesso criterio per qualunque sequenza (√x, π, serie, equazioni differenziali). (3) La sequenza è un **valore**: la si può passare a `euler_transform` o al tableau per accelerarla, mentre il `while` tiene un'approssimazione alla volta e la butta via."
+    },
+    {
+      "q": "Perché `sqrt_stream(9)` raddoppia le cifre corrette a ogni passo e `sqrt_stream(0)` dà `1, 0.5, 0.25, …`?",
+      "concept": "sicp-streams/approssimazioni",
+      "difficulty": 3,
+      "a": "Newton converge quadraticamente vicino a una radice semplice di f(g) = g² − x. Con x = 0 la radice g = 0 è **doppia** (anche f'(0) = 2g = 0): il passo `(g + 0/g) / 2` diventa `g / 2` e si guadagna un solo bit per passo (convergenza lineare)."
+    },
+    {
+      "q": "Con l'errore di `pi_stream` circa 1/n, quanti termini servono per π con 10 cifre corrette? Basterebbero davvero?",
+      "concept": "sicp-streams/approssimazioni",
+      "difficulty": 2,
+      "a": "Circa 10¹⁰ (dieci miliardi): ogni cifra in più costa 10 volte più termini. In pratica non bastano: dopo miliardi di somme in virgola mobile gli arrotondamenti accumulati sono dello stesso ordine della precisione cercata, e siccome `pi_stream` è una costante di modulo memoizzata, tutte le celle forzate resterebbero in memoria. `accelerated_sequence(euler_transform, pi_stream)` arriva alla precisione macchina in 8 elementi, usando una ventina di termini."
+    },
+    {
+      "q": "Perché `accelerated_sequence(euler_transform, pi_stream)` dà `NaN` dall'elemento 10 in poi?",
+      "concept": "sicp-streams/approssimazioni",
+      "difficulty": 2,
+      "a": "Il `number` di JS è un double IEEE 754 a 64 bit (53 bit di mantissa, circa 15-17 cifre decimali; vicino a π due double distano circa 4,4·10⁻¹⁶). Quando una riga del tableau è costante fino all'ultimo bit, s0 = s1 = s2: `s2 - s1 = 0` e la differenza seconda `s0 - 2*s1 + s2 = 0`, quindi `0 / 0 = NaN`. Il `NaN` è contagioso: ogni operazione con `NaN` dà `NaN`, e ogni riga successiva è `euler_transform` della precedente. Differenza seconda nulla significa \"non c'è più niente da accelerare\": è il consumatore che deve fermarsi prima (`stream_limit`)."
+    },
+    {
+      "q": "Perché `stream_map(stream_head, make_tableau(transform, s))` ha bisogno di `as Stream<number>` e `stream_map((row: Stream<number>) => stream_head(row), …)` no?",
+      "concept": "sicp-streams/approssimazioni",
+      "difficulty": 2,
+      "a": "`stream_head` è generica (`<T>(s: Stream<T>) => T`): passata dove ci si aspetta `(...args: any[]) => R`, TypeScript non ha nulla da cui dedurre `T`, la istanzia a `unknown` e `R` diventa `unknown`. Con la lambda tipizzata `T = number` e `R = Stream<number>`. Meglio evitare `as`: zittisce il type checker anche quando ha ragione."
+    },
+    {
+      "q": "Come si ottengono `exp_series`, `sine_series` e `cosine_series` senza scrivere un fattoriale? Quali sono le costanti?",
+      "concept": "sicp-streams/serie",
+      "difficulty": 2,
+      "a": "`integrate_series` porta a0, a1, a2, … in a0/1, a1/2, a2/3, … (coefficiente di xⁿ → coefficiente di xⁿ⁺¹). eˣ è il proprio integrale più 1: `exp_series = cons_stream(1, () => integrate_series(exp_series))` dà 1, 1, 1/2, 1/6, … = 1/n!. sin' = cos e cos' = −sin: il seno è 0 seguito dall'integrale del coseno, il coseno è 1 seguito dall'integrale di −seno (sin 0 = 0, cos 0 = 1). Le due costanti si usano a vicenda solo dentro le lambda, quindi l'ordine delle dichiarazioni non conta; e la cella n legge la n-1 dello stesso stream, quindi il costo è lineare."
+    },
+    {
+      "q": "Perché in `exp_series = cons_stream(1, () => integrate_series(exp_series))` la chiamata deve stare dentro la lambda? Cosa succede con `cons_stream(1, integrate_series(exp_series))`?",
+      "concept": "sicp-streams/serie",
+      "difficulty": 1,
+      "a": "JavaScript valuta gli argomenti prima di chiamare `cons_stream`: `integrate_series(exp_series)` parte mentre la `const exp_series` è ancora in inizializzazione (temporal dead zone), quindi `ReferenceError: Cannot access 'exp_series' before initialization`. È lo stesso errore di `primes` senza il 2 esplicito. TypeScript lo segnalerebbe comunque prima, per un altro motivo: `cons_stream` vuole un thunk `() => Stream<number>`, non uno stream. Con la lambda la lettura di `exp_series` avviene quando la coda viene forzata, e a quel punto la costante esiste."
     }
   ]
 }
