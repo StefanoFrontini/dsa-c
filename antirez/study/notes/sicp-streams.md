@@ -1,5 +1,5 @@
 # Stream (SICP 3.5) in TypeScript
-Periodo: 2026-10-03 → in corso (tappe 1-5 fatte) · Percorso a tappe con test in `sicp/streams/README.md` · Progetto: [sicp-streams](../projects/sicp-streams.md)
+Periodo: 2026-10-03 → 2026-10-24 (7 tappe fatte, 37/37 test) · Percorso a tappe con test in `sicp/streams/README.md` · Progetto: [sicp-streams](../projects/sicp-streams.md)
 
 ## Mappa in breve
 - Uno stream è `null` oppure `{ head, tail }`: la testa è già un valore, la coda è un **thunk** (funzione senza argomenti) che calcola il resto solo quando viene forzata (`stream_tail`).
@@ -69,6 +69,19 @@ Periodo: 2026-10-03 → in corso (tappe 1-5 fatte) · Percorso a tappe con test 
 - `exp_series = cons_stream(1, () => integrate_series(exp_series))`: 1, 1, 1/2, 1/6, … = 1/n!, senza fattoriali.
 - `cosine_series = cons_stream(1, () => integrate_series(scale_stream(sine_series, -1)))` e `sine_series = cons_stream(0, () => integrate_series(cosine_series))`: costanti cos 0 = 1 e sin 0 = 0; si usano a vicenda solo dentro le lambda, quindi l'ordine delle dichiarazioni non conta.
 
+### Ritardo esplicito: integral e solve
+- `integral(delayed_integrand, initial, dt)`: `const integ = cons_stream(initial, () => add_streams(scale_stream(delayed_integrand(), dt), integ))`. Il thunk dell'integrando si chiama solo dentro la coda.
+- In `solve`, `const y = integral(() => dy, y0, dt); const dy = stream_map(f, y);`: alla prima riga `dy` è in temporal dead zone. Il ritardo della coda di `cons_stream` protegge ciò che sta dentro la cella, non gli argomenti di una funzione: serve un ritardo esplicito sull'argomento.
+- `solve(y => y, 1, dt)` è il metodo di Eulero su dy/dt = y: yₙ = (1 + dt)ⁿ, e con n = 1/dt passi si ottiene (1 + 1/n)ⁿ → e. Errore circa e·dt/2 (primo ordine): 1,36·10⁻³ con dt = 0,001.
+- Eulero usa la pendenza all'inizio dell'intervallo: sottostima le curve convesse (eᵗ, ma anche e⁻ᵗ: 0,367695 contro 0,367879) e sovrastima quelle concave.
+
+### Segnali come stream: zero crossing e smooth
+- `sign_change_detector(corrente, precedente)`: +1 da negativo a ≥ 0, −1 da ≥ 0 a negativo, altrimenti 0 (lo zero conta come positivo).
+- `zero_crossings(s) = stream_map(sign_change_detector, s, cons_stream(0, () => s))`: lo stream contro se stesso spostato di uno, con 0 davanti; niente casi particolari per il primo campione.
+- `smooth(s) = stream_map(average, s, stream_tail(s))`, con il controllo per `s` vuoto (altrimenti `stream_tail(null)` lancia prima che `stream_map` possa fermarsi); un elemento in meno.
+- `smoothed_zero_crossings(s) = zero_crossings(smooth(s))`: composizione, non copia. Copiare il corpo chiamando `smooth` due volte crea due stream separati e duplica il rilevatore.
+- Ponte verso l'audio: il PCM che il player passa a SDL è uno stream di campioni; filtri e rilevatori sono trasformazioni da stream a stream.
+
 ## Domande di autoverifica
 1. Perché `integers_from(n) = make_stream(n, integers_from(n + 1))` va in stack overflow? Dove deve stare la lambda?
 2. Quante volte `stream_ref(integers_from(1), 1000)` chiama `integers_from`? E senza memo, quante code forzano due `take(s, 10)` sullo stesso `s`?
@@ -91,3 +104,8 @@ Periodo: 2026-10-03 → in corso (tappe 1-5 fatte) · Percorso a tappe con test 
 19. Perché `stream_map(stream_head, …)` ha bisogno di `as Stream<number>`?
 20. Come si ottengono `exp_series`, `sine_series` e `cosine_series` senza fattoriali? Quali sono le costanti?
 21. Perché in `exp_series` la chiamata a `integrate_series` deve stare dentro la lambda?
+22. In `solve`, perché `integral` deve ricevere l'integrando come thunk? Il ritardo della coda di `cons_stream` non basta?
+23. Perché `stream_ref(solve(y => y, 1, 0.001), 1000)` approssima e? Come scala l'errore con dt?
+24. Perché Eulero sta sotto e? E con `solve(y => -y, 1, 0.001)`?
+25. Come si scrive `zero_crossings` con una sola `stream_map`?
+26. Perché `smoothed_zero_crossings` va scritto come composizione? Perché `smooth` controlla lo stream vuoto?

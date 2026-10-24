@@ -3,7 +3,7 @@
     "id": "sicp-streams",
     "title": "Stream (SICP 3.5) in TypeScript",
     "summary": "Il capitolo 3.5 di SICP implementato a tappe con test: coda ritardata e valutazione eager, memoizzazione e memoria, map/filter pigri, closure, stream infiniti definiti implicitamente (integers, fibs, primes), poi serie, ritardo esplicito e segnali come ponte verso il player audio in C.",
-    "period": "2026-10-03/2026-10-22",
+    "period": "2026-10-03/2026-10-24",
     "turns": []
   },
   "concepts": [
@@ -135,6 +135,42 @@
         "sicp-streams/memo"
       ],
       "difficulty": 2
+    },
+    {
+      "id": "sicp-streams/ritardo-esplicito",
+      "title": "Ritardo esplicito: integral e solve",
+      "summary": "In solve y e dy si definiscono a vicenda: il ritardo della coda di cons_stream non basta, perché JS valuta subito gli argomenti di integral; serve un thunk sull'argomento. solve(y => y, 1, dt) è il metodo di Eulero: (1 + dt)ⁿ → e.",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams/src/stream.ts",
+        "sicp/streams/test/06-ritardo.test.ts"
+      ],
+      "related": [
+        "sicp-streams/thunk-eager",
+        "sicp-streams/serie"
+      ],
+      "difficulty": 3
+    },
+    {
+      "id": "sicp-streams/segnali",
+      "title": "Segnali come stream: zero crossing e smooth",
+      "summary": "Un segnale campionato è uno stream di numeri: zero_crossings confronta lo stream con se stesso spostato (0 davanti), smooth fa la media con il successivo, smoothed_zero_crossings è la loro composizione.",
+      "turns": [],
+      "projects": [
+        "sicp-streams",
+        "audio-player"
+      ],
+      "code_refs": [
+        "sicp/streams/src/stream.ts",
+        "sicp/streams/test/07-segnali.test.ts"
+      ],
+      "related": [
+        "audio/pcm-planar-packed"
+      ],
+      "difficulty": 2
     }
   ],
   "projects": [
@@ -142,22 +178,22 @@
       "id": "sicp-streams",
       "title": "SICP 3.5 Streams in TypeScript (percorso a tappe)",
       "path": "sicp/streams/src/stream.ts, sicp/streams/test/",
-      "status": "in-progress",
-      "last_modified": "2026-10-22",
+      "status": "working",
+      "last_modified": "2026-10-24",
       "build": "cd sicp/streams && npm run typecheck (tsc --noEmit) → nessun errore",
-      "run": "cd sicp/streams && node --test test/01-basi.test.ts … test/05-sequenze.test.ts → 30/30",
+      "run": "cd sicp/streams && npm test → 37/37 (7 tappe)",
       "works": [
         "tappa 1: cons_stream con coda ritardata, take che non forza oltre il necessario, array_to_stream, integers_from",
         "tappa 2: memo con flag separato, cons_stream memoizzato",
         "tappa 3: stream_map su più stream, stream_filter iterativo (un test del predicato per elemento), add/mul/scale_streams",
         "tappa 4: ones, integers, fibs, sieve, primes/is_prime, merge + hamming, factorials",
-        "tappa 5: partial_sums implicito (lineare), sqrt_stream, pi_stream, euler_transform, make_tableau/accelerated_sequence, integrate_series, exp/sine/cosine_series"
+        "tappa 5: partial_sums implicito (lineare), sqrt_stream, pi_stream, euler_transform, make_tableau/accelerated_sequence, integrate_series, exp/sine/cosine_series",
+        "tappe 6-7: integral (integrando come thunk) e solve; sign_change_detector, zero_crossings con lo 0 davanti, smooth, smoothed_zero_crossings come composizione"
       ],
       "missing": [
-        "tappe 6-7: integral/solve (ritardo esplicito), zero crossing e smooth",
         "esercizi aperti: animazione del picture language, generatori, stream in C"
       ],
-      "next_step": "Tappa 6 (node --test test/06-ritardo.test.ts): integral con l'integrando come thunk, poi solve.",
+      "next_step": "Uno dei tre esercizi aperti del README (animazione del picture language, generatori, stream in C); il C porta verso il player audio.",
       "concepts": [
         "sicp-streams/thunk-eager",
         "sicp-streams/memo",
@@ -166,7 +202,9 @@
         "sicp-streams/infiniti-impliciti",
         "sicp-streams/primes-circolare",
         "sicp-streams/approssimazioni",
-        "sicp-streams/serie"
+        "sicp-streams/serie",
+        "sicp-streams/ritardo-esplicito",
+        "sicp-streams/segnali"
       ]
     }
   ],
@@ -301,6 +339,36 @@
       "concept": "sicp-streams/serie",
       "difficulty": 1,
       "a": "JavaScript valuta gli argomenti prima di chiamare `cons_stream`: `integrate_series(exp_series)` parte mentre la `const exp_series` è ancora in inizializzazione (temporal dead zone), quindi `ReferenceError: Cannot access 'exp_series' before initialization`. È lo stesso errore di `primes` senza il 2 esplicito. TypeScript lo segnalerebbe comunque prima, per un altro motivo: `cons_stream` vuole un thunk `() => Stream<number>`, non uno stream. Con la lambda la lettura di `exp_series` avviene quando la coda viene forzata, e a quel punto la costante esiste."
+    },
+    {
+      "q": "In `solve`, perché `integral` deve ricevere l'integrando come thunk (`() => dy`)? Il ritardo della coda di `cons_stream` non basta?",
+      "concept": "sicp-streams/ritardo-esplicito",
+      "difficulty": 2,
+      "a": "`const y = integral(() => dy, y0, dt); const dy = stream_map(f, y);`: alla prima riga `dy` è una `const` non ancora inizializzata (temporal dead zone). Passandola direttamente, JavaScript la leggerebbe subito per valutare l'argomento di `integral` → `ReferenceError`. Il ritardo di `cons_stream` protegge ciò che sta **dentro** la cella (la coda), non gli argomenti passati a una funzione: per questo serve un secondo ritardo, esplicito, sull'argomento. E `integral` deve chiamare il thunk solo dentro la coda, non quando costruisce lo stream (c'è un test apposta)."
+    },
+    {
+      "q": "Perché `stream_ref(solve(y => y, 1, 0.001), 1000)` approssima e? Quanto vale l'errore e come scala con dt?",
+      "concept": "sicp-streams/ritardo-esplicito",
+      "difficulty": 2,
+      "a": "`solve` risolve dy/dt = f(y) con y(0) = y0: qui dy/dt = y, y(0) = 1, soluzione y(t) = eᵗ. L'elemento k è y al tempo k·dt, quindi l'elemento 1000 con dt = 0,001 è y(1) = e. `integral` fa un passo di Eulero alla volta: yₖ₊₁ = yₖ + dt·yₖ = (1 + dt)·yₖ, quindi yₙ = (1 + dt)ⁿ = (1 + 1/n)ⁿ, la definizione di e come limite. Verificato: 2,5937 (dt = 0,1), 2,70481 (0,01), 2,716924 (0,001), 2,7181459 (0,0001), identici a (1 + dt)ⁿ. L'errore è circa e·dt/2 (1,36·10⁻³ con dt = 0,001): metodo del primo ordine, dt diviso per 10 → errore diviso per 10."
+    },
+    {
+      "q": "Perché l'approssimazione di e con Eulero sta sempre sotto? E quella di e⁻¹ con `solve(y => -y, 1, 0.001)`?",
+      "concept": "sicp-streams/ritardo-esplicito",
+      "difficulty": 3,
+      "a": "Eulero percorre ogni intervallo con la pendenza che c'è all'**inizio**. eᵗ è convessa (la sua pendenza eᵗ cresce lungo l'intervallo), quindi la pendenza iniziale è la più bassa e ogni passo sottostima l'aumento; l'errore si accumula sempre nello stesso verso. Anche e⁻ᵗ è convessa: la pendenza va da −1 verso 0 (la curva si appiattisce, la pendenza *cresce*), Eulero usa la più negativa e scende troppo: 0,367695 contro e⁻¹ = 0,367879, cioè sotto. In generale Eulero sottostima le curve convesse e sovrastima quelle concave; decide la convessità, non se la funzione cresce o cala."
+    },
+    {
+      "q": "Come si scrive `zero_crossings` con una sola `stream_map`, senza trattare a parte il primo campione?",
+      "concept": "sicp-streams/segnali",
+      "difficulty": 2,
+      "a": "Si accoppia lo stream con se stesso spostato di uno, mettendo 0 davanti allo stream dei precedenti: `stream_map(sign_change_detector, sense_data, cons_stream(0, () => sense_data))`. Correnti s0, s1, s2, … contro precedenti 0, s0, s1, …: il primo campione si confronta con 0 senza casi particolari, e lo stream vuoto dà lo stream vuoto (stream_map si ferma al primo vuoto)."
+    },
+    {
+      "q": "Perché `smoothed_zero_crossings` va scritto come `zero_crossings(smooth(sense_data))` e non copiando il corpo di `zero_crossings` con `smooth(sense_data)` al posto di `sense_data`? E perché `smooth` ha bisogno di un controllo per lo stream vuoto?",
+      "concept": "sicp-streams/segnali",
+      "difficulty": 2,
+      "a": "La copia chiama `smooth` due volte: due stream diversi che non condividono celle (ogni media calcolata due volte) e il rilevatore duplicato in due punti. L'es. 3.76 chiede l'opposto, la composizione di pezzi piccoli: filtro → rilevatore, come la pipeline del player (rete → chunk → pacchetti → PCM → SDL). `smooth(s) = stream_map(average, s, stream_tail(s))` valuta `stream_tail(s)` prima che `stream_map` possa vedere che `s` è vuoto: con `null` lancia `Stream is empty`, quindi serve `if (s === the_empty_stream) return the_empty_stream` (con un solo campione invece dà già lo stream vuoto)."
     }
   ]
 }

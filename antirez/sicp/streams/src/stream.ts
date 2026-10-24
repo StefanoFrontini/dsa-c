@@ -389,7 +389,11 @@ export function integral(
   initial: number,
   dt: number,
 ): Stream<number> {
-  return todo(6);
+  const integ: Stream<number> = cons_stream(initial, () => {
+    const integrand = delayed_integrand();
+    return add_streams(scale_stream(integrand, dt), integ);
+  });
+  return integ;
 }
 
 /** Risolve dy/dt = f(y) con y(0) = y0: y e dy si definiscono a vicenda. */
@@ -398,7 +402,9 @@ export function solve(
   y0: number,
   dt: number,
 ): Stream<number> {
-  return todo(6);
+  const y = integral(() => dy, y0, dt);
+  const dy = stream_map(f, y);
+  return y;
 }
 
 // ---------------------------------------------------------------------------
@@ -410,22 +416,33 @@ export function sign_change_detector(
   current: number,
   previous: number,
 ): number {
-  return todo(7);
+  if (previous < 0 && current >= 0) return 1;
+  else if (previous >= 0 && current < 0) return -1;
+  else return 0;
 }
 
 /** Es. 3.74: per ogni campione, sign_change_detector rispetto al precedente (il primo si confronta con 0). */
 export function zero_crossings(sense_data: Stream<number>): Stream<number> {
-  return todo(7);
+  return stream_map(
+    sign_change_detector,
+    sense_data,
+    cons_stream(0, () => sense_data),
+  );
 }
 
 /** Es. 3.76: media di ogni campione con il successivo (lo stream risultante ha un elemento in meno). */
 export function smooth(s: Stream<number>): Stream<number> {
-  return todo(7);
+  if (s === the_empty_stream) return the_empty_stream;
+  function average(a: number, b: number): number {
+    return (a + b) / 2;
+  }
+
+  return stream_map(average, s, stream_tail(s));
 }
 
 /** Es. 3.76: zero_crossings del segnale prima lisciato con smooth. */
 export function smoothed_zero_crossings(
   sense_data: Stream<number>,
 ): Stream<number> {
-  return todo(7);
+  return zero_crossings(smooth(sense_data));
 }

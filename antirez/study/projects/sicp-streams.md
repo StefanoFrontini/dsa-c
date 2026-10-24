@@ -1,5 +1,5 @@
-# SICP 3.5 Streams in TypeScript (percorso a tappe)  — stato: in-progress
-Path: `sicp/streams/src/stream.ts`, `sicp/streams/test/` · Percorso: `sicp/streams/README.md` · Ultima modifica: 2026-10-22
+# SICP 3.5 Streams in TypeScript (percorso a tappe)  — stato: working
+Path: `sicp/streams/src/stream.ts`, `sicp/streams/test/` · Percorso: `sicp/streams/README.md` · Ultima modifica: 2026-10-24
 
 ## Cosa fa
 Implementazione degli stream del capitolo 3.5 di SICP (edizione JS) a tappe, con le firme fissate in
@@ -15,7 +15,7 @@ npm run typecheck                    # tsc --noEmit
 ```
 
 ## Esito verifica
-- Tappe 1-5: 30/30 test, typecheck senza errori (2026-10-22).
+- 7 tappe: 37/37 test (`npm test`), typecheck senza errori (2026-10-24).
 
 ## Cosa funziona
 - Tappa 1: `cons_stream` con coda ritardata, `take` che non forza oltre l'ultimo elemento, `array_to_stream`, `integers_from`.
@@ -23,9 +23,10 @@ npm run typecheck                    # tsc --noEmit
 - Tappa 3: `stream_map` su più stream, `stream_filter` iterativo (stack costante, un test del predicato per elemento), `add_streams`/`mul_streams`/`scale_stream`.
 - Tappa 4: `ones`, `integers`, `fibs`, `sieve`, `primes`/`is_prime`, `merge` + `hamming`, `factorials`.
 - Tappa 5: `partial_sums` implicito e lineare, `sqrt_stream`, `pi_stream`, `euler_transform`, `make_tableau`/`accelerated_sequence`, `integrate_series`, `exp_series`, `sine_series`/`cosine_series`.
+- Tappa 6: `integral` con l'integrando come thunk, `solve` (Eulero; `solve(y => y, 1, 0.001)` ≈ e).
+- Tappa 7: `sign_change_detector`, `zero_crossings` con lo 0 davanti, `smooth`, `smoothed_zero_crossings` come composizione.
 
 ## Cosa manca
-- Tappe 6-7: `integral`/`solve` (ritardo esplicito), zero crossing e `smooth`.
 - Esercizi aperti: animazione del picture language con uno stream, generatori JS, stream in C.
 - La prima bozza `sicp/streams/streams.ts` (commentata) resta come storia: `make_stream(h, t)` riceveva la coda già calcolata e andava in stack overflow.
 - `sicp/pair.ts` (commentato): esperimenti di coppia procedurale (SICP 2.1.3, es. 2.4); `pair.ts:53` `head2` restituisce `p` inesistente.
@@ -37,6 +38,8 @@ npm run typecheck                    # tsc --noEmit
 - [Stream infiniti e definizioni implicite](../notes/sicp-streams.md#stream-infiniti-e-definizioni-implicite)
 - [Sequenze di approssimazioni e acceleratori](../notes/sicp-streams.md#sequenze-di-approssimazioni-e-acceleratori)
 - [Serie di potenze come stream di coefficienti](../notes/sicp-streams.md#serie-di-potenze-come-stream-di-coefficienti)
+- [Ritardo esplicito: integral e solve](../notes/sicp-streams.md#ritardo-esplicito-integral-e-solve)
+- [Segnali come stream: zero crossing e smooth](../notes/sicp-streams.md#segnali-come-stream-zero-crossing-e-smooth)
 
 ## Prossimo passo consigliato
-Tappa 6: `node --test test/06-ritardo.test.ts`, `integral` con l'integrando come thunk, poi `solve`.
+Uno dei tre esercizi aperti in `sicp/streams/README.md`: animazione del picture language, generatori JS, **stream in C** (verso il player audio).
