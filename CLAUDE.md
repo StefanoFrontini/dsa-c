@@ -47,7 +47,7 @@ Non serve leggere tutto il codice per orientarti: è già stato fatto e verifica
   Leak: `leaks --atExit -- ./prog`. Stack: 8 MB nel main, 512 KB nei pthread secondari.
 - Player audio: `cd antirez/networking && make` (Makefile con pkg-config); si collega a Radio 24 (HLS), usare un timeout.
 - Stream SICP: `cd antirez/sicp/streams && node --test test/01-basi.test.ts` (Node 24 esegue i `.ts`, niente
-  `npm install`); tipi: `npm run typecheck`. Percorso a 7 tappe in `antirez/sicp/streams/README.md`.
+  `npm install`); tipi: `npm run typecheck`. Percorso a 8 tappe (la 8 sui generatori, in `src/generators.ts`) in `antirez/sicp/streams/README.md`.
 - Picture language: `tsc -p antirez/sicp/language-picture` → `script.js`, poi un server http statico.
 
 ## Sito di studio (`antirez/study/`)

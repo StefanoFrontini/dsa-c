@@ -157,14 +157,44 @@ e il programma resta una composizione di pezzi piccoli (es. 3.76).
 
 ---
 
+## Tappa 8 — Generatori: stream senza memoria
+
+Lettura: MDN, [`function*`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/function*)
+e il [protocollo degli iteratori](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols).
+
+Da implementare, in `src/generators.ts`: `integers_from_gen`, `take_gen`, `map_gen`, `filter_gen`, `stream_to_gen`,
+`gen_to_stream`, `sieve_gen`. Test: `node --test test/08-generatori.test.ts`.
+
+Un generatore è pigro come uno stream: `function*` non esegue nulla finché qualcuno non chiama `next()`, e ogni
+`yield` sospende il calcolo come la lambda della coda. Ma lo stato sta **dentro** il generatore e avanza a ogni
+`next()`: non c'è una cella da rileggere. Gli ultimi due ponti (`stream_to_gen`, `gen_to_stream`) mostrano cosa
+serve per passare da un modello all'altro.
+
+<details><summary>Suggerimento</summary>
+
+- `take_gen` con `for...of` e `break` sembra comodo, ma `break` chiama `return()` sull'iteratore e **chiude** il
+  generatore: il test "un generatore si consuma" fallisce. Usa `next()` direttamente.
+- `map_gen` con più iteratori: chiedi un valore a ciascuno e fermati appena uno risponde `done`.
+- `gen_to_stream`: la testa è il primo `next()`; la coda è... un altro `gen_to_stream` dello stesso generatore.
+  Perché questo funziona solo grazie alla memo di `cons_stream`?
+- `sieve_gen`: il primo valore è un primo `p`; il resto è il crivello degli elementi non divisibili per `p`
+  (`yield*` delega a un altro generatore).
+</details>
+
+Domande per te:
+1. Quale test della tappa 2 fallirebbe se `cons_stream` fosse un generatore? Perché?
+2. Puoi scrivere `ones` o `fibs` *implicitamente* con i generatori, cioè riferendoti al generatore stesso come fai
+   con `const ones = cons_stream(1, () => ones)`? Cosa manca?
+3. In `gen_to_stream`, cosa succede se qualcun altro chiama `g.next()` dopo che hai costruito lo stream?
+4. `sieve_gen` annida un `filter_gen` per ogni primo trovato. Cosa succede alla profondità delle chiamate quando
+   chiedi il millesimo primo? Confrontalo con `sieve` sugli stream.
+
 ## Dopo i test: tre esercizi aperti
 
 1. **Animare il picture language con uno stream.** Uno stream infinito di painter (`right_split(p, 0)`,
    `right_split(p, 1)`, …), consumato da `requestAnimationFrame`: un frame per elemento.
    Chi decide il ritmo: lo stream o il browser?
-2. **Generatori JS.** Riscrivi `integers_from`, `stream_map` e `stream_filter` con `function*` e confronta:
-   un generatore è uno stream *senza memoria* (non puoi rileggere un elemento già prodotto). Quali test della
-   tappa 2 fallirebbero?
+2. **Generatori JS.** Diventato la tappa 8 (sopra).
 3. **Stream in C** (cartella da creare, prossimo passo): la coda diventa un puntatore a funzione più un ambiente
    (`struct` con i "parametri catturati"), la memoizzazione un campo nella cella. La domanda vera sarà la memoria:
    chi possiede le celle già calcolate, con il refcount di toyforth o con un'arena?
