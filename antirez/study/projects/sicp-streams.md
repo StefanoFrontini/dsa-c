@@ -1,5 +1,5 @@
 # SICP 3.5 Streams in TypeScript (percorso a tappe)  — stato: working
-Path: `sicp/streams/src/stream.ts`, `sicp/streams/test/` · Percorso: `sicp/streams/README.md` · Ultima modifica: 2026-10-24
+Path: `sicp/streams/src/stream.ts`, `sicp/streams/src/generators.ts`, `sicp/streams/test/` · Percorso: `sicp/streams/README.md` · Ultima modifica: 2026-10-28
 
 ## Cosa fa
 Implementazione degli stream del capitolo 3.5 di SICP (edizione JS) a tappe, con le firme fissate in
@@ -15,7 +15,7 @@ npm run typecheck                    # tsc --noEmit
 ```
 
 ## Esito verifica
-- 7 tappe: 37/37 test (`npm test`), typecheck senza errori (2026-10-24).
+- 8 tappe: 45/45 test (`npm test`), typecheck senza errori (2026-10-28).
 
 ## Cosa funziona
 - Tappa 1: `cons_stream` con coda ritardata, `take` che non forza oltre l'ultimo elemento, `array_to_stream`, `integers_from`.
@@ -25,9 +25,10 @@ npm run typecheck                    # tsc --noEmit
 - Tappa 5: `partial_sums` implicito e lineare, `sqrt_stream`, `pi_stream`, `euler_transform`, `make_tableau`/`accelerated_sequence`, `integrate_series`, `exp_series`, `sine_series`/`cosine_series`.
 - Tappa 6: `integral` con l'integrando come thunk, `solve` (Eulero; `solve(y => y, 1, 0.001)` ≈ e).
 - Tappa 7: `sign_change_detector`, `zero_crossings` con lo 0 davanti, `smooth`, `smoothed_zero_crossings` come composizione.
+- Tappa 8 (`src/generators.ts`): `integers_from_gen`, `take_gen` (controlla `done`, non chiede valori in più), `map_gen`/`filter_gen` come cicli, i ponti `stream_to_gen`/`gen_to_stream` (memoizzato, un `next()` per valore), `sieve_gen`.
 
 ## Cosa manca
-- Esercizi aperti: animazione del picture language con uno stream, generatori JS, stream in C.
+- Esercizi aperti: animazione del picture language con uno stream, stream in C.
 - La prima bozza `sicp/streams/streams.ts` (commentata) resta come storia: `make_stream(h, t)` riceveva la coda già calcolata e andava in stack overflow.
 - `sicp/pair.ts` (commentato): esperimenti di coppia procedurale (SICP 2.1.3, es. 2.4); `pair.ts:53` `head2` restituisce `p` inesistente.
 
@@ -40,6 +41,7 @@ npm run typecheck                    # tsc --noEmit
 - [Serie di potenze come stream di coefficienti](../notes/sicp-streams.md#serie-di-potenze-come-stream-di-coefficienti)
 - [Ritardo esplicito: integral e solve](../notes/sicp-streams.md#ritardo-esplicito-integral-e-solve)
 - [Segnali come stream: zero crossing e smooth](../notes/sicp-streams.md#segnali-come-stream-zero-crossing-e-smooth)
+- [Generatori JS: stream senza memoria](../notes/sicp-streams.md#generatori-js-stream-senza-memoria)
 
 ## Prossimo passo consigliato
-Uno dei tre esercizi aperti in `sicp/streams/README.md`: animazione del picture language, generatori JS, **stream in C** (verso il player audio).
+Uno dei due esercizi aperti in `sicp/streams/README.md`: animazione del picture language, **stream in C** (verso il player audio).

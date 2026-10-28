@@ -2,8 +2,8 @@
   "area": {
     "id": "sicp-streams",
     "title": "Stream (SICP 3.5) in TypeScript",
-    "summary": "Il capitolo 3.5 di SICP implementato a tappe con test: coda ritardata e valutazione eager, memoizzazione e memoria, map/filter pigri, closure, stream infiniti definiti implicitamente (integers, fibs, primes), poi serie, ritardo esplicito e segnali come ponte verso il player audio in C.",
-    "period": "2026-10-03/2026-10-24",
+    "summary": "Il capitolo 3.5 di SICP implementato a tappe con test: coda ritardata e valutazione eager, memoizzazione e memoria, map/filter pigri, closure, stream infiniti definiti implicitamente (integers, fibs, primes), poi serie, ritardo esplicito e segnali come ponte verso il player audio in C; infine i generatori JS a confronto (pigri ma senza memoria) e i ponti stream ↔ generatore.",
+    "period": "2026-10-03/2026-10-28",
     "turns": []
   },
   "concepts": [
@@ -171,29 +171,49 @@
         "audio/pcm-planar-packed"
       ],
       "difficulty": 2
+    },
+    {
+      "id": "sicp-streams/generatori",
+      "title": "Generatori JS: stream senza memoria",
+      "summary": "function* è pigro come uno stream ma lo stato sta dentro il generatore: un valore letto è consumato. Cicli con stato locale invece di yield* ricorsivo (catene di delega, RangeError); gen_to_stream aggiunge la memo e cede l'ownership del generatore allo stream.",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams/src/generators.ts",
+        "sicp/streams/test/08-generatori.test.ts"
+      ],
+      "related": [
+        "sicp-streams/memo",
+        "sicp-streams/infiniti-impliciti",
+        "parsing/js-generators"
+      ],
+      "difficulty": 3
     }
   ],
   "projects": [
     {
       "id": "sicp-streams",
       "title": "SICP 3.5 Streams in TypeScript (percorso a tappe)",
-      "path": "sicp/streams/src/stream.ts, sicp/streams/test/",
+      "path": "sicp/streams/src/stream.ts, sicp/streams/src/generators.ts, sicp/streams/test/",
       "status": "working",
-      "last_modified": "2026-10-24",
+      "last_modified": "2026-10-28",
       "build": "cd sicp/streams && npm run typecheck (tsc --noEmit) → nessun errore",
-      "run": "cd sicp/streams && npm test → 37/37 (7 tappe)",
+      "run": "cd sicp/streams && npm test → 45/45 (8 tappe)",
       "works": [
         "tappa 1: cons_stream con coda ritardata, take che non forza oltre il necessario, array_to_stream, integers_from",
         "tappa 2: memo con flag separato, cons_stream memoizzato",
         "tappa 3: stream_map su più stream, stream_filter iterativo (un test del predicato per elemento), add/mul/scale_streams",
         "tappa 4: ones, integers, fibs, sieve, primes/is_prime, merge + hamming, factorials",
         "tappa 5: partial_sums implicito (lineare), sqrt_stream, pi_stream, euler_transform, make_tableau/accelerated_sequence, integrate_series, exp/sine/cosine_series",
-        "tappe 6-7: integral (integrando come thunk) e solve; sign_change_detector, zero_crossings con lo 0 davanti, smooth, smoothed_zero_crossings come composizione"
+        "tappe 6-7: integral (integrando come thunk) e solve; sign_change_detector, zero_crossings con lo 0 davanti, smooth, smoothed_zero_crossings come composizione",
+        "tappa 8: generatori JS (integers_from_gen, take_gen, map_gen, filter_gen come cicli), ponti stream_to_gen/gen_to_stream, sieve_gen"
       ],
       "missing": [
-        "esercizi aperti: animazione del picture language, generatori, stream in C"
+        "esercizi aperti: animazione del picture language, stream in C"
       ],
-      "next_step": "Uno dei tre esercizi aperti del README (animazione del picture language, generatori, stream in C); il C porta verso il player audio.",
+      "next_step": "Uno dei due esercizi aperti del README (animazione del picture language, stream in C); il C porta verso il player audio.",
       "concepts": [
         "sicp-streams/thunk-eager",
         "sicp-streams/memo",
@@ -204,7 +224,8 @@
         "sicp-streams/approssimazioni",
         "sicp-streams/serie",
         "sicp-streams/ritardo-esplicito",
-        "sicp-streams/segnali"
+        "sicp-streams/segnali",
+        "sicp-streams/generatori"
       ]
     }
   ],
@@ -369,6 +390,72 @@
       "concept": "sicp-streams/segnali",
       "difficulty": 2,
       "a": "La copia chiama `smooth` due volte: due stream diversi che non condividono celle (ogni media calcolata due volte) e il rilevatore duplicato in due punti. L'es. 3.76 chiede l'opposto, la composizione di pezzi piccoli: filtro → rilevatore, come la pipeline del player (rete → chunk → pacchetti → PCM → SDL). `smooth(s) = stream_map(average, s, stream_tail(s))` valuta `stream_tail(s)` prima che `stream_map` possa vedere che `s` è vuoto: con `null` lancia `Stream is empty`, quindi serve `if (s === the_empty_stream) return the_empty_stream` (con un solo campione invece dà già lo stream vuoto)."
+    },
+    {
+      "q": "Perché `take_gen` deve controllare `done` e non `value === undefined`?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 2,
+      "a": "Un generatore può produrre `undefined` come valore legittimo (`yield undefined`): la fine la segnala solo `done`. È lo stesso errore del memo della tappa 2: usare il valore come segnale invece di un flag separato."
+    },
+    {
+      "q": "Cosa succede se `integers_from_gen` è scritto come `yield n; yield* integers_from_gen(n + 1)`? Perché lo stream `integers_from` non ha lo stesso problema?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 3,
+      "a": "Ogni livello resta sospeso dentro `yield*` in attesa del successivo: dopo k valori c'è una catena di k generatori, e ogni `next()` sull'esterno attraversa tutta la catena: k frame sullo stack e tempo O(k) per valore (O(n²) in tutto); in Node va in `RangeError` dopo circa 5400 valori. Lo stream no: il thunk costruisce la cella successiva e ritorna, il collegamento è un dato (un puntatore), non un calcolo sospeso. I generatori sospesi stanno nell'heap, ma lo stack cresce durante l'attraversamento. Regola: `yield*` va bene se la profondità è limitata dalla forma del problema (es. l'altezza di un albero), non se cresce con la lunghezza della sequenza; lì serve un `while` con lo stato in variabili locali."
+    },
+    {
+      "q": "Si possono scrivere `ones` o `fibs` implicitamente con i generatori, riferendosi al generatore stesso?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 3,
+      "a": "No: le definizioni implicite non sono procedure ricorsive ma dati letti in due punti (`fibs` e `stream_tail(fibs)`). Con un solo generatore le due letture si rubano i valori; creandone uno nuovo per chiamata il lavoro esplode (come gli stream impliciti senza memo). Con i generatori `fibs` diventa un `while` con stato esplicito `(a, b)`: si toglie la condivisione e si mette lo stato."
+    },
+    {
+      "q": "Con `take_gen` scritto con `for...of` e `break`, perché una seconda `take_gen(g, 3)` sullo stesso generatore restituisce `[]`? Come si rimedia?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 3,
+      "a": "`for...of` chiama `[Symbol.iterator]()` sull'iterabile (un `Iterator` semplice non ce l'ha: errore TS2488) e controlla `done` da solo; al `break` chiama `return()` se l'iteratore lo ha, e `return()` chiude il generatore: da lì `next()` dà sempre `{ value: undefined, done: true }`. Rimedio: dare a `for...of` un involucro che ha solo `next()` (inoltra a `g.next()`) e niente `return()`. Inoltre il controllo `n === 0` va prima del ciclo, altrimenti `for...of` chiede già un valore."
+    },
+    {
+      "q": "Perché la chiusura automatica di `for...of` (`return()` al `break`) è utile?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 2,
+      "a": "Esegue il `finally` del generatore: se il generatore ha aperto una risorsa (file, socket) e non viene chiuso, la risorsa resta aperta; il GC libera la memoria ma non esegue il `finally`. È una questione di ownership: `for...of` considera l'iteratore suo e lo chiude; l'involucro dice che è solo in prestito."
+    },
+    {
+      "q": "`map_gen` chiama `next()` su tutti gli iteratori e poi controlla `done`: cosa si perde? Come si \"sbircia\" un generatore?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 3,
+      "a": "Se il primo iteratore è finito e il secondo no, il valore estratto dal secondo è consumato e non si può rimettere dentro. Con gli stream la testa è un dato già calcolato che si può guardare senza consumarlo. Per sbirciare un generatore serve un memo (flag + valore salvato): valore salvato + resto da chiedere quando serve = una cella di stream, cioè `gen_to_stream`."
+    },
+    {
+      "q": "Che differenza c'è tra `filter_gen(x => false, integers_from_gen(1))` e `stream_filter(x => false, integers_from(1))`?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 2,
+      "a": "Nessuno dei due termina, ed entrambi hanno stack costante (sono cicli). Ma lo stream si blocca già alla creazione (una cella ha la testa già calcolata, quindi deve trovare subito il primo elemento buono), il generatore solo al primo `next()`. Lo stream è pigro sulla coda ma non sulla testa; il generatore anche sul primo valore."
+    },
+    {
+      "q": "Percorrendo un milione di elementi con `stream_to_gen(integers_from(1))`, le celle già lette sono liberabili? E con `stream_to_gen(primes)`?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 2,
+      "a": "Nel primo caso sì: l'unico riferimento è `s` dentro il generatore, riassegnato a ogni giro. Con `primes`, costante del modulo, la testa resta raggiungibile e la memo tiene tutte le celle: è voluto, perché `is_prime` rilegge i primi (lo scambio memoria/lavoro della tappa 4)."
+    },
+    {
+      "q": "Se `gen_to_stream` usasse un `cons_stream` senza memo, cosa darebbe la seconda `take(s, 5)` su un generatore 1, 2, 3, …?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 3,
+      "a": "`1, 6, 7, 8, 9`: la testa è un valore nella cella, calcolato una volta; si ricalcolano solo le code, e forzare di nuovo la coda della prima cella chiede a `g` il valore successivo (6). Senza memo lo stream non è più un valore: due letture danno risultati diversi e incoerenti."
+    },
+    {
+      "q": "Dopo `s = gen_to_stream(g)` e `take(s, 3)`, qualcuno chiama `g.next()`: cosa dà poi `take(s, 5)`?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 3,
+      "a": "`1, 2, 3, 5, 6` (con una `take` che non forza la coda dell'ultimo elemento): 1-3 sono memoizzati, il 4 lo ha preso il `next()` esterno. Dove salta dipende dai dettagli (se `take` forzasse un elemento in più sparirebbe il 5). Passare `g` a `gen_to_stream` ne cede l'ownership allo stream: chi lo aveva non deve più usarlo, come quando si passa l'ownership di un puntatore in C."
+    },
+    {
+      "q": "Quanto è profonda `sieve_gen` (`yield*` + `filter_gen`) per arrivare al 1000° primo, rispetto allo stream `sieve`?",
+      "concept": "sicp-streams/generatori",
+      "difficulty": 3,
+      "a": "Per il k-esimo primo ci sono k `sieve_gen` annidati con `yield*` e k `filter_gen` annidati uno sull'altro; sono sospesi nell'heap, ma ogni `next()` attraversa la catena, quindi lo stack cresce con il numero di primi trovati. Misurato: 2000 primi ok, 5000 `RangeError`. Anche lo stream `sieve` va in `RangeError` a 5000: la catena di filtri è propria dell'algoritmo (ogni primo aggiunge un filtro), non solo di `yield*`, che aggiunge in più la catena di delega."
     }
   ]
 }

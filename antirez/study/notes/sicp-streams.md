@@ -1,11 +1,12 @@
 # Stream (SICP 3.5) in TypeScript
-Periodo: 2026-10-03 → 2026-10-24 (7 tappe fatte, 37/37 test) · Percorso a tappe con test in `sicp/streams/README.md` · Progetto: [sicp-streams](../projects/sicp-streams.md)
+Periodo: 2026-10-03 → 2026-10-28 (8 tappe fatte, 45/45 test) · Percorso a tappe con test in `sicp/streams/README.md` · Progetto: [sicp-streams](../projects/sicp-streams.md)
 
 ## Mappa in breve
 - Uno stream è `null` oppure `{ head, tail }`: la testa è già un valore, la coda è un **thunk** (funzione senza argomenti) che calcola il resto solo quando viene forzata (`stream_tail`).
 - Con la **memoizzazione** (`memo`) ogni coda si calcola una volta sola: è ciò che rende possibili le definizioni implicite (`integers`, `fibs`, `primes`) senza costi esponenziali.
 - `stream_map` / `stream_filter` separano *chi descrive il calcolo* da *chi consuma*: si calcola solo quello che qualcuno chiede.
 - Gli stream infiniti si definiscono **in termini di se stessi**: funziona perché la coda è ritardata, quindi quando il thunk parte la costante esiste già.
+- I generatori JS (tappa 8) sono pigri come gli stream ma **senza memoria**: un valore letto è consumato; `gen_to_stream` aggiunge la memo e ne fa uno stream.
 - Domanda di fondo che torna in ogni tappa e che diventerà centrale nella versione C: **chi tiene vivo cosa**, cioè chi ha un riferimento alla testa e quindi impedisce di liberare le celle già calcolate.
 - Le risposte qui sono quelle corrette, verificate con i test (`cd sicp/streams && node --test`) o con piccoli esperimenti in Node.
 
@@ -82,6 +83,17 @@ Periodo: 2026-10-03 → 2026-10-24 (7 tappe fatte, 37/37 test) · Percorso a tap
 - `smoothed_zero_crossings(s) = zero_crossings(smooth(s))`: composizione, non copia. Copiare il corpo chiamando `smooth` due volte crea due stream separati e duplica il rilevatore.
 - Ponte verso l'audio: il PCM che il player passa a SDL è uno stream di campioni; filtri e rilevatori sono trasformazioni da stream a stream.
 
+### Generatori JS: stream senza memoria
+- Cos'è: `function*` è pigro come uno stream (non esegue nulla finché qualcuno non chiama `next()`, ogni `yield` sospende il calcolo come la lambda della coda), ma lo stato sta **dentro** il generatore e avanza a ogni `next()`: un valore letto è consumato, non resta da rileggere. Uno stream memoizzato è un **valore**; un generatore è un **processo**.
+- `integers_from_gen` (`sicp/streams/src/generators.ts:19`) è un `while (true) { yield n++; }`: lo stato in una variabile locale. Scritto come `yield n; yield* integers_from_gen(n + 1)` ogni livello resta sospeso dentro `yield*`: dopo k valori c'è una catena di k generatori e ogni `next()` la attraversa tutta (k frame sullo stack, O(n²) in tutto, `RangeError` dopo circa 5400 valori). `yield*` va bene solo se la profondità è limitata dalla forma del problema (l'altezza di un albero), non se cresce con la lunghezza della sequenza.
+- `take_gen` (`generators.ts:28`) controlla `done`, non `value === undefined` (stesso errore del memo della tappa 2), e il controllo `n === 0` sta prima di chiedere valori. Con `for...of` + `break` il generatore verrebbe chiuso (`return()`): la seconda `take_gen` sullo stesso generatore darebbe `[]` (vedi le domande).
+- `map_gen` (`generators.ts:66`) e `filter_gen` (`generators.ts:77`) sono cicli: stack costante. `map_gen` chiama `next()` su tutti gli iteratori prima di guardare `done`: se il primo è finito, il valore estratto dal secondo è perso. Uno stream invece ha la testa già calcolata e la si può guardare senza consumarla.
+- `filter_gen(x => false, …)` su una sequenza infinita non termina, come `stream_filter`, ma si blocca solo al primo `next()`: lo stream è pigro sulla coda e non sulla testa, il generatore anche sul primo valore.
+- I due ponti: `stream_to_gen` (`generators.ts:91`) percorre lo stream riassegnando `s` (le celle superate sono liberabili se nessun altro tiene la testa; con `primes` no, la tiene il modulo). `gen_to_stream` (`generators.ts:99`) è la memo che manca ai generatori: valore salvato + resto da chiedere quando serve = una cella di stream. Funziona solo con `cons_stream` memoizzato e se nessun altro chiama `g.next()`: passare `g` cede l'ownership allo stream.
+- Le definizioni implicite (`ones`, `fibs`) non si traducono: sono dati letti in due punti, e con un generatore le due letture si rubano i valori. `fibs` diventa un ciclo con stato esplicito `(a, b)`.
+- `sieve_gen` (`generators.ts:116`) usa `yield*` e annida un `filter_gen` per ogni primo: per il k-esimo primo ogni `next()` attraversa k livelli (2000 primi ok, 5000 `RangeError`). Anche `sieve` con gli stream va in `RangeError` a 5000: la catena di filtri è dell'algoritmo, `yield*` aggiunge la catena di delega.
+- Test: `sicp/streams/test/08-generatori.test.ts` (8 test; `counting` conta le chiamate a `next()` per verificare la pigrizia e che `gen_to_stream` chieda ogni valore una volta sola).
+
 ## Domande di autoverifica
 1. Perché `integers_from(n) = make_stream(n, integers_from(n + 1))` va in stack overflow? Dove deve stare la lambda?
 2. Quante volte `stream_ref(integers_from(1), 1000)` chiama `integers_from`? E senza memo, quante code forzano due `take(s, 10)` sullo stesso `s`?
@@ -109,3 +121,14 @@ Periodo: 2026-10-03 → 2026-10-24 (7 tappe fatte, 37/37 test) · Percorso a tap
 24. Perché Eulero sta sotto e? E con `solve(y => -y, 1, 0.001)`?
 25. Come si scrive `zero_crossings` con una sola `stream_map`?
 26. Perché `smoothed_zero_crossings` va scritto come composizione? Perché `smooth` controlla lo stream vuoto?
+27. Perché `take_gen` deve controllare `done` e non `value === undefined`?
+28. Cosa succede se `integers_from_gen` è scritto come `yield n; yield* integers_from_gen(n + 1)`? Perché lo stream `integers_from` non ha lo stesso problema?
+29. Si possono scrivere `ones` o `fibs` implicitamente con i generatori?
+30. Con `take_gen` scritto con `for...of` e `break`, perché una seconda `take_gen(g, 3)` restituisce `[]`? Come si rimedia?
+31. Perché la chiusura automatica di `for...of` (`return()` al `break`) è utile?
+32. `map_gen` chiama `next()` su tutti gli iteratori e poi controlla `done`: cosa si perde? Come si "sbircia" un generatore?
+33. `filter_gen(x => false, integers_from_gen(1))` e `stream_filter(x => false, integers_from(1))`: che differenza c'è?
+34. Percorrendo un milione di elementi con `stream_to_gen(integers_from(1))`, le celle lette sono liberabili? E con `stream_to_gen(primes)`?
+35. Se `gen_to_stream` usasse un `cons_stream` senza memo, cosa darebbe la seconda `take(s, 5)` su un generatore 1, 2, 3, …?
+36. Dopo `s = gen_to_stream(g)` e `take(s, 3)` qualcuno chiama `g.next()`: cosa dà `take(s, 5)`?
+37. Quanto è profonda `sieve_gen` per arrivare al 1000° primo? E lo stream `sieve`?

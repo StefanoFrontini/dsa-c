@@ -1,5 +1,5 @@
 {
-"generated": "2026-10-03",
+"generated": "2026-10-28",
 "files": [
 "Gemini-Reference Counting e Ownership in C-20261003-1108.md",
 "bst.c",
@@ -65,6 +65,8 @@
 "sicp/pair.ts",
 "sicp/streams/README.md",
 "sicp/streams/package.json",
+"sicp/streams/prova.ts",
+"sicp/streams/src/generators.ts",
 "sicp/streams/src/stream.ts",
 "sicp/streams/streams.ts",
 "sicp/streams/test/01-basi.test.ts",
@@ -74,6 +76,7 @@
 "sicp/streams/test/05-sequenze.test.ts",
 "sicp/streams/test/06-ritardo.test.ts",
 "sicp/streams/test/07-segnali.test.ts",
+"sicp/streams/test/08-generatori.test.ts",
 "sicp/streams/tsconfig.json",
 "snake/CMakeLists.txt",
 "snake/minHeap.c",

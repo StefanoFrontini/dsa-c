@@ -7,6 +7,7 @@ import {
   stream_head,
   stream_tail,
   cons_stream,
+  is_divisible,
   type Stream,
 } from "./stream.ts";
 
@@ -92,7 +93,6 @@ export function* stream_to_gen<T>(s: Stream<T>): Generator<T> {
     yield stream_head(s);
     s = stream_tail(s);
   }
-  return;
 }
 
 /** Il ponte inverso: uno stream (memoizzato) che chiede a `g` ogni valore una volta sola. */
@@ -103,7 +103,18 @@ export function gen_to_stream<T>(g: Iterator<T>): Stream<T> {
     : cons_stream(next.value, () => gen_to_stream(g));
 }
 
+/** Crivello di Eratostene: sieve(integers_from(2)) = 2, 3, 5, 7, ... */
+// export function sieve(s: Stream<number>): Stream<number> {
+//   return cons_stream(stream_head(s), () =>
+//     sieve(
+//       stream_filter((x) => !is_divisible(x, stream_head(s)), stream_tail(s)),
+//     ),
+//   );
+// }
+
 /** Crivello di Eratostene con i generatori: sieve_gen(integers_from_gen(2)) = 2, 3, 5, 7, ... */
 export function* sieve_gen(g: Iterator<number>): Generator<number> {
-  todo();
+  const next = g.next();
+  yield next.value;
+  yield* sieve_gen(filter_gen((x) => !is_divisible(x, next.value), g));
 }
