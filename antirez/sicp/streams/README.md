@@ -189,11 +189,54 @@ Domande per te:
 4. `sieve_gen` annida un `filter_gen` per ogni primo trovato. Cosa succede alla profondità delle chiamate quando
    chiedi il millesimo primo? Confrontalo con `sieve` sugli stream.
 
+## Tappa 9 — Animare il picture language
+
+Lettura: MDN, [`requestAnimationFrame`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame);
+il tuo `../language-picture/script.ts` (`beside`, `below`, `right_split`).
+
+Due parti:
+- **pura, con i test**, in `src/animation.ts`: `iterate`, `cycle`, `play`. Test: `node --test test/09-animazione.test.ts`.
+  Non c'è DOM: un "painter" qui può essere anche una stringa, e l'orologio del browser è un finto
+  `requestAnimationFrame` (`fakeClock` nel test) che chiama le callback agli istanti scelti dal test.
+- **la colla con il browser**, in `../language-picture/animation.ts`: tre passi descritti nei commenti, senza test.
+  Si guarda con gli occhi:
+  ```sh
+  cd ../language-picture
+  npx -y -p typescript@5.9 tsc -p tsconfig.anim.json   # → dist/ (anche script.js e i tuoi stream)
+  python3 -m http.server 8000                          # → http://localhost:8000/animation.html
+  ```
+  `animation.html` carica prima `script.js` come script classico: i suoi nomi (`painter`, `beside`, `frame1`, `ctx`…)
+  sono globali e il modulo `animation.ts` li vede senza import.
+
+`play` è il consumatore: lo stream dice *cosa* mostrare, l'orologio dice *quando*. A ogni frame `play` guarda il
+tempo trascorso, calcola quale elemento tocca e fa avanzare lo stream fin lì.
+
+<details><summary>Suggerimento</summary>
+
+- `iterate`: la testa è `x`; la coda è un altro `iterate`. Dove chiami `f` perché costruire lo stream non la chiami?
+- `cycle`: è una definizione implicita, come `ones`. Lo stream deve tornare alla sua **prima cella**, non a una
+  copia: costruisci le celle con una funzione interna `build(i)` e, dopo l'ultima, la coda restituisce la prima.
+- `play`: tieni lo stato in variabili locali chiuse nella callback (lo stream corrente, l'indice mostrato,
+  l'istante del primo frame, un flag per `stop`). L'avanzamento di più elementi va fatto con un **ciclo**: il test
+  "scheda tornata dopo molto tempo" avanza di 100.000 elementi in un frame solo.
+- Nella colla: `right_split(p, n)` = `beside(p)(below(smaller)(smaller))` con `smaller` il livello `n - 1`.
+</details>
+
+Domande per te:
+1. Chi decide il ritmo dell'animazione: lo stream o il browser? E se `play` mostrasse un elemento **a ogni frame**
+   invece che a ogni `period`, cosa cambierebbe su uno schermo a 60 Hz e su uno a 120 Hz?
+2. Con `stream_map(n => right_split(p, n), integers_from(0))` invece di `iterate`, quanti `beside`/`below`
+   costruisci per arrivare al livello 10? E con `iterate`? Costruire un painter costa quanto disegnarlo?
+3. `cycle` è infinito: quante celle occupa in memoria? Cosa succederebbe senza la memo di `cons_stream`?
+4. Se `play` tenesse da parte la testa dello stream (per esempio per poter ricominciare), cosa succederebbe alla
+   memoria dopo un'ora di `iterate` a 60 elementi al secondo? E con `cycle`?
+5. Quando il browser è lento, `play` salta degli elementi: li calcola comunque? Perché non può farne a meno?
+6. `requestAnimationFrame` *spinge* una callback a ogni frame, `play` *tira* gli elementi dallo stream. Dove trovi
+   la stessa coppia nel player audio (pensa alla callback audio di SDL)?
+
 ## Dopo i test: tre esercizi aperti
 
-1. **Animare il picture language con uno stream.** Uno stream infinito di painter (`right_split(p, 0)`,
-   `right_split(p, 1)`, …), consumato da `requestAnimationFrame`: un frame per elemento.
-   Chi decide il ritmo: lo stream o il browser?
+1. **Animare il picture language con uno stream.** Diventato la tappa 9 (sopra).
 2. **Generatori JS.** Diventato la tappa 8 (sopra).
 3. **Stream in C** (cartella da creare, prossimo passo): la coda diventa un puntatore a funzione più un ambiente
    (`struct` con i "parametri catturati"), la memoizzazione un campo nella cella. La domanda vera sarà la memoria:
