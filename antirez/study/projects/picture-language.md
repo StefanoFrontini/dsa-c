@@ -46,6 +46,7 @@ Esecuzione: per i soli segmenti basta aprire `index.html` (file://). Per il pain
 - `image_to_painter` con `ctx.transform` e correzione dell'asse Y (`script.ts:467-496`), se servito via http.
 - 21 combinatori di Smullyan (e simili) tipizzati con generici distribuiti per livello; tutti gli esempi con i painter compilano tranne `C(B)`.
 - Ricorsione anonima tipizzata con `SelfApplicable<Step>` + `M`.
+- Animazione con uno stream (tappa 9 di [sicp-streams](sicp-streams.md)): `animation.html` + `animation.ts`, build `tsc -p tsconfig.anim.json` → `dist/` (fuori dal repo); livelli di `right_split` 0…5…1 con `iterate` + `cycle`, mostrati con `play` e `requestAnimationFrame`.
 
 ## Cosa manca / bug noti
 - `script.js` non rigenerato dopo le ultime modifiche (vedi sopra): la pagina mostra una versione vecchia.

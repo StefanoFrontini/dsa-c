@@ -60,3 +60,6 @@ Mkfile.old
 dkms.conf
 
 build
+
+# output di build TypeScript (es. antirez/sicp/language-picture/dist, tsc -p tsconfig.anim.json)
+dist/

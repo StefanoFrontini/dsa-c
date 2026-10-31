@@ -232,7 +232,8 @@ Domande per te:
    memoria dopo un'ora di `iterate` a 60 elementi al secondo? E con `cycle`?
 5. Quando il browser è lento, `play` salta degli elementi: li calcola comunque? Perché non può farne a meno?
 6. `requestAnimationFrame` *spinge* una callback a ogni frame, `play` *tira* gli elementi dallo stream. Dove trovi
-   la stessa coppia nel player audio (pensa alla callback audio di SDL)?
+   la stessa coppia nel player audio? (Pensa a `read_packet` in `client_http.c`, che FFmpeg chiama quando gli servono
+   byte, e a `SDL_PutAudioStreamData`: con SDL3 senza callback chi spinge e chi tira?)
 
 ## Dopo i test: tre esercizi aperti
 

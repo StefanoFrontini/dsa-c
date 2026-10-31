@@ -1,5 +1,5 @@
 # Stream (SICP 3.5) in TypeScript
-Periodo: 2026-10-03 → 2026-10-28 (8 tappe fatte, 45/45 test) · Percorso a tappe con test in `sicp/streams/README.md` · Progetto: [sicp-streams](../projects/sicp-streams.md)
+Periodo: 2026-10-03 → 2026-10-31 (9 tappe fatte, 54/54 test) · Percorso a tappe con test in `sicp/streams/README.md` · Progetto: [sicp-streams](../projects/sicp-streams.md)
 
 ## Mappa in breve
 - Uno stream è `null` oppure `{ head, tail }`: la testa è già un valore, la coda è un **thunk** (funzione senza argomenti) che calcola il resto solo quando viene forzata (`stream_tail`).
@@ -7,6 +7,7 @@ Periodo: 2026-10-03 → 2026-10-28 (8 tappe fatte, 45/45 test) · Percorso a tap
 - `stream_map` / `stream_filter` separano *chi descrive il calcolo* da *chi consuma*: si calcola solo quello che qualcuno chiede.
 - Gli stream infiniti si definiscono **in termini di se stessi**: funziona perché la coda è ritardata, quindi quando il thunk parte la costante esiste già.
 - I generatori JS (tappa 8) sono pigri come gli stream ma **senza memoria**: un valore letto è consumato; `gen_to_stream` aggiunge la memo e ne fa uno stream.
+- Con l'animazione (tappa 9) lo stream dice **cosa** mostrare e l'orologio del browser (`requestAnimationFrame`) dice **quando**: `play` è il consumatore che tira gli elementi al ritmo del tempo, non dei frame.
 - Domanda di fondo che torna in ogni tappa e che diventerà centrale nella versione C: **chi tiene vivo cosa**, cioè chi ha un riferimento alla testa e quindi impedisce di liberare le celle già calcolate.
 - Le risposte qui sono quelle corrette, verificate con i test (`cd sicp/streams && node --test`) o con piccoli esperimenti in Node.
 
@@ -94,6 +95,21 @@ Periodo: 2026-10-03 → 2026-10-28 (8 tappe fatte, 45/45 test) · Percorso a tap
 - `sieve_gen` (`generators.ts:116`) usa `yield*` e annida un `filter_gen` per ogni primo: per il k-esimo primo ogni `next()` attraversa k livelli (2000 primi ok, 5000 `RangeError`). Anche `sieve` con gli stream va in `RangeError` a 5000: la catena di filtri è dell'algoritmo, `yield*` aggiunge la catena di delega.
 - Test: `sicp/streams/test/08-generatori.test.ts` (8 test; `counting` conta le chiamate a `next()` per verificare la pigrizia e che `gen_to_stream` chieda ogni valore una volta sola).
 
+### Animazione: lo stream dice cosa, l'orologio dice quando
+- Cos'è: la tappa 9 separa *cosa* mostrare (uno stream di painter, o di stringhe e numeri nei test) da *quando* mostrarlo (l'orologio del browser). La parte pura sta in `sicp/streams/src/animation.ts`, senza DOM, testata con un orologio finto; la colla con il browser sta in `sicp/language-picture/animation.ts` (pagina `animation.html`, build `tsc -p tsconfig.anim.json` → `dist/`, esclusa dal repo con il `.gitignore`), fatta e verificata nel browser il 2026-10-31.
+- La colla (`sicp/language-picture/animation.ts:13-34`): i livelli con `iterate(smaller => beside(painter)(below(smaller)(smaller)), painter)` (`:13`), cioè il passo ricorsivo di `right_split` (`script.ts:709`) con il painter originale fisso a sinistra e il livello precedente sotto e sopra; l'andata e ritorno con `cycle([...levels, ...levels.slice(1, -1).reverse()])` (`:21`), che dà 0 1 2 3 4 5 4 3 2 1 senza ripetere 5 e 0 quando il cerchio si chiude; `play` con `requestAnimationFrame`, `clearRect` prima di ogni painter (`:29`) e `stop` restituito (`:25`). I nomi di `script.js` (caricato prima come script classico) sono globali e il modulo li vede senza import; il restringimento `if (!ctx) throw` di `script.ts` però non attraversa i file, quindi in `animation.ts` `ctx` resta `CanvasRenderingContext2D | null` (`:28`).
+- `iterate(f, x)` (`sicp/streams/src/animation.ts:19`): x, f(x), f(f(x)), … La chiamata a `f` sta dentro la lambda della coda: costruire lo stream non chiama `f` e, con la memo, ogni elemento si calcola una volta sola. Calcolare `f(x)` prima della `cons_stream` lascia la memo ma anticipa il lavoro di un elemento (vedi le domande).
+- È la forma giusta per `right_split` (`sicp/language-picture/script.ts:709`): il livello n+1 è **un passo** (`beside(p)(below(s)(s))`) sul livello n. Fino al livello 10: 10 passi con `iterate`, 1 + 2 + … + 10 = 55 con `stream_map(n => right_split(p, n), integers_from(0))`, che ricostruisce ogni livello da zero. Costruire un painter costa poco (crea closure, non disegna); disegnarlo costa: il livello n contiene 2ⁿ⁺¹ − 1 copie del painter base, cioè 2047 George (17 segmenti) ≈ 34.800 linee al livello 10, a ogni disegno.
+- `cycle(xs)` (`animation.ts:24`) è una definizione implicita come `ones`: `let stream` parte vuota (`:25`), `iter(i)` costruisce una cella con la coda ritardata e dopo l'ultima la coda restituisce `stream` (`:27`), che nel frattempo è stata assegnata alla prima cella (`:29`). Funziona perché la closure cattura la **variabile** e la coda viene forzata dopo l'assegnamento. Infinito con k celle in tutto (il test verifica che tre `stream_tail` su `cycle([1, 2, 3])` tornino alla stessa cella); con `xs = []` restituisce lo stream vuoto.
+- `play(s, draw, schedule, period)` (`animation.ts:50`): `schedule` ha la forma di `requestAnimationFrame` (tipo `Schedule`, `:34`) e vale **una volta sola**, quindi la callback `step` si ri-registra a ogni frame (`:81`). Non è ricorsione sullo stack: `step` consegna se stessa al browser e ritorna, come un thunk ("chiamami dopo"). Fermarsi vuol dire non ri-registrarsi: fine dello stream (`:75`) o `stop`.
+- Tempo assoluto: al primo frame `play` disegna la testa e fissa `start` (`:62-67`), mai più aggiornato; a ogni frame l'indice è `Math.floor((t − start) / period)` (`:70`) e un ciclo con un contatore separato fa avanzare lo stream fin lì (`:72-77`). Gli elementi rimasti indietro si **attraversano** (lo stream è sequenziale, le code vanno forzate) ma non si disegnano; frame nello stesso periodo non ridisegnano. Con il ciclo 100.000 elementi in un frame non fanno stack overflow.
+- Perché non "un elemento per periodo dall'ultimo disegno": i frame non arrivano regolari (disegno pesante, GC, scheda in background che sospende `requestAnimationFrame`). Con il tempo relativo ogni elemento può durare fino a un frame in più e i ritardi si sommano (deriva): decide il browser. Con l'indice assoluto l'animazione resta in orario e salta elementi: decide l'orologio, come nei lettori audio/video (l'audio non rallenta, il video scarta fotogrammi).
+- Tre "frame" diversi: il frame del browser (una chiamata della callback con il tempo `t`, circa 60 al secondo), l'elemento dello stream (mostrato per `period` ms, cioè per molti frame del browser) e `frame1` del picture language (il parallelogramma in cui il painter disegna).
+- `stop` (`:85`) è una closure sullo stato privato di `play`: l'unico modo di fermare da fuori qualcosa che continua dopo il ritorno. Il flag si controlla all'inizio della callback (`:61`) perché una callback già registrata verrà chiamata comunque. Stesso schema del cleanup di `useEffect` (avvia e restituisci chi annulla); `clearInterval`, `cancelAnimationFrame` e `removeEventListener` fanno lo stesso con un id. Non è un thunk di stream: produce un effetto, non un valore, e chiamarla due volte è innocuo.
+- Memoria: `play` riassegna `s` (`:74`), quindi le celle già mostrate diventano irraggiungibili e un `iterate` di un'ora occupa memoria costante. Tenere la testa (dentro `play`, nel chiamante o in una costante di modulo come `primes`) con la memo tiene tutte le celle: 60 elementi al secondo sono 216.000 celle in un'ora. Con `cycle` le celle sono k e restano comunque: tenere la testa è gratis. Per ricominciare si tiene la **ricetta**, non lo stream: `() => iterate(step, painter)`, un thunk un livello più su (lo scambio memoria/lavoro delle tappe 2 e 4).
+- Test: `sicp/streams/test/09-animazione.test.ts` (9 test). `fakeClock` (`:11`) tiene una **lista** di callback in attesa, come il browser (più animazioni registrano le loro callback e vengono chiamate nello stesso frame con lo stesso `t`): così il test vede una doppia registrazione (`pending` = 2), che con un posto solo resterebbe nascosta e nel browser raddoppierebbe le callback a ogni frame (1024 dopo 10 frame).
+- Spingere e tirare: `requestAnimationFrame` spinge una callback a ogni frame, `play` tira gli elementi dallo stream quando servono. Nel player audio il tirare è `read_packet` (`networking/client_http.c:333`), che FFmpeg chiama quando ha fame di byte e che li prende dal ring buffer, mentre la rete (e gli attori nella versione ad attori) spinge. Con SDL3 il tuo codice spinge anche il PCM (`SDL_PutAudioStreamData`) e il dispositivo lo tira dalla coda di SDL al suo ritmo (con la callback di SDL2 quel pull sarebbe esplicito, come `play`). Il buffer in mezzo è il punto d'incontro.
+
 ## Domande di autoverifica
 1. Perché `integers_from(n) = make_stream(n, integers_from(n + 1))` va in stack overflow? Dove deve stare la lambda?
 2. Quante volte `stream_ref(integers_from(1), 1000)` chiama `integers_from`? E senza memo, quante code forzano due `take(s, 10)` sullo stesso `s`?
@@ -132,3 +148,19 @@ Periodo: 2026-10-03 → 2026-10-28 (8 tappe fatte, 45/45 test) · Percorso a tap
 35. Se `gen_to_stream` usasse un `cons_stream` senza memo, cosa darebbe la seconda `take(s, 5)` su un generatore 1, 2, 3, …?
 36. Dopo `s = gen_to_stream(g)` e `take(s, 3)` qualcuno chiama `g.next()`: cosa dà `take(s, 5)`?
 37. Quanto è profonda `sieve_gen` per arrivare al 1000° primo? E lo stream `sieve`?
+38. `iterate` scritto con `const next = f(x); return cons_stream(x, () => iterate(f, next))`: cosa cambia? Quale test fallisce?
+39. Con `stream_map(n => right_split(p, n), integers_from(0))` invece di `iterate`, quanti passi `beside`/`below` servono fino al livello 10? Costruire un painter costa quanto disegnarlo?
+40. In `cycle`, quando chiami `iter(0)` la variabile `stream` vale ancora `the_empty_stream`: perché l'ultima cella torna alla prima?
+41. Cosa darebbe `cycle` con una `cons_stream` che valuta subito la coda? Ci sarebbe un `ReferenceError`?
+42. Quanta memoria occupa `cycle`? E senza la memo di `cons_stream`?
+43. Cosa si intende per "frame" in `play`? Quanti significati ci sono in gioco?
+44. Cosa vuol dire "chiedere il frame successivo"? È ricorsione?
+45. Perché `fakeClock` tiene una lista di callback in attesa invece di un posto solo?
+46. Perché `play` fa avanzare più elementi in un frame invece di mostrare "un elemento ogni volta che passa un periodo" dall'ultimo disegno?
+47. Perché `play` restituisce `() => void`? Dove hai già visto lo stesso schema?
+48. Quali errori tipici si fanno scrivendo `play` (start, contatore, tempo relativo e assoluto)?
+49. `play` riassegna `s`: cosa succede alla memoria con `play(iterate(...))` per un'ora? E se `play` facesse `const first = s`? E con `cycle`?
+50. Come si ricomincia un'animazione senza leak?
+51. `requestAnimationFrame` spinge, `play` tira: dove trovi la stessa coppia nel player audio?
+52. Nella colla, `iterate(p => right_split(p, 2), painter)`: che cosa disegna l'elemento k?
+53. Perché in `animation.ts` TypeScript dice che `ctx` può essere `null`, se `script.ts` lancia un errore quando lo è? Quale rimedio scegliere?

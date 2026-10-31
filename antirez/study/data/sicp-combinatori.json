@@ -481,7 +481,8 @@
         "beside/below curryficati, right/up/corner_split, square_of_four, square_limit (verificato in headless Chrome)",
         "image_to_painter con correzione asse Y (verificato via http)",
         "21 combinatori tipizzati; tutti gli esempi con i painter compilano tranne C(B)",
-        "frattale con M(make_fractal) e SelfApplicable<Step>"
+        "frattale con M(make_fractal) e SelfApplicable<Step>",
+        "animazione con uno stream (tappa 9 di sicp-streams): animation.html + animation.ts, build tsc -p tsconfig.anim.json → dist/ (fuori dal repo), livelli di right_split 0…5…1 con iterate + cycle + play"
       ],
       "missing": [
         "script.js non allineato a script.ts (3 differenze; esegue ancora WesternNic)",

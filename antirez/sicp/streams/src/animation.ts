@@ -3,7 +3,13 @@
 // La colla con il browser è in ../../language-picture/animation.ts.
 // Percorso e domande: ../README.md, "Tappa 9". Test: `node --test test/09-animazione.test.ts`.
 
-import { cons_stream, the_empty_stream, type Stream } from "./stream.ts";
+import {
+  cons_stream,
+  the_empty_stream,
+  stream_tail,
+  type Stream,
+  stream_head,
+} from "./stream.ts";
 
 function todo(): never {
   throw new Error("TODO tappa 9: da implementare");
@@ -36,11 +42,47 @@ export type Schedule = (callback: (time: number) => void) => unknown;
  * - Quando lo stream finisce smette di chiedere frame. Uno stream vuoto non disegna nulla.
  * Restituisce `stop`: dopo averla chiamata, non disegna più e non chiede altri frame.
  */
+
+// - `play`: tieni lo stato in variabili locali chiuse nella callback (lo stream corrente, l'indice mostrato,
+//   l'istante del primo frame, un flag per `stop`). L'avanzamento di più elementi va fatto con un **ciclo**: il test
+//   "scheda tornata dopo molto tempo" avanza di 100.000 elementi in un frame solo.
+
 export function play<T>(
   s: Stream<T>,
   draw: (x: T) => void,
   schedule: Schedule,
   period: number,
 ): () => void {
-  return todo();
+  let start: number;
+  let indexDrawn: number;
+  let stop = false;
+
+  function step(timestamp: number) {
+    if (stop) return;
+    if (start === undefined) {
+      if (s === the_empty_stream) return;
+      draw(stream_head(s));
+      indexDrawn = 0;
+      start = timestamp;
+    }
+    const elapsed = timestamp - start;
+
+    let indexToDraw = Math.floor(elapsed / period);
+    if (indexToDraw > indexDrawn) {
+      let elToDraw = indexToDraw - indexDrawn;
+      while (elToDraw) {
+        s = stream_tail(s);
+        if (s === the_empty_stream) return;
+        elToDraw--;
+      }
+      draw(stream_head(s));
+      indexDrawn = indexToDraw;
+    }
+    schedule(step);
+  }
+  schedule(step);
+
+  return () => {
+    stop = true;
+  };
 }
