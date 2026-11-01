@@ -32,13 +32,43 @@ quattro vantaggi:
 
 ### "Stream" vuol dire cose diverse
 
-La parola copre quattro modelli; le idee del percorso servono a riconoscere quale si ha davanti:
+La parola copre cinque modelli; le idee del percorso servono a riconoscere quale si ha davanti:
 
 - **lista pigra** (SICP, Haskell): si tira e si rilegge grazie alla memo;
 - **iteratore o generatore** (JS, Python): si tira, ma non si rilegge;
 - **stream di I/O** (Node, Web Streams, i socket in C): si tira a pezzi, con un buffer e la backpressure (il
   consumatore lento rallenta il produttore);
-- **stream di eventi** (RxJS, DOM): si spinge, e chi consuma reagisce.
+- **stream di eventi** (RxJS, DOM): si spinge, e chi consuma reagisce;
+- **log persistente** (Redis Streams, Kafka): un log in sola aggiunta, condiviso fra processi. I dati li producono
+  gli scrittori quando vogliono (eager, non pigro); i consumatori tirano al loro ritmo e possono rileggere per
+  posizione, come una lista pigra con memo. La memoria non la libera un GC: "chi tiene la testa?" diventa una
+  politica di conservazione esplicita.
+
+#### Redis Streams
+
+Il tipo **Stream** di Redis (dalla 5.0, 2018) l'ha progettato antirez, ispirandosi a Kafka ma tenendo i dati in
+memoria. Ogni voce ha un ID crescente `<millisecondi>-<sequenza>` (es. `1730000000000-0`) e qualche coppia
+campo/valore.
+
+| comando | cosa fa |
+|---|---|
+| `XADD key * campo valore` | aggiunge una voce in fondo (`*` = genera l'ID) |
+| `XRANGE key start end` | legge un intervallo di ID: si **rilegge** quando si vuole |
+| `XREAD BLOCK 0 STREAMS key $` | aspetta le voci nuove: il consumatore **tira** quando è pronto |
+| `XREADGROUP` / `XACK` | **gruppi di consumatori**: più lettori si dividono le voci e confermano quelle elaborate |
+| `XADD key MAXLEN ~ 1000 …` / `XTRIM` | tiene solo le ultime ~1000 voci: la politica di conservazione |
+
+| | stream di SICP | Redis Stream |
+|---|---|---|
+| chi produce | il consumatore, forzando le code (pigro) | i produttori con `XADD` (eager) |
+| rileggere | sì, grazie alla memo | sì, per ID (`XRANGE`) |
+| chi decide il ritmo | chi consuma | chi consuma (`XREAD` tira, anche bloccandosi in attesa) |
+| quando si libera la memoria | quando nessuno tiene la testa (GC) | quando lo decidi tu (`MAXLEN`, `XTRIM`) |
+| infinito | sì, perché calcolato | no: finito ma in crescita, e condiviso in rete |
+
+Dentro Redis lo stream è scritto in C: le voci stanno in un **radix tree** (`rax.c`) i cui nodi contengono blocchi
+compatti di voci (**listpack**, `listpack.c`). È una buona lettura dopo le tappe sulla memoria degli stream in C:
+strutture compatte, ID come chiavi ordinate, ownership dei blocchi.
 
 ### Quando non usarli
 
