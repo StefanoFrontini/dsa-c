@@ -1,6 +1,55 @@
 # Stream (SICP 3.5) in TypeScript
 Periodo: 2026-10-03 → 2026-10-31 (9 tappe fatte, 54/54 test) · Percorso a tappe con test in `sicp/streams/README.md` · Progetto: [sicp-streams](../projects/sicp-streams.md)
 
+## Introduzione: perché vale la pena padroneggiare gli stream
+
+Il valore principale è un'idea: separare *che cosa* è una sequenza di dati da *quanto* e *quando* la si consuma.
+Chi produce descrive la sequenza, magari infinita; chi consuma decide quanto leggerne e a che ritmo. Da qui vengono
+quattro vantaggi:
+
+1. **Composizione.** Un programma diventa una catena di piccole trasformazioni indipendenti:
+   `smoothed_zero_crossings = zero_crossings(smooth(s))` invece di un unico `while` con dentro tutto, come la
+   versione di Alyssa.
+2. **Memoria costante su dati enormi o infiniti.** Se nessuno tiene la testa, si elaborano un milione o un miliardo
+   di elementi tenendone in memoria pochi (`integers_from`, `play`).
+3. **Il tempo come dato.** SICP 3.5.5 propone gli stream come alternativa agli oggetti con stato: invece di un conto
+   che cambia, lo stream dei suoi saldi. Senza assegnamenti è più facile ragionare sul codice e condividerlo fra
+   thread.
+4. **Le domande giuste.** Chi decide il ritmo? Cosa tengo in memoria (memo contro ricalcolo)? Chi possiede i dati?
+   Chi tira e chi spinge? Sono le domande di qualunque sistema che elabora dati nel tempo.
+
+### Dove è fondamentale
+
+| ambito | dove compare lo stream | cosa serve di quello che hai imparato |
+|---|---|---|
+| **Audio e video** (il player) | byte di rete → pacchetti TS → frame PCM → dispositivo; filtri come `smooth`, volume come `scale_stream` | chi tira (`read_packet`, `networking/client_http.c:333`) e chi spinge (SDL3, `SDL_PutAudioStreamData`), buffer fra i due, scartare elementi per restare in orario |
+| **Rete e protocolli** | TCP è uno stream di byte; HTTP chunked, HLS e WebSocket arrivano a pezzi | parser incrementali che consumano un byte alla volta (`getNextByte`) |
+| **Parser e compilatori** | caratteri → token → AST; il Pratt parser consuma uno stream di token | sbirciare il prossimo token senza consumarlo: il memo di `gen_to_stream` |
+| **Frontend** | eventi dell'interfaccia (RxJS, observable), `fetch` con `ReadableStream`, le risposte di un LLM un token alla volta, scroll infinito | push contro pull, cancellazione (`stop`, il cleanup di `useEffect`), backpressure |
+| **Dati grandi** | log, CSV ed ETL che non stanno in memoria: stream di Node, generatori Python, pipe Unix; Kafka e Flink in produzione | non tenere la testa, elaborare a pezzi |
+| **Animazioni, giochi, simulazioni** | frame nel tempo, integrazione numerica (`integral`, `solve`) | l'orologio decide il ritmo; il tempo assoluto evita la deriva |
+| **Sensori e segnali** | campioni da un sensore, rilevamento di eventi (gli zero crossing di Alyssa) | finestre sugli elementi vicini, smussamento, ritardo |
+
+### "Stream" vuol dire cose diverse
+
+La parola copre quattro modelli; le idee del percorso servono a riconoscere quale si ha davanti:
+
+- **lista pigra** (SICP, Haskell): si tira e si rilegge grazie alla memo;
+- **iteratore o generatore** (JS, Python): si tira, ma non si rilegge;
+- **stream di I/O** (Node, Web Streams, i socket in C): si tira a pezzi, con un buffer e la backpressure (il
+  consumatore lento rallenta il produttore);
+- **stream di eventi** (RxJS, DOM): si spinge, e chi consuma reagisce.
+
+### Quando non usarli
+
+- Serve l'accesso casuale: con uno stream arrivare all'elemento n costa n passi.
+- I dati sono pochi e stanno in un array: lo stream aggiunge complessità senza vantaggi.
+- La memo fa crescere la memoria senza che te ne accorga (il caso di `const first = s` nella tappa 9).
+
+Per questo percorso i due ambiti più concreti sono il **player audio**, che è già una pipeline di stream e dove la
+domanda è chi possiede i buffer (la si affronta negli stream in C, `sicp/streams-c/README.md`), e il **frontend**,
+dove lo streaming delle risposte AI e gli eventi dell'interfaccia sono oggi i casi d'uso più comuni.
+
 ## Mappa in breve
 - Uno stream è `null` oppure `{ head, tail }`: la testa è già un valore, la coda è un **thunk** (funzione senza argomenti) che calcola il resto solo quando viene forzata (`stream_tail`).
 - Con la **memoizzazione** (`memo`) ogni coda si calcola una volta sola: è ciò che rende possibili le definizioni implicite (`integers`, `fibs`, `primes`) senza costi esponenziali.

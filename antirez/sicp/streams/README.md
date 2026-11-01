@@ -239,9 +239,10 @@ Domande per te:
 
 1. **Animare il picture language con uno stream.** Diventato la tappa 9 (sopra).
 2. **Generatori JS.** Diventato la tappa 8 (sopra).
-3. **Stream in C** (cartella da creare, prossimo passo): la coda diventa un puntatore a funzione più un ambiente
-   (`struct` con i "parametri catturati"), la memoizzazione un campo nella cella. La domanda vera sarà la memoria:
-   chi possiede le celle già calcolate, con il refcount di toyforth o con un'arena?
+3. **Stream in C**: diventato un percorso a parte, in [`../streams-c/`](../streams-c/README.md). La coda diventa un
+   puntatore a funzione più un ambiente (`struct` con i "parametri catturati"), la memoizzazione un campo nella
+   cella. La domanda vera sarà la memoria: chi possiede le celle già calcolate, con il refcount di toyforth o con
+   un'arena?
 
 Il collegamento con l'audio player: la tua pipeline (byte di rete → chunk HTTP → pacchetti TS → frame PCM → SDL) è
 già una catena di trasformazioni da stream a stream. `getNextByte` è un iteratore che *tira* i byte quando servono,

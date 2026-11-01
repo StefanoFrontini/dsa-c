@@ -11,7 +11,7 @@ Scrivi in italiano.
   networking e player audio HLS (`networking/client_http.c` → binario `underground_radio`, versione ad attori in
   `networking/actor/`), `snake`, `game_of_life`, esercizi sparsi nella root di `antirez/`.
   - `antirez/sicp/` — SICP in TypeScript: `language-picture/` (picture language + combinatori di Smullyan),
-    `streams/` (esercizi a tappe sugli stream, vedi sotto).
+    `streams/` (esercizi a tappe sugli stream, vedi sotto), `streams-c/` (gli stessi stream in C).
   - `antirez/study/` — **mappa della conoscenza e sito di studio** (pubblicato su Netlify, vedi sotto).
 - Fuori da `antirez/` (2025, più vecchi e semplici): algoritmi e strutture dati di base (`binary-search`, `*-sort`,
   `dynamic-array`, `queue`, `stack`, `singly-linked-list`, `two-crystal-balls`), esercizi da `beej/` (Beej's Guide),
@@ -48,6 +48,8 @@ Non serve leggere tutto il codice per orientarti: è già stato fatto e verifica
 - Player audio: `cd antirez/networking && make` (Makefile con pkg-config); si collega a Radio 24 (HLS), usare un timeout.
 - Stream SICP: `cd antirez/sicp/streams && node --test test/01-basi.test.ts` (Node 24 esegue i `.ts`, niente
   `npm install`); tipi: `npm run typecheck`. Percorso a 9 tappe (8: generatori in `src/generators.ts`; 9: animazione in `src/animation.ts` + `language-picture/animation.ts`, build con `tsc -p tsconfig.anim.json`) in `antirez/sicp/streams/README.md`.
+- Stream in C: `cd antirez/sicp/streams-c && make test` (o `make t1`…): binari in `$TMPDIR/streams-c`, `-O0` + ASan/UBSan,
+  ogni test in un processo figlio. Percorso a tappe (1-3 pronte, 4-6 da preparare) in `antirez/sicp/streams-c/README.md`.
 - Picture language: `tsc -p antirez/sicp/language-picture` → `script.js`, poi un server http statico.
 
 ## Sito di studio (`antirez/study/`)
