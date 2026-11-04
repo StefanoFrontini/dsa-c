@@ -1,5 +1,5 @@
 {
-"generated": "2026-10-31",
+"generated": "2026-11-04",
 "files": [
 "Gemini-Reference Counting e Ownership in C-20261003-1108.md",
 "bst.c",
@@ -66,6 +66,14 @@
 "sicp/language-picture/tsconfig.anim.json",
 "sicp/language-picture/tsconfig.json",
 "sicp/pair.ts",
+"sicp/streams-c/Makefile",
+"sicp/streams-c/README.md",
+"sicp/streams-c/stream.c",
+"sicp/streams-c/stream.h",
+"sicp/streams-c/test/test.h",
+"sicp/streams-c/test/test_01_basi.c",
+"sicp/streams-c/test/test_02_memo.c",
+"sicp/streams-c/test/test_03_operazioni.c",
 "sicp/streams/README.md",
 "sicp/streams/package.json",
 "sicp/streams/prova.ts",

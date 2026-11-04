@@ -2,8 +2,8 @@
   "area": {
     "id": "sicp-streams",
     "title": "Stream (SICP 3.5) in TypeScript",
-    "summary": "Il capitolo 3.5 di SICP implementato a tappe con test: coda ritardata e valutazione eager, memoizzazione e memoria, map/filter pigri, closure, stream infiniti definiti implicitamente (integers, fibs, primes), poi serie, ritardo esplicito e segnali come ponte verso il player audio in C; infine i generatori JS a confronto (pigri ma senza memoria) e i ponti stream ↔ generatore; per chiudere l'animazione del picture language (iterate, cycle, play: lo stream dice cosa, l'orologio dice quando).",
-    "period": "2026-10-03/2026-10-31",
+    "summary": "Il capitolo 3.5 di SICP implementato a tappe con test: coda ritardata e valutazione eager, memoizzazione e memoria, map/filter pigri, closure, stream infiniti definiti implicitamente (integers, fibs, primes), poi serie, ritardo esplicito e segnali come ponte verso il player audio in C; infine i generatori JS a confronto (pigri ma senza memoria) e i ponti stream ↔ generatore; per chiudere l'animazione del picture language (iterate, cycle, play: lo stream dice cosa, l'orologio dice quando); poi gli stessi stream in C (sicp/streams-c), dove la closure si scrive a mano e la memoria diventa esplicita.",
+    "period": "2026-10-03/2026-11-04",
     "turns": []
   },
   "concepts": [
@@ -218,17 +218,46 @@
         "audio/custom-io-read-packet"
       ],
       "difficulty": 3
+    },
+    {
+      "id": "sicp-streams/c-closure-a-mano",
+      "title": "Stream in C: la closure scritta a mano",
+      "summary": "Tappa 1 in C: la coda è TailFn + void *env, l'ambiente sta sull'heap perché vive quanto la cella (&next sullo stack = stack-use-after-return; void * spegne il controllo dei tipi). Un puntatore allo stack si presta ma non deve sfuggire. take e stream_ref come cicli (niente TCO garantita, né in C né in V8). Contratti: precondizione di stream_ref vs 'fino a n' di take; prestito, copia o cessione dell'array. static: linkage interno e durata statica.",
+      "turns": [],
+      "projects": [
+        "sicp-streams"
+      ],
+      "code_refs": [
+        "sicp/streams-c/stream.h",
+        "sicp/streams-c/stream.c",
+        "sicp/streams-c/test/test_01_basi.c",
+        "sicp/streams-c/README.md",
+        "sicp/streams-c/Makefile"
+      ],
+      "related": [
+        "sicp-streams/thunk-eager",
+        "sicp-streams/closure-variabile",
+        "sicp-streams/memo",
+        "memoria-c/dangling-pointer-stack",
+        "memoria-c/owner-vs-osservatore",
+        "memoria-c/trasferimento-vs-condivisione",
+        "memoria-c/generics-macro-void",
+        "memoria-c/xmalloc-wrapper",
+        "memoria-c/buffer-grandi-stack-overflow",
+        "audio/sdl3-audiostream"
+      ],
+      "difficulty": 2
     }
   ],
   "projects": [
     {
       "id": "sicp-streams",
       "title": "SICP 3.5 Streams in TypeScript (percorso a tappe)",
-      "path": "sicp/streams/src/stream.ts, sicp/streams/src/generators.ts, sicp/streams/src/animation.ts, sicp/streams/test/, sicp/language-picture/animation.ts",
+      "path": "sicp/streams/src/stream.ts, sicp/streams/src/generators.ts, sicp/streams/src/animation.ts, sicp/streams/test/, sicp/language-picture/animation.ts, sicp/streams-c/",
       "status": "working",
-      "last_modified": "2026-10-31",
+      "last_modified": "2026-11-04",
       "build": "cd sicp/streams && npm run typecheck (tsc --noEmit) → nessun errore",
-      "run": "cd sicp/streams && npm test → 54/54 (9 tappe)",
+      "run": "cd sicp/streams && npm test → 54/54 (9 tappe); cd sicp/streams-c && make t1 → 6/6 (tappa 1 in C)",
       "works": [
         "tappa 1: cons_stream con coda ritardata, take che non forza oltre il necessario, array_to_stream, integers_from",
         "tappa 2: memo con flag separato, cons_stream memoizzato",
@@ -237,12 +266,13 @@
         "tappa 5: partial_sums implicito (lineare), sqrt_stream, pi_stream, euler_transform, make_tableau/accelerated_sequence, integrate_series, exp/sine/cosine_series",
         "tappe 6-7: integral (integrando come thunk) e solve; sign_change_detector, zero_crossings con lo 0 davanti, smooth, smoothed_zero_crossings come composizione",
         "tappa 8: generatori JS (integers_from_gen, take_gen, map_gen, filter_gen come cicli), ponti stream_to_gen/gen_to_stream, sieve_gen",
-        "tappa 9 (src/animation.ts): iterate (f dentro la coda, un passo per livello), cycle circolare con k celle, play con requestAnimationFrame come orologio (indice assoluto dal primo frame, elementi in ritardo saltati senza disegnarli, avanzamento con un ciclo, stop); colla con il browser (sicp/language-picture/animation.ts): livelli di right_split con iterate, andata e ritorno 0…5…1 con take + cycle, play con requestAnimationFrame, verificata nel browser"
+        "tappa 9 (src/animation.ts): iterate (f dentro la coda, un passo per livello), cycle circolare con k celle, play con requestAnimationFrame come orologio (indice assoluto dal primo frame, elementi in ritardo saltati senza disegnarli, avanzamento con un ciclo, stop); colla con il browser (sicp/language-picture/animation.ts): livelli di right_split con iterate, andata e ritorno 0…5…1 con take + cycle, play con requestAnimationFrame, verificata nel browser",
+        "stream in C, tappa 1 (sicp/streams-c/stream.c): cons_stream/stream_tail con TailFn + ambiente sull'heap, take e stream_ref come cicli (un milione di elementi a stack costante), integers_from, stream_enumerate_interval, array_to_stream (prende in prestito l'array), allocazioni solo quando nasce una cella"
       ],
       "missing": [
-        "esercizio aperto: stream in C"
+        "stream in C: tappe 2-3 (memo nella cella; map, filter, operazioni con contesto), poi 4-6 da preparare (ownership e refcount, cicli: refcount o arena, ponte verso il player)"
       ],
-      "next_step": "Esercizio aperto: stream in C (coda come puntatore a funzione + ambiente, memo nella cella, ownership delle celle), verso il player audio.",
+      "next_step": "Stream in C, tappa 2: memo dentro la cella (make t2), poi tappa 3 (make t3).",
       "concepts": [
         "sicp-streams/thunk-eager",
         "sicp-streams/memo",
@@ -255,7 +285,8 @@
         "sicp-streams/ritardo-esplicito",
         "sicp-streams/segnali",
         "sicp-streams/generatori",
-        "sicp-streams/animazione"
+        "sicp-streams/animazione",
+        "sicp-streams/c-closure-a-mano"
       ]
     }
   ],
@@ -582,6 +613,60 @@
       "concept": "sicp-streams/animazione",
       "difficulty": 2,
       "a": "Il restringimento di tipo di `if (!ctx) throw …` vale solo nel flusso di controllo di `script.ts`; da un altro file si vede il tipo dichiarato, `CanvasRenderingContext2D | null`. A runtime `ctx` non è mai `null` quando parte il modulo. Rimedi: un controllo locale (`if (!ctx) return;`: se un giorno fosse `null` l'animazione gira senza disegnare né lanciare errori), `?.` (salta solo `clearRect` ma chiama comunque il painter), `!` (dice a TypeScript di fidarsi: errore a runtime al primo frame). Il controllo locale è il più prudente."
+    },
+    {
+      "q": "Perché in C l'ambiente di `integers_from` deve stare sull'heap? Cosa succederebbe con `Value next = n + 1;` e `cons_stream(n, integers_tail, &next)`?",
+      "concept": "sicp-streams/c-closure-a-mano",
+      "difficulty": 1,
+      "a": "La cella vive più a lungo della chiamata che la crea: la coda viene forzata dopo che `integers_from` ha restituito la cella. `next` locale vive nel frame di `integers_from`, che muore al `return`: `env` resta lo stesso indirizzo, ma punta a stack che le chiamate successive riusano (puntatore pendente). Leggerlo è comportamento indefinito: a volte c'è ancora il vecchio valore, a volte dati di un'altra funzione. AddressSanitizer con `detect_stack_use_after_return=1` lo segnala come `stack-use-after-return`. In TypeScript la closure tiene vivo `n` (le variabili catturate stanno sull'heap e le libera il GC)."
+    },
+    {
+      "q": "Con `Value *next = xmalloc(sizeof(Value)); *next = n + 1;` ma `cons_stream(n, integers_tail, &next)`, cosa legge la coda? Perché `-Wall -Wextra` non avvisano?",
+      "concept": "sicp-streams/c-closure-a-mano",
+      "difficulty": 2,
+      "a": "Ci sono due oggetti: il `Value` sull'heap (vive fino a `free`) e la variabile puntatore `next`, nel frame di `integers_from`. `&next` è un `Value **` che punta allo stack: la coda legge 8 byte di uno slot morto e li interpreta come double IEEE 754. Senza ASan `take(integers_from(1), 5)` dà `1, 2.47e-323, 2.6e-314, …` con exit 0: esponente a zero, numeri subnormali; `2.47e-323` sono i bit dell'intero 5, quindi lo slot era già stato sovrascritto. In più il `Value` sull'heap non lo raggiunge più nessuno (leak). Il compilatore tace perché il parametro è `void *`: ogni puntatore ci si converte implicitamente e il controllo dei tipi sparisce. La correzione è passare `next`, l'indirizzo sull'heap."
+    },
+    {
+      "q": "Perché in C `take` e `stream_ref` vanno scritte con un ciclo? La ricorsione in coda non basterebbe? E in TypeScript?",
+      "concept": "sicp-streams/c-closure-a-mano",
+      "difficulty": 1,
+      "a": "Una `stream_ref` ricorsiva su un milione di elementi tiene aperti un milione di frame (`s`, `n`, indirizzo di ritorno; gli elementi stanno sull'heap): a `-O0` con ASan sono ben oltre gli 8 MB dello stack. Lo standard C non garantisce l'ottimizzazione delle chiamate in coda: clang a `-O2` probabilmente la fa, a `-O0` no, quindi non ci si può contare. In TypeScript nemmeno: ES2015 la prevede ma V8 (Node, Chrome) non la implementa, solo Safari; Node regge circa 10.000 frame e poi lancia `RangeError`. Le versioni ricorsive in TypeScript funzionavano perché i test chiedevano pochi elementi."
+    },
+    {
+      "q": "`stream_ref(stream_enumerate_interval(1, 3), 10)` termina con un errore, mentre `take` su uno stream più corto restituisce meno elementi. Perché due comportamenti diversi?",
+      "concept": "sicp-streams/c-closure-a-mano",
+      "difficulty": 2,
+      "a": "Sono contratti diversi. `stream_ref` ha una precondizione (`n` minore della lunghezza): violarla è un bug di chi chiama, che ha deciso lui la lunghezza, e fermarsi subito è giusto; inoltre un `Value` non ha un valore libero per dire \"non c'è\" (qualunque double, anche `NaN`, può essere un elemento). `take` promette \"fino a n\": chi consuma non sa quanti elementi ha lo stream, quindi uno stream corto è un caso normale e il risultato dice quanti ne ha copiati, come `read(2)`. Se servisse una `stream_ref` che non si ferma: `bool stream_try_ref(Stream *s, size_t n, Value *out)`. Per gli errori di programmazione `abort()` è meglio di `exit(1)`: il debugger mostra la catena di chiamate."
+    },
+    {
+      "q": "In una versione di `array_to_stream` si passava `&env`, una struct locale sullo stack, a `iter`, e funzionava; `&next` in `integers_from` no. Qual è la differenza?",
+      "concept": "sicp-streams/c-closure-a-mano",
+      "difficulty": 2,
+      "a": "Non conta dove sta la variabile ma cosa fa chi riceve il puntatore. `iter` usava `e` solo durante la chiamata: leggeva i campi, li copiava in un ambiente nuovo sull'heap e salvava quello nella cella; quando `array_to_stream` ritornava, nessuno teneva più `&env`. `&next` invece veniva salvato nella cella, che vive più del frame. Regola: un puntatore allo stack si può **prestare** a una funzione che lo usa e lo lascia, ma non deve **sfuggire** dentro qualcosa che sopravvive al frame (è il borrowing di Rust, che in C controlla solo ASan a runtime). Ancora meglio: `iter(const Value *xs, size_t n, size_t i)` con parametri tipizzati, `void *` solo nella `TailFn`."
+    },
+    {
+      "q": "Perché allocare l'ambiente solo dopo aver controllato che lo stream non sia vuoto?",
+      "concept": "sicp-streams/c-closure-a-mano",
+      "difficulty": 1,
+      "a": "Se `stream_enumerate_interval(5, 4)` o `array_to_stream(xs, 0)` allocano l'ambiente e poi restituiscono lo stream vuoto, nessuna cella tiene quell'ambiente: memoria che nessuno può più liberare. Ora le tappe 1–3 non liberano niente e non si vede, ma dalla tappa 4 ogni allocazione dovrà avere un proprietario (la cella che la tiene): un'allocazione senza proprietario è un leak sicuro. Ordine giusto: decidere se serve una cella, poi allocare."
+    },
+    {
+      "q": "`array_to_stream` prende in prestito l'array: cosa succede se lo stream sopravvive all'array? E in TypeScript? Conviene copiare?",
+      "concept": "sicp-streams/c-closure-a-mano",
+      "difficulty": 2,
+      "a": "Con una funzione che dichiara `Value xs[] = {1, 2, 3};` e restituisce `array_to_stream(xs, 3)`, la prima cella ha già la testa copiata, ma le code forzate dopo leggono `xs[i]` da uno stack morto (ASan: `stack-use-after-return`). In TypeScript il GC tiene vivo l'array finché la closure lo cattura, quindi niente puntatori pendenti; resta però l'aliasing: chi modifica l'array dopo aver creato lo stream cambia gli elementi non ancora forzati (vale anche in C, perché la testa si copia quando la cella nasce). Copiare non è automaticamente meglio: è un contratto diverso. Prestito: gratis, chi chiama garantisce la vita (la firma fissata in `stream.h`). Copia: O(n) subito e un buffer condiviso da tutte le celle, da liberare quando muore l'ultima (tappa 4). Cessione: chi chiama passa un buffer allocato e lo stream lo libera. SDL3 ne offre due: `SDL_PutAudioStreamData` copia, `SDL_PutAudioStreamDataNoCopy` presta e chiama una callback quando ha finito. Per buffer audio grandi la copia ha un costo, e il prestito vuole un \"ho finito\"."
+    },
+    {
+      "q": "Cosa vuol dire `static` in C, fuori e dentro una funzione? Una `static Value next` in `integers_from` risolverebbe il problema dell'ambiente?",
+      "concept": "sicp-streams/c-closure-a-mano",
+      "difficulty": 2,
+      "a": "Fuori dalle funzioni: linkage interno, il nome resta nel file e non arriva al linker (il \"non esportato\" di TypeScript, ma in C il default è esportare: due `xmalloc` globali in file diversi danno `duplicate symbol`). Per questo le funzioni di supporto di `stream.c` sono `static`; i tag delle `struct` non hanno linkage. Dentro una funzione: durata statica, una sola variabile per tutto il programma, inizializzata una volta e che mantiene il valore fra le chiamate (`static Value out[1000000]` nel test: 8 MB non stanno sullo stack). `static Value next` sopravvive al frame ma è **una sola** per tutte le celle: ogni chiamata la sovrascrive. Una `take` sequenziale su un solo stream sembrerebbe funzionare per coincidenza, ma `s = integers_from(1); t = integers_from(100); stream_tail(s)` darebbe 101. Serve un ambiente per cella, quindi l'heap. (Uso raro: `double a[static 4]` in un parametro promette almeno 4 elementi e non NULL.)"
+    },
+    {
+      "q": "Un solo ambiente con un cursore condiviso da tutte le celle di `array_to_stream` passa i test della tappa 1. Cosa non va? E perché?",
+      "concept": "sicp-streams/c-closure-a-mano",
+      "difficulty": 2,
+      "a": "Ogni coda forzata sposta il cursore per tutte le celle: forzare due volte la coda della stessa cella su `{10, 20, 30}` dà 20 e poi 30, e una `take(s, 5)` successiva dà solo `10`. I test passano perché leggono ogni stream una volta sola e in ordine: ogni coda è forzata una volta, quella della cella k prima di quella della k+1, e il cursore coincide per caso con la posizione giusta. È un generatore, non uno stream: lo stato avanza a ogni lettura invece di essere un valore rileggibile. Con la memo della tappa 2 diventerebbe corretto (ogni coda forzata al massimo una volta e in ordine, come `gen_to_stream`), ma la correttezza dipenderebbe da quell'invariante e l'ambiente condiviso porrebbe il problema di chi lo libera (tappa 4). La soluzione semplice è un ambiente per cella: `{ next, end }`, 16 byte."
     }
   ]
 }
